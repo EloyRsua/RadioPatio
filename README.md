@@ -38,7 +38,7 @@ Proyecto desarrollado para la asignatura Software para Dispositivos Móviles del
 | 👤 Name                        | 📧 Email                    | 🐱 GitHub                                                                 |
 | :----------------------------: | :------------------------: | :------------------------------------------------------------------------: |
 | Patricia Lago Martín           | UO294435@uniovi.es          | [![GitHub](https://img.shields.io/badge/GitHub-patriilaago-brightgreen)](https://github.com/patriilaago) |
-| Eloy Rubio Suárez              | UO298184@uniovi.es          | [![GitHub](https://img.shields.io/badge/GitHub-EloyRsua-brightgreen)](https://github.com/EloyRsua) |
+| Eloy Rubio Suárez              | UO298184@uniovi.es          | [![GitHub](https://img.shields.io/badge/GitHub-EloyRsua-orange)](https://github.com/EloyRsua) |
 | Natalia Blanco Agudín          | UO295340@uniovi.es          | [![GitHub](https://img.shields.io/badge/GitHub-NataliaBlancoAgudin-brightgreen)](https://github.com/NataliaBlancoAgudin) |
 
 
