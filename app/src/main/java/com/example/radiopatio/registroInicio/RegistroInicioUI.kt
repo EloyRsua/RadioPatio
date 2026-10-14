@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.example.radiopatio.R
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
+
 /**
  * Pantalla de registro sin huecos ni cortes entre la foto y la tarjeta.
  */
