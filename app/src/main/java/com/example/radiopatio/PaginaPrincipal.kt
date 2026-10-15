@@ -7,7 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,73 +53,89 @@ enum class SeccionRadioPatio {
 }
 
 /**
- * Pantalla principal con Sticky List y soporte para navegación hacia el Calendario de Eventos.
+ * UiState inmutable para la pantalla principal (Feed).
+ * Aplica el patrón UiState para agrupar las propiedades de estado de la pantalla.
  */
-@OptIn(ExperimentalFoundationApi::class)
+data class PaginaPrincipalUiState(
+    val seccionActual: SeccionRadioPatio = SeccionRadioPatio.INICIO,
+    val listaPublicaciones: List<Publicacion> = listOf(
+        Publicacion(
+            autor = "Lucía Fernández",
+            inicial = "L",
+            tiempoYUbica = "Hace 2 h · Calle Mayor",
+            contenido = "¡Buenas vecin@s! ☀️ Este sábado organizamos una quedada en el parque para tomar algo. ¡Os esperamos!",
+            meGusta = 24,
+            comentarios = 6
+        ),
+        Publicacion(
+            autor = "María García",
+            inicial = "M",
+            tiempoYUbica = "Hace 3 h · Calle Mayor",
+            contenido = "Se ha encontrado un peluche en el portal, se ha dejado en la garita del conserje.",
+            meGusta = 0,
+            comentarios = 0
+        ),
+        Publicacion(
+            autor = "Carlos Ruiz",
+            inicial = "C",
+            tiempoYUbica = "Hace 5 h · Portal 4",
+            contenido = "¿Alguien sabe si mañana cortan el agua por obras en la caldera?",
+            meGusta = 4,
+            comentarios = 8
+        ),
+        Publicacion(
+            autor = "Ana Belén",
+            inicial = "A",
+            tiempoYUbica = "Hace 6 h · 2º B",
+            contenido = "Tengo cajas de cartón limpias para mudanza por si a alguien le hacen falta antes de tirarlas al contenedor azul.",
+            meGusta = 9,
+            comentarios = 3
+        ),
+        Publicacion(
+            autor = "Javier Gómez",
+            inicial = "J",
+            tiempoYUbica = "Ayer · Garaje",
+            contenido = "Recordad aparcar dentro de las líneas en la planta -1 para no dificultar la maniobra de salida.",
+            meGusta = 15,
+            comentarios = 2
+        )
+    ),
+    val mostrarDialogoRedactar: Boolean = false
+)
+
+/**
+ * Función de entrada retrocompatible que delega en [PaginaPrincipalScreen].
+ */
 @Composable
-fun PaginaPrincipal(
+fun PaginaPrincipal(seccionInicial: SeccionRadioPatio = SeccionRadioPatio.INICIO) {
+    PaginaPrincipalScreen(seccionInicial = seccionInicial)
+}
+
+/**
+ * Screen (Stateful): Mantiene y gestiona el estado de la pantalla principal (State Hoisting).
+ * Intermediario que pasa el estado a [PaginaPrincipalContent] o a otras pantallas de sección.
+ */
+@Composable
+fun PaginaPrincipalScreen(
     seccionInicial: SeccionRadioPatio = SeccionRadioPatio.INICIO
 ) {
-    var seccionActual by remember { mutableStateOf(seccionInicial) }
-    var mostrarDialogoRedactar by remember { mutableStateOf(false) }
+    var uiState by remember { mutableStateOf(PaginaPrincipalUiState(seccionActual = seccionInicial)) }
 
-    // Lista mutable de publicaciones
-    var listaPublicaciones by remember {
-        mutableStateOf(
-            listOf(
-                Publicacion(
-                    autor = "Lucía Fernández",
-                    inicial = "L",
-                    tiempoYUbica = "Hace 2 h · Calle Mayor",
-                    contenido = "¡Buenas vecin@s! ☀️ Este sábado organizamos una quedada en el parque para tomar algo. ¡Os esperamos!",
-                    meGusta = 24,
-                    comentarios = 6
-                ),
-                Publicacion(
-                    autor = "María García",
-                    inicial = "M",
-                    tiempoYUbica = "Hace 3 h · Calle Mayor",
-                    contenido = "Se ha encontrado un peluche en el portal, se ha dejado en la garita del conserje.",
-                    meGusta = 0,
-                    comentarios = 0
-                ),
-                Publicacion(
-                    autor = "Carlos Ruiz",
-                    inicial = "C",
-                    tiempoYUbica = "Hace 5 h · Portal 4",
-                    contenido = "¿Alguien sabe si mañana cortan el agua por obras en la caldera?",
-                    meGusta = 4,
-                    comentarios = 8
-                ),
-                Publicacion(
-                    autor = "Ana Belén",
-                    inicial = "A",
-                    tiempoYUbica = "Hace 6 h · 2º B",
-                    contenido = "Tengo cajas de cartón limpias para mudanza por si a alguien le hacen falta antes de tirarlas al contenedor azul.",
-                    meGusta = 9,
-                    comentarios = 3
-                ),
-                Publicacion(
-                    autor = "Javier Gómez",
-                    inicial = "J",
-                    tiempoYUbica = "Ayer · Garaje",
-                    contenido = "Recordad aparcar dentro de las líneas en la planta -1 para no dificultar la maniobra de salida.",
-                    meGusta = 15,
-                    comentarios = 2
-                )
-            )
-        )
-    }
-
-    when (seccionActual) {
+    when (uiState.seccionActual) {
         SeccionRadioPatio.EVENTOS -> {
             CalendarioEventosScreen(
-                onVolverAInicio = { seccionActual = SeccionRadioPatio.INICIO },
+                onVolverAInicio = {
+                    uiState = uiState.copy(seccionActual = SeccionRadioPatio.INICIO)
+                },
                 barraInferior = {
                     BarraNavegacionInferior(
-                        seccionActual = seccionActual,
-                        onSeleccionarSeccion = { seccionActual = it },
-                        onCrearPulsado = { seccionActual = SeccionRadioPatio.EVENTOS }
+                        seccionActual = uiState.seccionActual,
+                        onSeleccionarSeccion = { nuevaSeccion ->
+                            uiState = uiState.copy(seccionActual = nuevaSeccion)
+                        },
+                        onCrearPulsado = {
+                            uiState = uiState.copy(seccionActual = SeccionRadioPatio.EVENTOS)
+                        }
                     )
                 }
             )
@@ -127,97 +143,168 @@ fun PaginaPrincipal(
 
         SeccionRadioPatio.VECINOS, SeccionRadioPatio.MERCADILLO -> {
             PantallaSeccionEnDesarrollo(
-                seccion = seccionActual,
-                onVolverAInicio = { seccionActual = SeccionRadioPatio.INICIO },
-                onIrAEventos = { seccionActual = SeccionRadioPatio.EVENTOS },
+                seccion = uiState.seccionActual,
+                onVolverAInicio = {
+                    uiState = uiState.copy(seccionActual = SeccionRadioPatio.INICIO)
+                },
+                onIrAEventos = {
+                    uiState = uiState.copy(seccionActual = SeccionRadioPatio.EVENTOS)
+                },
                 barraInferior = {
                     BarraNavegacionInferior(
-                        seccionActual = seccionActual,
-                        onSeleccionarSeccion = { seccionActual = it },
-                        onCrearPulsado = { mostrarDialogoRedactar = true }
+                        seccionActual = uiState.seccionActual,
+                        onSeleccionarSeccion = { nuevaSeccion ->
+                            uiState = uiState.copy(seccionActual = nuevaSeccion)
+                        },
+                        onCrearPulsado = {
+                            uiState = uiState.copy(mostrarDialogoRedactar = true)
+                        }
                     )
                 }
             )
         }
 
         SeccionRadioPatio.INICIO, SeccionRadioPatio.PUBLICAR -> {
-            Scaffold(
-                topBar = { BarraSuperior() },
-                bottomBar = {
-                    BarraNavegacionInferior(
-                        seccionActual = seccionActual,
-                        onSeleccionarSeccion = { seccionActual = it },
-                        onCrearPulsado = { mostrarDialogoRedactar = true }
-                    )
+            PaginaPrincipalContent(
+                uiState = uiState,
+                onSeleccionarSeccion = { nuevaSeccion ->
+                    uiState = uiState.copy(seccionActual = nuevaSeccion)
+                },
+                onAbrirDialogoRedactar = {
+                    uiState = uiState.copy(mostrarDialogoRedactar = true)
+                },
+                onCerrarDialogoRedactar = {
+                    uiState = uiState.copy(mostrarDialogoRedactar = false)
+                },
+                onPublicar = { nuevoTexto ->
+                    if (nuevoTexto.isNotBlank()) {
+                        val nueva = Publicacion(
+                            autor = "Tú (Vecino)",
+                            inicial = "T",
+                            tiempoYUbica = "Ahora mismo · Comunidad",
+                            contenido = nuevoTexto.trim(),
+                            meGusta = 0,
+                            comentarios = 0
+                        )
+                        uiState = uiState.copy(
+                            listaPublicaciones = listOf(nueva) + uiState.listaPublicaciones,
+                            mostrarDialogoRedactar = false
+                        )
+                    } else {
+                        uiState = uiState.copy(mostrarDialogoRedactar = false)
+                    }
+                },
+                onToggleMeGusta = { index ->
+                    val listaActualizada = uiState.listaPublicaciones.mapIndexed { i, pub ->
+                        if (i == index) {
+                            pub.copy(meGusta = pub.meGusta + 1)
+                        } else pub
+                    }
+                    uiState = uiState.copy(listaPublicaciones = listaActualizada)
+                },
+                onVerEnCalendario = {
+                    uiState = uiState.copy(seccionActual = SeccionRadioPatio.EVENTOS)
                 }
-            ) { rellenoInterior ->
-                LazyColumn(
+            )
+        }
+    }
+}
+
+/**
+ * Content (Stateless): Representa exclusivamente la interfaz de usuario a partir del estado.
+ * No mantiene variables con remember para el estado de datos. Recibe valores y emite eventos (lambdas).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun PaginaPrincipalContent(
+    uiState: PaginaPrincipalUiState,
+    onSeleccionarSeccion: (SeccionRadioPatio) -> Unit,
+    onAbrirDialogoRedactar: () -> Unit,
+    onCerrarDialogoRedactar: () -> Unit,
+    onPublicar: (String) -> Unit,
+    onToggleMeGusta: (Int) -> Unit,
+    onVerEnCalendario: () -> Unit
+) {
+    Scaffold(
+        topBar = { BarraSuperior() },
+        bottomBar = {
+            BarraNavegacionInferior(
+                seccionActual = uiState.seccionActual,
+                onSeleccionarSeccion = onSeleccionarSeccion,
+                onCrearPulsado = onAbrirDialogoRedactar
+            )
+        }
+    ) { rellenoInterior ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFF9FAFB))
+                .padding(rellenoInterior),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 1. Campo para redactar publicación
+            item {
+                Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFFF9FAFB))
-                        .padding(rellenoInterior),
-                    contentPadding = PaddingValues(bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                        .clickable { onAbrirDialogoRedactar() }
                 ) {
-                    // 1. Campo para redactar publicación (hace scroll normal)
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, top = 8.dp)
-                                .clickable { mostrarDialogoRedactar = true }
-                        ) {
-                            CampoCrearPublicacion()
-                        }
-                    }
+                    CampoCrearPublicacion()
+                }
+            }
 
-                    // 2. Encabezado fijo (Sticky Header) con enlace directo al Calendario de Eventos
-                    stickyHeader {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFFF9FAFB))
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
-                        ) {
-                            NoticiaFijada(
-                                onVerEnCalendario = { seccionActual = SeccionRadioPatio.EVENTOS }
-                            )
-                        }
-                    }
+            // 2. Encabezado fijo (Sticky Header) con enlace al Calendario de Eventos
+            stickyHeader {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFF9FAFB))
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    NoticiaFijada(onVerEnCalendario = onVerEnCalendario)
+                }
+            }
 
-                    // 3. Todas las publicaciones
-                    items(listaPublicaciones) { publicacion ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                        ) {
-                            TarjetaPublicacion(publicacion = publicacion)
-                        }
+            // 3. Publicaciones
+            if (uiState.listaPublicaciones.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No hay publicaciones comunitarias todavía. ¡Sé el primero en compartir!",
+                            color = Color.Gray,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                itemsIndexed(uiState.listaPublicaciones) { index, publicacion ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        TarjetaPublicacion(
+                            publicacion = publicacion,
+                            onMeGustaPulsado = { onToggleMeGusta(index) }
+                        )
                     }
                 }
             }
         }
     }
 
-    // Diálogo sencillo para publicar en el feed
-    if (mostrarDialogoRedactar) {
+    if (uiState.mostrarDialogoRedactar) {
         DialogoCrearPublicacion(
-            onDismiss = { mostrarDialogoRedactar = false },
-            onPublicar = { nuevoTexto ->
-                if (nuevoTexto.isNotBlank()) {
-                    val nueva = Publicacion(
-                        autor = "Tú (Vecino)",
-                        inicial = "T",
-                        tiempoYUbica = "Ahora mismo · Comunidad",
-                        contenido = nuevoTexto.trim(),
-                        meGusta = 0,
-                        comentarios = 0
-                    )
-                    listaPublicaciones = listOf(nueva) + listaPublicaciones
-                }
-                mostrarDialogoRedactar = false
-            }
+            onDismiss = onCerrarDialogoRedactar,
+            onPublicar = onPublicar
         )
     }
 }
@@ -475,7 +562,7 @@ private fun DialogoCrearPublicacion(
 }
 
 /**
- * Pantalla informativa para secciones en construcción con botón directo para volver o ir al calendario.
+ * Pantalla informativa para secciones en construcción.
  */
 @Composable
 private fun PantallaSeccionEnDesarrollo(
@@ -551,13 +638,13 @@ private fun PantallaSeccionEnDesarrollo(
 }
 
 /**
- * Tarjeta individual para mostrar una publicación.
+ * Tarjeta individual para mostrar una publicación (Stateless).
  */
 @Composable
-fun TarjetaPublicacion(publicacion: Publicacion) {
-    var meGustaCount by remember { mutableStateOf(publicacion.meGusta) }
-    var leGustaUsuario by remember { mutableStateOf(false) }
-
+fun TarjetaPublicacion(
+    publicacion: Publicacion,
+    onMeGustaPulsado: () -> Unit = {}
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -597,19 +684,16 @@ fun TarjetaPublicacion(publicacion: Publicacion) {
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        leGustaUsuario = !leGustaUsuario
-                        meGustaCount = if (leGustaUsuario) meGustaCount + 1 else meGustaCount - 1
-                    }
+                    modifier = Modifier.clickable { onMeGustaPulsado() }
                 ) {
                     Icon(
                         Icons.Filled.Favorite,
                         contentDescription = "Me gusta",
-                        tint = if (leGustaUsuario) Color(0xFFE53935) else Color.Gray,
+                        tint = if (publicacion.meGusta > 0) Color(0xFFE53935) else Color.Gray,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "$meGustaCount", fontSize = 12.sp, color = Color.DarkGray)
+                    Text(text = "${publicacion.meGusta}", fontSize = 12.sp, color = Color.DarkGray)
                 }
                 Spacer(modifier = Modifier.width(20.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -624,13 +708,38 @@ fun TarjetaPublicacion(publicacion: Publicacion) {
     }
 }
 
-/**
- * Previsualización para Android Studio.
- */
-@Preview(showBackground = true, showSystemUi = true)
+// -----------------------------------------------------------------------------------------
+// Previews aplicadas sobre la función Content con diferentes estados (según Práctica 02)
+// -----------------------------------------------------------------------------------------
+
+@Preview(name = "Feed Principal con Publicaciones", showBackground = true, showSystemUi = true)
 @Composable
-fun PaginaPrincipalPreview() {
+fun PaginaPrincipalContentPreview() {
     RadioPatioTheme {
-        PaginaPrincipal()
+        PaginaPrincipalContent(
+            uiState = PaginaPrincipalUiState(),
+            onSeleccionarSeccion = {},
+            onAbrirDialogoRedactar = {},
+            onCerrarDialogoRedactar = {},
+            onPublicar = {},
+            onToggleMeGusta = {},
+            onVerEnCalendario = {}
+        )
+    }
+}
+
+@Preview(name = "Feed Vacío", showBackground = true)
+@Composable
+fun PaginaPrincipalVaciaPreview() {
+    RadioPatioTheme {
+        PaginaPrincipalContent(
+            uiState = PaginaPrincipalUiState(listaPublicaciones = emptyList()),
+            onSeleccionarSeccion = {},
+            onAbrirDialogoRedactar = {},
+            onCerrarDialogoRedactar = {},
+            onPublicar = {},
+            onToggleMeGusta = {},
+            onVerEnCalendario = {}
+        )
     }
 }
