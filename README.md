@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://skillicons.dev">
-    <img src="https://skillicons.dev/icons?i=kotlin,androidstudio,android,jetpackcompose" alt="Used Skills" />
+    <img src="https://skill-icons-v2.vercel.app/api/icons?i=kotlin,androidstudio,android,jetpackcompose" />
   </a>
 </p>
 
