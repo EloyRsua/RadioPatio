@@ -11,15 +11,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.DateRange
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.ShoppingBasket
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -39,7 +34,9 @@ import androidx.compose.foundation.lazy.items
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PaginaPrincipal() {
+fun PaginaPrincipal(
+    modifier: Modifier = Modifier
+) {
     // Lista de publicaciones (fácil de ampliar o recibir desde base de datos)
     val listaPublicaciones = listOf(
         Publicacion(
@@ -85,8 +82,8 @@ fun PaginaPrincipal() {
     )
 
     Scaffold(
+        modifier = modifier,
         topBar = { BarraSuperior() },
-        bottomBar = { BarraNavegacionInferior() }
     ) { rellenoInterior ->
         LazyColumn(
             modifier = Modifier
@@ -174,45 +171,45 @@ private fun BarraSuperior() {
     }
 }
 
-/**
- * Barra de navegación inferior fija.
- */
-@Composable
-private fun BarraNavegacionInferior() {
-    Surface(shadowElevation = 8.dp) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFEAEFF2))
-                .navigationBarsPadding()
-                .padding(vertical = 6.dp, horizontal = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Home, contentDescription = "Inicio", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
-            }
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Person, contentDescription = "Vecinos", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
-            }
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF389F82)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Outlined.Add, contentDescription = "Publicar", tint = Color.White, modifier = Modifier.size(28.dp))
-            }
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.ShoppingBasket, contentDescription = "Mercadillo", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
-            }
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.DateRange, contentDescription = "Eventos", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
-            }
-        }
-    }
-}
+///**
+// * Barra de navegación inferior fija.
+// */
+//@Composable
+//private fun BarraNavegacionInferior() {
+//    Surface(shadowElevation = 8.dp) {
+//        Row(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .background(Color(0xFFEAEFF2))
+//                .navigationBarsPadding()
+//                .padding(vertical = 6.dp, horizontal = 24.dp),
+//            horizontalArrangement = Arrangement.SpaceBetween,
+//            verticalAlignment = Alignment.CenterVertically
+//        ) {
+//            IconButton(onClick = {}) {
+//                Icon(Icons.Outlined.Home, contentDescription = "Inicio", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
+//            }
+//            IconButton(onClick = {}) {
+//                Icon(Icons.Outlined.Person, contentDescription = "Vecinos", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
+//            }
+//            Box(
+//                modifier = Modifier
+//                    .size(52.dp)
+//                    .clip(CircleShape)
+//                    .background(Color(0xFF389F82)),
+//                contentAlignment = Alignment.Center
+//            ) {
+//                Icon(Icons.Outlined.Add, contentDescription = "Publicar", tint = Color.White, modifier = Modifier.size(28.dp))
+//            }
+//            IconButton(onClick = {}) {
+//                Icon(Icons.Outlined.ShoppingBasket, contentDescription = "Mercadillo", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
+//            }
+//            IconButton(onClick = {}) {
+//                Icon(Icons.Outlined.DateRange, contentDescription = "Eventos", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
+//            }
+//        }
+//    }
+//}
 
 /**
  * Noticia fijada destacada en verde.

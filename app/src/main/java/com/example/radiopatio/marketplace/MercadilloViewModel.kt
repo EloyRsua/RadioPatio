@@ -13,7 +13,8 @@ data class MercadilloUiState(
     val textoBusqueda: String = "",
     val esModoComprar: Boolean = true,
     val categoriaSeleccionada: CategoriaProducto = CategoriaProducto.TODOS,
-    val productosTotales: List<Producto> = emptyList()
+    val productosTotales: List<Producto> = emptyList(),
+    val mostrarDialogoNuevoProducto: Boolean = false
 ){
     // Se recalcula automaticamente cuando cambia la busqueda o el modo
     val productosFiltrados: List<Producto>
@@ -56,5 +57,21 @@ class MercadilloViewModel : ViewModel(){
 
     fun onCategoriaSeleccionada(categoria: CategoriaProducto){
         uiState = uiState.copy(categoriaSeleccionada = categoria)
+    }
+
+    fun onAbrirDialogoNuevoProducto(){
+        uiState = uiState.copy(mostrarDialogoNuevoProducto = true)
+    }
+
+    fun onCerrarDialogoNuevoProducto(){
+        uiState = uiState.copy(mostrarDialogoNuevoProducto = false)
+    }
+
+    fun onCrearProducto(nuevoProducto: Producto){
+        val nuevaLista = listOf(nuevoProducto) + uiState.productosTotales
+        uiState = uiState.copy(
+            productosTotales = nuevaLista,
+            mostrarDialogoNuevoProducto = false
+        )
     }
 }
