@@ -12,10 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,33 +21,36 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.radiopatio.R
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
+/**
+ * Screen: Responsable de mantener y gestionar el estado mediante el ViewModel.
+ * Actúa como intermediario entre la logica de negocio y la interfaz visual
+ */
 @Composable
-fun PaginaMercadillo(){
-    var textoBusqueda by rememberSaveable { mutableStateOf("") }
-    var esModoComprar by rememberSaveable { mutableStateOf(true) }
-
-    // Datos de ejemplo
-    val listaProductos = listOf(
-        Producto(1, "Mesa auxiliar", "15€", "1ºA - Hace 1h"),
-        Producto(2, "Altavoz BT", "30€", "2ºC - Hace 2h"),
-        Producto(3, "Chaqueta", "45€", "6ºA - Hace 3h"),
-        Producto(4, "Osito de peluche", "3€", "3ºD - Hace 3h"),
-        Producto(5, "Portátil", "220€", "4ºB - Hace 5h"),
-        Producto(6, "Taladro Bosch", "25€", "Bajo A - Ayer")
-    )
+fun MercadilloScreen(
+    onProductoClick: (Int) -> Unit = {},
+    viewModel: MercadilloViewModel = viewModel()
+){
+    val uiState = viewModel.uiState
 
     MercadilloContent(
-        productos = listaProductos,
-        textoBusqueda = textoBusqueda,
-        onTextoBusquedaChange = { textoBusqueda = it },
-        esModoComprar = esModoComprar,
-        onCambiarModo = { esModoComprar = it }
+        productos = uiState.productosFiltrados,
+        textoBusqueda = uiState.textoBusqueda,
+        onTextoBusquedaChange = { viewModel.onTextoBusquedaChange(it) },
+        esModoComprar = uiState.esModoComprar,
+        onCambiarModo = { viewModel.onCambiarModo(it) },
+        onProductoClick = onProductoClick
     )
+
 }
 
+/**
+ * Content: Responsable exclusivamente de representar la UI a partir de los datos recibidos
+ * No gestiona estado propio.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MercadilloContent(
@@ -59,7 +58,8 @@ fun MercadilloContent(
     textoBusqueda: String,
     onTextoBusquedaChange: (String) -> Unit,
     esModoComprar: Boolean,
-    onCambiarModo: (Boolean) -> Unit
+    onCambiarModo: (Boolean) -> Unit,
+    onProductoClick: (Int) -> Unit
 ) {
     Scaffold(
         topBar = { BarraSuperiorMercadillo() },
@@ -106,6 +106,7 @@ fun MercadilloContent(
                     for (producto in fila) {
                         TarjetaProducto(
                             producto = producto,
+                            onClick = { onProductoClick(producto.id) }, // Conectamos el clic de la tarjeta con el id
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -220,6 +221,16 @@ private fun BarraNavegacionMercadillo() {
 @Composable
 fun MercadilloPreview() {
     RadioPatioTheme {
-        PaginaMercadillo()
+        MercadilloContent(
+            productos = listOf(
+                Producto(1, "Mesa auxiliar", "15€", "1ºA - Hace 1h"),
+                Producto(2, "Altavoz BT", "30€", "2ºC - Hace 2h"),
+            ),
+            textoBusqueda = "",
+            onTextoBusquedaChange = {},
+            esModoComprar = true,
+            onCambiarModo = {},
+            onProductoClick = {}
+        )
     }
 }

@@ -1,7 +1,6 @@
 package com.example.radiopatio.marketplace
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +20,8 @@ import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -46,35 +47,32 @@ fun BuscadorMercadillo(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Caja de busqueda
-        Row(modifier = Modifier
-            .weight(1f)
-            .height(44.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFB0BEC5),
-                RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ){
-            Icon(
-                imageVector = Icons.Outlined.Search,
-                contentDescription = "Buscar",
-                tint = Color.Gray,
-                modifier = Modifier.size(20.dp)
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Text(
-                text = if(textoBusqueda.isEmpty()) "Buscar en el mercadillo" else textoBusqueda,
-                color = if(textoBusqueda.isEmpty()) Color.Gray else Color.Black,
-                fontSize = 14.sp
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-
-        }
+        OutlinedTextField(
+            value = textoBusqueda,
+            onValueChange = onTextoChange,
+            modifier = Modifier
+                .weight(1f)
+                .height(50.dp),
+            placeholder = {
+                Text("Buscar en el mercadillo", color = Color.Gray, fontSize = 14.sp)
+            },
+            leadingIcon = {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = "Buscar",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(20.dp))
+            },
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = Color.White,
+                focusedContainerColor = Color.White,
+                unfocusedBorderColor = Color(0xFFB0BEC5),
+                focusedBorderColor = Color(0xFF133E54),
+                cursorColor = Color(0xFF133E54)
+            ),
+            singleLine = true
+        )
 
         // Boton de filtros
         IconButton(onClick = {}) {

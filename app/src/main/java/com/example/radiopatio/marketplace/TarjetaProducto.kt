@@ -3,6 +3,7 @@ package com.example.radiopatio.marketplace
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,7 @@ import com.example.radiopatio.ui.theme.RadioPatioTheme
 @Composable
 fun TarjetaProducto(
     producto: Producto,
+    onClick: () -> Unit,
     modifier: Modifier
 ){
     Column(
@@ -44,6 +46,7 @@ fun TarjetaProducto(
             .background(Color.White)
             .border(1.dp, Color(0xFFD6DDE1),
                 RoundedCornerShape(14.dp))
+            .clickable { onClick() }
             .padding(10.dp)
     ) {
         // Hueco de la imagen
@@ -110,6 +113,7 @@ fun TarjetaProductoPreview() {
                 precio = "15€",
                 ubicacionYTiempo = "1ºA - Hace 1h"
             ),
+            onClick = {},
             modifier = Modifier.padding(16.dp).width(180.dp)
         )
     }
