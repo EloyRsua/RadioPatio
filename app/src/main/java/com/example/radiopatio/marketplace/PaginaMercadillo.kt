@@ -42,6 +42,8 @@ fun MercadilloScreen(
         onTextoBusquedaChange = { viewModel.onTextoBusquedaChange(it) },
         esModoComprar = uiState.esModoComprar,
         onCambiarModo = { viewModel.onCambiarModo(it) },
+        categoriaSeleccionada = uiState.categoriaSeleccionada,
+        onCategoriaChange = { viewModel.onCategoriaSeleccionada(it) },
         onProductoClick = onProductoClick
     )
 
@@ -59,6 +61,8 @@ fun MercadilloContent(
     onTextoBusquedaChange: (String) -> Unit,
     esModoComprar: Boolean,
     onCambiarModo: (Boolean) -> Unit,
+    categoriaSeleccionada: CategoriaProducto,
+    onCategoriaChange: (CategoriaProducto) -> Unit,
     onProductoClick: (Int) -> Unit
 ) {
     Scaffold(
@@ -77,7 +81,9 @@ fun MercadilloContent(
             item {
                 BuscadorMercadillo(
                     textoBusqueda = textoBusqueda,
-                    onTextoChange = onTextoBusquedaChange
+                    onTextoChange = onTextoBusquedaChange,
+                    categoriaSeleccionada = categoriaSeleccionada,
+                    onCategoriaChange = onCategoriaChange
                 )
             }
             // 2. ENCABEZADO PEGAJOSO (Sticky Header)
@@ -223,13 +229,15 @@ fun MercadilloPreview() {
     RadioPatioTheme {
         MercadilloContent(
             productos = listOf(
-                Producto(1, "Mesa auxiliar", "15€", "1ºA - Hace 1h"),
-                Producto(2, "Altavoz BT", "30€", "2ºC - Hace 2h"),
+                Producto(1, "Mesa auxiliar", "15€", "1ºA - Hace 1h", CategoriaProducto.MUEBLES, true),
+                Producto(2, "Altavoz BT", "30€", "2ºC - Hace 2h", CategoriaProducto.ELECTRONICA, true),
             ),
             textoBusqueda = "",
             onTextoBusquedaChange = {},
             esModoComprar = true,
             onCambiarModo = {},
+            categoriaSeleccionada = CategoriaProducto.TODOS,
+            onCategoriaChange = {},
             onProductoClick = {}
         )
     }

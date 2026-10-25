@@ -3,6 +3,7 @@ package com.example.radiopatio.marketplace
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,12 +19,16 @@ import androidx.compose.material.icons.outlined.Handshake
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,11 +38,15 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.radiopatio.ui.theme.RadioPatioTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @Composable
 fun BuscadorMercadillo(
     textoBusqueda: String,
     onTextoChange: (String) -> Unit,
+    categoriaSeleccionada: CategoriaProducto,
+    onCategoriaChange: (CategoriaProducto) -> Unit,
     modifier: Modifier = Modifier
 ){
     Row(
@@ -75,13 +84,40 @@ fun BuscadorMercadillo(
         )
 
         // Boton de filtros
-        IconButton(onClick = {}) {
-            Icon(
-                imageVector = Icons.Outlined.Tune,
-                contentDescription = "Filtros",
-                tint = Color(0xFF133E54),
-                modifier = Modifier.size(28.dp)
-            )
+        Box{
+            var menuExpandido by remember { mutableStateOf(false) }
+
+            IconButton(onClick = { menuExpandido = true}) {
+                Icon(
+                    imageVector = Icons.Outlined.Tune,
+                    contentDescription = "Filtros",
+                    // Se pone verde si hay un filtro activo, si no, azul oscuro
+                    tint = if (categoriaSeleccionada != CategoriaProducto.TODOS) Color(0xFF389F82) else Color(0xFF133E54),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            DropdownMenu(
+                expanded = menuExpandido,
+                onDismissRequest = { menuExpandido = false},
+                modifier = Modifier.background(Color.White)
+            ) {
+                CategoriaProducto.entries.forEach{ categoria ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = categoria.nombre,
+                                fontWeight = if (categoria == categoriaSeleccionada) FontWeight.Bold else FontWeight.Normal,
+                                color = if (categoria == categoriaSeleccionada) Color(0xFF0F8A5F) else Color.Black
+                            )
+                        },
+                        onClick = {
+                            onCategoriaChange(categoria)
+                            menuExpandido = false
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -166,8 +202,16 @@ fun SelectorModoMercadillo(
 fun ControlesMercadilloPreview() {
     RadioPatioTheme {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
-            BuscadorMercadillo(textoBusqueda = "", onTextoChange = {})
-            SelectorModoMercadillo(esComprarSeleccionado = true, onSeleccionarModo = {})
+            BuscadorMercadillo(
+                textoBusqueda = "",
+                onTextoChange = {},
+                categoriaSeleccionada = CategoriaProducto.TODOS,
+                onCategoriaChange = {}
+            )
+            SelectorModoMercadillo(
+                esComprarSeleccionado = true,
+                onSeleccionarModo = {}
+            )
         }
     }
 }

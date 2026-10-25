@@ -107,12 +107,7 @@ fun TarjetaProducto(
 fun TarjetaProductoPreview() {
     RadioPatioTheme {
         TarjetaProducto(
-            producto = Producto(
-                id = 1,
-                titulo = "Mesa auxiliar",
-                precio = "15€",
-                ubicacionYTiempo = "1ºA - Hace 1h"
-            ),
+            producto = Producto(1, "Mesa auxiliar", "15€", "1ºA - Hace 1h", CategoriaProducto.MUEBLES, true),
             onClick = {},
             modifier = Modifier.padding(16.dp).width(180.dp)
         )
