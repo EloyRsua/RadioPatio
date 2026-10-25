@@ -4,82 +4,51 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.radiopatio.publicacion.Publicacion
+import com.example.radiopatio.publicacion.TarjetaPublicacion
 import com.example.radiopatio.ui.theme.RadioPatioTheme
-import androidx.compose.foundation.lazy.items
 
-/**
- * Pantalla principal con Sticky List: la noticia se queda anclada arriba al hacer scroll.
- */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PaginaPrincipal(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onIrACrearPublicacion: () -> Unit = {}
 ) {
-    // Lista de publicaciones (fácil de ampliar o recibir desde base de datos)
-    val listaPublicaciones = listOf(
-        Publicacion(
-            autor = "Lucía Fernández",
-            inicial = "L",
-            tiempoYUbica = "Hace 2 h · Calle Mayor",
-            contenido = "¡Buenas vecin@s! ☀️ Este sábado organizamos una quedada en el parque para tomar algo. ¡Os esperamos!",
-            meGusta = 24,
-            comentarios = 6
-        ),
-        Publicacion(
-            autor = "María García",
-            inicial = "M",
-            tiempoYUbica = "Hace 3 h · Calle Mayor",
-            contenido = "Se ha encontrado un peluche en el portal, se ha dejado en la garita del conserje.",
-            meGusta = 0,
-            comentarios = 0
-        ),
-        Publicacion(
-            autor = "Carlos Ruiz",
-            inicial = "C",
-            tiempoYUbica = "Hace 5 h · Portal 4",
-            contenido = "¿Alguien sabe si mañana cortan el agua por obras en la caldera?",
-            meGusta = 4,
-            comentarios = 8
-        ),
-        Publicacion(
-            autor = "Ana Belén",
-            inicial = "A",
-            tiempoYUbica = "Hace 6 h · 2º B",
-            contenido = "Tengo cajas de cartón limpias para mudanza por si a alguien le hacen falta antes de tirarlas al contenedor azul.",
-            meGusta = 9,
-            comentarios = 3
-        ),
-        Publicacion(
-            autor = "Javier Gómez",
-            inicial = "J",
-            tiempoYUbica = "Ayer · Garaje",
-            contenido = "Recordad aparcar dentro de las líneas en la planta -1 para no dificultar la maniobra de salida.",
-            meGusta = 15,
-            comentarios = 2
-        )
+    val context = LocalContext.current
+    val app = context.applicationContext as RadioPatioApplication
+
+    val viewModel: RadioPatioViewModel = viewModel(
+        factory = RadioPatioViewModelFactory(app.database.publicacionDao())
     )
+
+    // Carga inicial desde Room
+    LaunchedEffect(Unit) {
+        viewModel.insertarDatosIniciales()
+    }
 
     Scaffold(
         modifier = modifier,
@@ -93,46 +62,54 @@ fun PaginaPrincipal(
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. Campo para redactar publicación (hace scroll normal)
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                 ) {
-                    CampoCrearPublicacion()
+                    CampoCrearPublicacion(
+                        onCrearClick = onIrACrearPublicacion
+                    )
                 }
             }
 
-            // 2. Encabezado fijo (Sticky Header)
             stickyHeader {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFFF9FAFB)) // Fondo opaco para que no se transparente el contenido
+                        .background(Color(0xFFF9FAFB))
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     NoticiaFijada()
                 }
             }
 
-            // 3. Todas las publicaciones
-            items(listaPublicaciones) { publicacion ->
+            items(viewModel.publicaciones) { entidad ->
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                 ) {
-                    TarjetaPublicacion(publicacion = publicacion)
+                    TarjetaPublicacion(
+                        publicacion = Publicacion(
+                            autor = entidad.autor,
+                            inicial = entidad.inicial,
+                            tiempoYUbica = entidad.tiempoYUbica,
+                            contenido = entidad.contenido,
+                            meGusta = entidad.meGusta,
+                            comentarios = entidad.comentarios
+                        ),
+                        onEliminarClick = {
+                            viewModel.eliminarPublicacion(entidad)
+                        }
+                    )
                 }
             }
         }
     }
 }
 
-/**
- * Barra superior fija con logotipo, título y botones de acción.
- */
 @Composable
 private fun BarraSuperior() {
     Surface(shadowElevation = 2.dp) {
@@ -171,49 +148,6 @@ private fun BarraSuperior() {
     }
 }
 
-///**
-// * Barra de navegación inferior fija.
-// */
-//@Composable
-//private fun BarraNavegacionInferior() {
-//    Surface(shadowElevation = 8.dp) {
-//        Row(
-//            modifier = Modifier
-//                .fillMaxWidth()
-//                .background(Color(0xFFEAEFF2))
-//                .navigationBarsPadding()
-//                .padding(vertical = 6.dp, horizontal = 24.dp),
-//            horizontalArrangement = Arrangement.SpaceBetween,
-//            verticalAlignment = Alignment.CenterVertically
-//        ) {
-//            IconButton(onClick = {}) {
-//                Icon(Icons.Outlined.Home, contentDescription = "Inicio", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
-//            }
-//            IconButton(onClick = {}) {
-//                Icon(Icons.Outlined.Person, contentDescription = "Vecinos", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
-//            }
-//            Box(
-//                modifier = Modifier
-//                    .size(52.dp)
-//                    .clip(CircleShape)
-//                    .background(Color(0xFF389F82)),
-//                contentAlignment = Alignment.Center
-//            ) {
-//                Icon(Icons.Outlined.Add, contentDescription = "Publicar", tint = Color.White, modifier = Modifier.size(28.dp))
-//            }
-//            IconButton(onClick = {}) {
-//                Icon(Icons.Outlined.ShoppingBasket, contentDescription = "Mercadillo", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
-//            }
-//            IconButton(onClick = {}) {
-//                Icon(Icons.Outlined.DateRange, contentDescription = "Eventos", tint = Color(0xFF133E54), modifier = Modifier.size(28.dp))
-//            }
-//        }
-//    }
-//}
-
-/**
- * Noticia fijada destacada en verde.
- */
 @Composable
 private fun NoticiaFijada() {
     Column(
@@ -251,17 +185,17 @@ private fun NoticiaFijada() {
     }
 }
 
-/**
- * Campo de texto para empezar a redactar una publicación.
- */
 @Composable
-private fun CampoCrearPublicacion() {
+private fun CampoCrearPublicacion(
+    onCrearClick: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White)
             .border(1.dp, Color(0xFFECEFF1), RoundedCornerShape(12.dp))
+            .clickable { onCrearClick() }
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -278,73 +212,16 @@ private fun CampoCrearPublicacion() {
                 .background(Color(0xFF0F8A5F)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "Crear publicación",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }
 
-/**
- * Tarjeta individual para mostrar una publicación.
- */
-@Composable
-fun TarjetaPublicacion(publicacion: Publicacion) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFECEFF1), RoundedCornerShape(14.dp))
-            .padding(14.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF133E54)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(publicacion.inicial, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(text = publicacion.autor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text(text = publicacion.tiempoYUbica, fontSize = 11.sp, color = Color.Gray)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = publicacion.contenido,
-            fontSize = 13.sp,
-            color = Color(0xFF263238)
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Favorite, contentDescription = "Me gusta", tint = Color(0xFFE53935), modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "${publicacion.meGusta}", fontSize = 12.sp, color = Color.DarkGray)
-            }
-            Spacer(modifier = Modifier.width(20.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = "Comentarios", tint = Color.Gray, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "${publicacion.comentarios}", fontSize = 12.sp, color = Color.DarkGray)
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Icon(Icons.Outlined.Share, contentDescription = "Compartir", tint = Color.Gray, modifier = Modifier.size(16.dp))
-        }
-    }
-}
-
-/**
- * Previsualización para Android Studio.
- */
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun PaginaPrincipalPreview() {

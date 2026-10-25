@@ -1,4 +1,4 @@
-package com.example.radiopatio
+package com.example.radiopatio.publicacion
 
 data class Publicacion(
     val autor: String,
