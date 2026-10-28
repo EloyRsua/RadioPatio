@@ -17,12 +17,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -43,8 +43,8 @@ fun TarjetaProducto(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFD6DDE1),
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline,
                 RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(10.dp)
@@ -55,7 +55,7 @@ fun TarjetaProducto(
                 .fillMaxWidth()
                 .height(115.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFFF0F4F7)),
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ){
             if(producto.imagenRes!=null){
@@ -69,7 +69,7 @@ fun TarjetaProducto(
                 Icon(
                     imageVector = Icons.Outlined.ShoppingBag,
                     contentDescription =  null,
-                    tint = Color(0xFF90A4AE),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(36.dp)
                 )
             }
@@ -81,7 +81,7 @@ fun TarjetaProducto(
             text = producto.titulo,
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
-            color = Color(0xFF133E54),
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1
         )
 
@@ -90,14 +90,14 @@ fun TarjetaProducto(
             text = producto.precio,
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
-            color = Color(0xFF2E9473)
+            color = MaterialTheme.colorScheme.secondary
         )
 
         // Ubicacion y antiguedad
         Text(
             text = producto.ubicacionYTiempo,
             fontSize = 11.sp,
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

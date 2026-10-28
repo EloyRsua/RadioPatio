@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,8 +37,8 @@ fun TarjetaPublicacion(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFECEFF1), RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
             .padding(14.dp)
     ) {
         // Cabecera: Avatar, Autor, Tiempo/Ubicación y Botón de Eliminar
@@ -48,12 +49,12 @@ fun TarjetaPublicacion(
                 modifier = Modifier
                     .size(34.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF133E54)),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = publicacion.inicial,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
@@ -67,12 +68,13 @@ fun TarjetaPublicacion(
                 Text(
                     text = publicacion.autor,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = publicacion.tiempoYUbica,
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -93,7 +95,7 @@ fun TarjetaPublicacion(
         Text(
             text = publicacion.contenido,
             fontSize = 13.sp,
-            color = Color(0xFF263238)
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -114,7 +116,7 @@ fun TarjetaPublicacion(
                 Text(
                     text = "${publicacion.meGusta}",
                     fontSize = 12.sp,
-                    color = Color.DarkGray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -124,14 +126,14 @@ fun TarjetaPublicacion(
                 Icon(
                     imageVector = Icons.Outlined.ChatBubbleOutline,
                     contentDescription = "Comentarios",
-                    tint = Color.Gray,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "${publicacion.comentarios}",
                     fontSize = 12.sp,
-                    color = Color.DarkGray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -140,7 +142,7 @@ fun TarjetaPublicacion(
             Icon(
                 imageVector = Icons.Outlined.Share,
                 contentDescription = "Compartir",
-                tint = Color.Gray,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)
             )
         }

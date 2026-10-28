@@ -8,7 +8,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,8 +22,8 @@ fun PantallaCrearPublicacion(
     var ubicacion by remember { mutableStateOf("") }
     var contenido by remember { mutableStateOf("") }
 
-    val verdeBoton = Color(0xFF0F8A5F)
-    val azulPrincipal = Color(0xFF133E54)
+    val verdeBoton = MaterialTheme.colorScheme.secondary
+    val azulPrincipal = MaterialTheme.colorScheme.primary
 
     Scaffold(
         topBar = {
@@ -39,20 +38,24 @@ fun PantallaCrearPublicacion(
                 navigationIcon = {
                     IconButton(onClick = onVolver) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Volver",
                             tint = azulPrincipal
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                )
             )
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF9FAFB))
+                .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -102,7 +105,7 @@ fun PantallaCrearPublicacion(
                     text = "Publicar",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSecondary
                 )
             }
         }

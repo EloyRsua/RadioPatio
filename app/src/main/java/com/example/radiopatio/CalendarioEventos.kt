@@ -181,7 +181,7 @@ fun CalendarioEventosContent(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF9FAFB))
+                .background(MaterialTheme.colorScheme.background)
                 .padding(relleno),
             contentPadding = PaddingValues(bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -236,12 +236,12 @@ fun CalendarioEventosContent(
                             },
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            color = Color(0xFF133E54)
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Text(
                             text = "${eventosFiltrados.size} actividad${if (eventosFiltrados.size == 1) "" else "es"} disponible${if (eventosFiltrados.size == 1) "" else "s"}",
                             fontSize = 12.sp,
-                            color = Color.Gray
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -253,7 +253,7 @@ fun CalendarioEventosContent(
                             Text(
                                 text = "Ver todo el mes",
                                 fontSize = 12.sp,
-                                color = Color(0xFF389F82),
+                                color = MaterialTheme.colorScheme.secondary,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -310,7 +310,7 @@ private fun BarraSuperiorEventos(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.surface)
                 .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -319,7 +319,7 @@ private fun BarraSuperiorEventos(
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Volver",
-                    tint = Color(0xFF133E54)
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -330,12 +330,12 @@ private fun BarraSuperiorEventos(
                     text = "Calendario de Eventos",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF133E54)
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = "Actividades y avisos de la comunidad",
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -343,7 +343,7 @@ private fun BarraSuperiorEventos(
                 Icon(
                     Icons.Outlined.AddCircleOutline,
                     contentDescription = "Añadir Evento",
-                    tint = Color(0xFF389F82)
+                    tint = MaterialTheme.colorScheme.secondary
                 )
             }
         }
@@ -376,19 +376,19 @@ private fun SelectorMesHeader(
                 text = "$nombreMes $anio",
                 fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF133E54)
+                color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(8.dp))
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFEAF5EC),
+                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
                 modifier = Modifier.clickable { onIrAHoy() }
             ) {
                 Text(
                     text = "Hoy",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF0F8A5F),
+                    color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
@@ -402,7 +402,7 @@ private fun SelectorMesHeader(
                 Icon(
                     Icons.Filled.ChevronLeft,
                     contentDescription = "Mes anterior",
-                    tint = Color(0xFF133E54)
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
             IconButton(
@@ -412,7 +412,7 @@ private fun SelectorMesHeader(
                 Icon(
                     Icons.Filled.ChevronRight,
                     contentDescription = "Mes siguiente",
-                    tint = Color(0xFF133E54)
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -440,9 +440,11 @@ private fun TarjetaCalendarioMensual(
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFECEFF1)))
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outline)
+        )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -455,7 +457,7 @@ private fun TarjetaCalendarioMensual(
                         text = dia,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (esFinDeSemana) Color(0xFFE65100) else Color.Gray,
+                        color = if (esFinDeSemana) Color(0xFFE65100) else MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f)
                     )
@@ -516,8 +518,8 @@ private fun CeldaDiaCalendario(
 ) {
     val fondoColor by animateColorAsState(
         targetValue = when {
-            esSeleccionado -> Color(0xFF133E54)
-            esHoy -> Color(0xFFEAF5EC)
+            esSeleccionado -> MaterialTheme.colorScheme.primary
+            esHoy -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
             else -> Color.Transparent
         },
         label = "fondoDia"
@@ -525,9 +527,9 @@ private fun CeldaDiaCalendario(
 
     val textoColor by animateColorAsState(
         targetValue = when {
-            esSeleccionado -> Color.White
-            esHoy -> Color(0xFF0F8A5F)
-            else -> Color(0xFF263238)
+            esSeleccionado -> MaterialTheme.colorScheme.onPrimary
+            esHoy -> MaterialTheme.colorScheme.secondary
+            else -> MaterialTheme.colorScheme.onSurface
         },
         label = "textoDia"
     )
@@ -540,7 +542,7 @@ private fun CeldaDiaCalendario(
             .background(fondoColor)
             .then(
                 if (esHoy && !esSeleccionado) {
-                    Modifier.border(1.dp, Color(0xFF389F82), RoundedCornerShape(10.dp))
+                    Modifier.border(1.dp, MaterialTheme.colorScheme.secondary, RoundedCornerShape(10.dp))
                 } else Modifier
             )
             .clickable { onClick() },
@@ -561,7 +563,7 @@ private fun CeldaDiaCalendario(
                 modifier = Modifier.padding(top = 2.dp)
             ) {
                 eventos.take(3).forEach { evento ->
-                    val colorPunto = if (esSeleccionado) Color(0xFF389F82) else evento.categoria.colorTexto
+                    val colorPunto = if (esSeleccionado) MaterialTheme.colorScheme.secondary else evento.categoria.colorTexto
                     Box(
                         modifier = Modifier
                             .size(4.dp)
@@ -595,8 +597,8 @@ private fun FiltroCategoriasEventos(
 
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = if (esActivo) Color(0xFF133E54) else Color.White,
-                border = if (esActivo) null else CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFECEFF1))),
+                color = if (esActivo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                border = if (esActivo) null else CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)),
                 shadowElevation = if (esActivo) 2.dp else 0.dp,
                 modifier = Modifier.clickable { onCategoriaSeleccionada(categoria) }
             ) {
@@ -613,7 +615,7 @@ private fun FiltroCategoriasEventos(
                         text = categoria.nombre,
                         fontSize = 12.sp,
                         fontWeight = if (esActivo) FontWeight.Bold else FontWeight.Medium,
-                        color = if (esActivo) Color.White else Color(0xFF37474F)
+                        color = if (esActivo) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -635,11 +637,11 @@ fun TarjetaEvento(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = androidx.compose.ui.graphics.SolidColor(
-                if (evento.esDestacado) Color(0xFF389F82).copy(alpha = 0.5f) else Color(0xFFECEFF1)
+                if (evento.esDestacado) MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
             )
         )
     ) {
@@ -652,12 +654,12 @@ fun TarjetaEvento(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        color = Color(0xFFEAF5EC),
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
                             text = "⭐ EVENTO DESTACADO DEL BARRIO",
-                            color = Color(0xFF0F8A5F),
+                            color = MaterialTheme.colorScheme.secondary,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -671,7 +673,7 @@ fun TarjetaEvento(
                 verticalAlignment = Alignment.Top
             ) {
                 Surface(
-                    color = Color(0xFFF1F5F9),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.size(54.dp)
                 ) {
@@ -684,13 +686,13 @@ fun TarjetaEvento(
                             text = evento.fecha.dayOfMonth.toString(),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF133E54)
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Text(
                             text = evento.fecha.month.getDisplayName(TextStyle.SHORT, Locale("es", "ES")).uppercase(),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF389F82)
+                            color = MaterialTheme.colorScheme.secondary
                         )
                     }
                 }
@@ -717,7 +719,7 @@ fun TarjetaEvento(
                         text = evento.titulo,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1A1A1A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -729,21 +731,21 @@ fun TarjetaEvento(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFFF9FAFB))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     .padding(8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Outlined.AccessTime,
                         contentDescription = "Hora",
-                        tint = Color(0xFF546E7A),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = evento.hora,
                         fontSize = 12.sp,
-                        color = Color(0xFF37474F),
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -752,14 +754,14 @@ fun TarjetaEvento(
                     Icon(
                         Icons.Outlined.LocationOn,
                         contentDescription = "Ubicación",
-                        tint = Color(0xFF546E7A),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = evento.ubicacion,
                         fontSize = 12.sp,
-                        color = Color(0xFF37474F)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -767,14 +769,14 @@ fun TarjetaEvento(
                     Icon(
                         Icons.Outlined.Person,
                         contentDescription = "Organizador",
-                        tint = Color(0xFF546E7A),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Convoca: ${evento.organizador}",
                         fontSize = 12.sp,
-                        color = Color(0xFF546E7A)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -784,7 +786,7 @@ fun TarjetaEvento(
             Text(
                 text = evento.descripcion,
                 fontSize = 12.sp,
-                color = Color(0xFF455A64),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (expandirDescripcion) Int.MAX_VALUE else 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.clickable { expandirDescripcion = !expandirDescripcion }
@@ -867,7 +869,7 @@ private fun EstadoEventosVacio(
         verticalArrangement = Arrangement.Center
     ) {
         Surface(
-            color = Color(0xFFEAEFF2),
+            color = MaterialTheme.colorScheme.surfaceVariant,
             shape = CircleShape,
             modifier = Modifier.size(64.dp)
         ) {
@@ -875,7 +877,7 @@ private fun EstadoEventosVacio(
                 Icon(
                     Icons.Outlined.EventBusy,
                     contentDescription = null,
-                    tint = Color(0xFF133E54),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(32.dp)
                 )
             }
@@ -887,7 +889,7 @@ private fun EstadoEventosVacio(
             text = "Sin eventos en esta fecha",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF133E54)
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -895,7 +897,7 @@ private fun EstadoEventosVacio(
         Text(
             text = "No hay actividades comunitarias programadas con los filtros actuales.",
             fontSize = 12.sp,
-            color = Color.Gray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
 
@@ -906,17 +908,17 @@ private fun EstadoEventosVacio(
                 onClick = onVerTodos,
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text("Ver todo el mes", fontSize = 12.sp, color = Color(0xFF133E54))
+                Text("Ver todo el mes", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
             }
 
             Button(
                 onClick = onProponerEvento,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF389F82)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Proponer", fontSize = 12.sp)
+                Text("Proponer", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondary)
             }
         }
     }
@@ -947,7 +949,7 @@ fun DialogoNuevoEvento(
                 Icon(
                     Icons.Outlined.EventAvailable,
                     contentDescription = null,
-                    tint = Color(0xFF389F82),
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -955,7 +957,7 @@ fun DialogoNuevoEvento(
                     text = "Proponer Evento",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF133E54)
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         },

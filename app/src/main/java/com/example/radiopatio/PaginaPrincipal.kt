@@ -20,7 +20,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -57,7 +56,7 @@ fun PaginaPrincipal(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF9FAFB))
+                .background(MaterialTheme.colorScheme.background)
                 .padding(rellenoInterior),
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -78,7 +77,7 @@ fun PaginaPrincipal(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFFF9FAFB))
+                        .background(MaterialTheme.colorScheme.background)
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     NoticiaFijada()
@@ -116,7 +115,7 @@ private fun BarraSuperior() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.surface)
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -135,14 +134,14 @@ private fun BarraSuperior() {
                 text = "RadioPatio",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF133E54),
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Search, contentDescription = "Buscar", tint = Color(0xFF133E54))
+                Icon(Icons.Outlined.Search, contentDescription = "Buscar", tint = MaterialTheme.colorScheme.onSurface)
             }
             IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Notifications, contentDescription = "Avisos", tint = Color(0xFF133E54))
+                Icon(Icons.Outlined.Notifications, contentDescription = "Avisos", tint = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
@@ -154,7 +153,7 @@ private fun NoticiaFijada() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFFEAF5EC))
+            .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f))
             .padding(12.dp)
     ) {
         Row(
@@ -166,21 +165,25 @@ private fun NoticiaFijada() {
                 text = "📌 NOTICIA FIJADA",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F8A5F)
+                color = MaterialTheme.colorScheme.secondary
             )
-            Text(text = "Hasta el 12 de octubre.", fontSize = 11.sp, color = Color(0xFF0F8A5F))
+            Text(
+                text = "Hasta el 12 de octubre.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.secondary
+            )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = "Fiestas del Barrio 2026 🎉",
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
-            color = Color(0xFF1A1A1A)
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = "Este sábado celebramos las fiestas en el parque del Oeste. Música, comida y actividades.",
             fontSize = 12.sp,
-            color = Color(0xFF455A64)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -193,8 +196,8 @@ private fun CampoCrearPublicacion(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFECEFF1), RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
             .clickable { onCrearClick() }
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -202,20 +205,20 @@ private fun CampoCrearPublicacion(
         Text(
             text = "¿Qué quieres compartir hoy?",
             fontSize = 13.sp,
-            color = Color.Gray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f)
         )
         Box(
             modifier = Modifier
                 .size(26.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF0F8A5F)),
+                .background(MaterialTheme.colorScheme.secondary),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Default.Add,
                 contentDescription = "Crear publicación",
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onSecondary,
                 modifier = Modifier.size(16.dp)
             )
         }

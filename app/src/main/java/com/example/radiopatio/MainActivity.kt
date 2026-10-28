@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -89,12 +90,12 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF389F82)),
+                                            .background(MaterialTheme.colorScheme.secondary),
                                         contentAlignment = Alignment.Center
                                     ){
                                         Icon(imageVector = Icons.Default.Add,
                                             contentDescription = "Publicar",
-                                            tint = Color.White,
+                                            tint = MaterialTheme.colorScheme.onSecondary,
                                             modifier = Modifier.size(16.dp))
                                     }
                                 },

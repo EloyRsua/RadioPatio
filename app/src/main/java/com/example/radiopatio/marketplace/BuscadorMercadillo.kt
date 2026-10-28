@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -63,22 +64,29 @@ fun BuscadorMercadillo(
                 .weight(1f)
                 .height(50.dp),
             placeholder = {
-                Text("Buscar en el mercadillo", color = Color.Gray, fontSize = 14.sp)
+                Text(
+                    text = "Buscar en el mercadillo",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp
+                )
             },
             leadingIcon = {
                 Icon(
                     Icons.Outlined.Search,
                     contentDescription = "Buscar",
-                    tint = Color.Gray,
-                    modifier = Modifier.size(20.dp))
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             },
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = Color.White,
-                focusedContainerColor = Color.White,
-                unfocusedBorderColor = Color(0xFFB0BEC5),
-                focusedBorderColor = Color(0xFF133E54),
-                cursorColor = Color(0xFF133E54)
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                cursorColor = MaterialTheme.colorScheme.primary,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
             ),
             singleLine = true
         )
@@ -91,8 +99,8 @@ fun BuscadorMercadillo(
                 Icon(
                     imageVector = Icons.Outlined.Tune,
                     contentDescription = "Filtros",
-                    // Se pone verde si hay un filtro activo, si no, azul oscuro
-                    tint = if (categoriaSeleccionada != CategoriaProducto.TODOS) Color(0xFF389F82) else Color(0xFF133E54),
+                    // Se pone verde si hay un filtro activo, si no, color de icono normal
+                    tint = if (categoriaSeleccionada != CategoriaProducto.TODOS) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -100,7 +108,7 @@ fun BuscadorMercadillo(
             DropdownMenu(
                 expanded = menuExpandido,
                 onDismissRequest = { menuExpandido = false},
-                modifier = Modifier.background(Color.White)
+                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
             ) {
                 CategoriaProducto.entries.forEach{ categoria ->
                     DropdownMenuItem(
@@ -108,7 +116,7 @@ fun BuscadorMercadillo(
                             Text(
                                 text = categoria.nombre,
                                 fontWeight = if (categoria == categoriaSeleccionada) FontWeight.Bold else FontWeight.Normal,
-                                color = if (categoria == categoriaSeleccionada) Color(0xFF0F8A5F) else Color.Black
+                                color = if (categoria == categoriaSeleccionada) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
                             )
                         },
                         onClick = {
@@ -137,7 +145,7 @@ fun SelectorModoMercadillo(
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .height(48.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFFE8ECEF))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -147,7 +155,7 @@ fun SelectorModoMercadillo(
                 .weight(1f)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(20.dp))
-                .background(if (esComprarSeleccionado) Color(0xFF0D324D) else Color.Transparent)
+                .background(if (esComprarSeleccionado) MaterialTheme.colorScheme.primary else Color.Transparent)
                 .clickable { onSeleccionarModo(true) },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
@@ -155,7 +163,7 @@ fun SelectorModoMercadillo(
             Icon(
                 imageVector = Icons.Outlined.ShoppingCart,
                 contentDescription = null,
-                tint = if (esComprarSeleccionado) Color.White else Color(0xFF133E54),
+                tint = if (esComprarSeleccionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -163,7 +171,7 @@ fun SelectorModoMercadillo(
                 text = "Comprar",
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
-                color = if (esComprarSeleccionado) Color.White else Color(0xFF133E54)
+                color = if (esComprarSeleccionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
             )
         }
         // Opción: PRESTAR
@@ -172,7 +180,7 @@ fun SelectorModoMercadillo(
                 .weight(1f)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(20.dp))
-                .background(if (!esComprarSeleccionado) Color(0xFF0D324D) else Color.Transparent)
+                .background(if (!esComprarSeleccionado) MaterialTheme.colorScheme.primary else Color.Transparent)
                 .clickable { onSeleccionarModo(false) },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
@@ -180,7 +188,7 @@ fun SelectorModoMercadillo(
             Icon(
                 imageVector = Icons.Outlined.Handshake,
                 contentDescription = null,
-                tint = if (!esComprarSeleccionado) Color.White else Color(0xFF133E54),
+                tint = if (!esComprarSeleccionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -188,7 +196,7 @@ fun SelectorModoMercadillo(
                 text = "Prestar",
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
-                color = if (!esComprarSeleccionado) Color.White else Color(0xFF133E54)
+                color = if (!esComprarSeleccionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
             )
         }
     }

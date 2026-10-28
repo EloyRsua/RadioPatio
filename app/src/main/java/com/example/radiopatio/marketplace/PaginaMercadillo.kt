@@ -14,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -83,7 +82,7 @@ fun MercadilloContent(
         LazyColumn (
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.background)
                 .padding(rellenoInterior),
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -102,7 +101,7 @@ fun MercadilloContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White) // Fondo opaco para que no se superpongan los productos
+                        .background(MaterialTheme.colorScheme.background) // Fondo opaco para que no se superpongan los productos
                         .padding(bottom = 6.dp)
                 ) {
                     SelectorModoMercadillo(
@@ -162,7 +161,7 @@ fun DialogoNuevoProducto(
                 Icon(
                     Icons.Outlined.AddCircleOutline,
                     contentDescription = null,
-                    tint = Color(0xFF389F82),
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -170,7 +169,7 @@ fun DialogoNuevoProducto(
                     text = "Subir Artículo",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF133E54)
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         },
@@ -216,7 +215,12 @@ fun DialogoNuevoProducto(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text("Categoría:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
+                Text(
+                    text = "Categoría:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 // Usamos FlowRow o un LazyRow para las categorías
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(CategoriaProducto.values().filter { it != CategoriaProducto.TODOS }) { cat ->
@@ -245,14 +249,14 @@ fun DialogoNuevoProducto(
                     }
                 },
                 enabled = titulo.isNotBlank() && precio.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF389F82))
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
-                Text("Publicar Artículo")
+                Text("Publicar Artículo", color = MaterialTheme.colorScheme.onSecondary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancelar", color = Color.Gray)
+                Text("Cancelar", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )
@@ -266,7 +270,7 @@ private fun BarraSuperiorMercadillo(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.surface)
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -276,12 +280,12 @@ private fun BarraSuperiorMercadillo(
                     text = "Mercadillo vecinal",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0XFF133E54)
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = "Compra, vende y presta en tu comunidad",
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -289,7 +293,7 @@ private fun BarraSuperiorMercadillo(
                 Icon(
                     Icons.Outlined.AddCircleOutline,
                     contentDescription = "Subir Artículo",
-                    tint = Color(0xFF389F82)
+                    tint = MaterialTheme.colorScheme.secondary
                 )
             }
         }
