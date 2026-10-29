@@ -14,6 +14,7 @@ import com.example.radiopatio.RadioPatioApplication
 import com.example.radiopatio.RadioPatioViewModel
 import com.example.radiopatio.RadioPatioViewModelFactory
 import com.example.radiopatio.data.PublicacionEntidad
+import com.example.radiopatio.informacionUsuario.PerfilUsuarioScreen
 import com.example.radiopatio.marketplace.MercadilloScreen
 import com.example.radiopatio.publicacion.PantallaCrearPublicacion
 
@@ -73,6 +74,13 @@ fun AppNavHost(
 
                     // Inserción asíncrona en Room y vuelta al Feed
                     viewModel.crearPublicacion(nuevaEntidad)
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable<Perfil> {
+            PerfilUsuarioScreen(
+                onVolver = {
                     navController.popBackStack()
                 }
             )

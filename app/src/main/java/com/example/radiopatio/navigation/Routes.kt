@@ -23,4 +23,5 @@ object Eventos
 object Publicar
 
 
-
+@Serializable
+object Perfil
