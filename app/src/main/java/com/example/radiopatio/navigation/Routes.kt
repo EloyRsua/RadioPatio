@@ -25,3 +25,9 @@ object Publicar
 
 @Serializable
 object Perfil
+
+@Serializable
+object InicioSesion
+
+@Serializable
+object RegistroNuevo

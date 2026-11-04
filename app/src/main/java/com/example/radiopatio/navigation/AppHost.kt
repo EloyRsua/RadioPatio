@@ -17,6 +17,8 @@ import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.informacionUsuario.PerfilUsuarioScreen
 import com.example.radiopatio.marketplace.MercadilloScreen
 import com.example.radiopatio.publicacion.PantallaCrearPublicacion
+import com.example.radiopatio.registroInicio.RegistroNuevoUsuario
+import com.example.radiopatio.registroInicio.RegistroUsuario
 
 @Composable
 fun AppNavHost(
@@ -36,6 +38,37 @@ fun AppNavHost(
         startDestination = Inicio,
         modifier = modifier
     ) {
+
+        // 1. Iniciar Sesión (Usuarios ya registrados)
+        composable<InicioSesion> {
+            RegistroUsuario(
+                onLoginClick = { email, password ->
+                    // TODO: Conectar con Firebase Auth (signInWithEmailAndPassword)
+                    navController.navigate(Inicio) {
+                        popUpTo(InicioSesion) { inclusive = true }
+                    }
+                },
+                onIrANuevoRegistroClick = {
+                    navController.navigate(RegistroNuevo)
+                }
+            )
+        }
+
+        // 2. Crear Cuenta (Nuevos Usuarios)
+        composable<RegistroNuevo> {
+            RegistroNuevoUsuario(
+                onRegisterClick = { nombre, apellidos, email, pass, photoUri ->
+                    // TODO: Conectar con UserRepository / Firebase Auth + Firestore
+                    navController.navigate(Inicio) {
+                        popUpTo(InicioSesion) { inclusive = true }
+                    }
+                },
+                onVolverClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
         composable<Inicio> {
             PaginaPrincipal(
                 onIrACrearPublicacion = {
