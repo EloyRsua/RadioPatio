@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Visibility
@@ -41,11 +42,11 @@ import com.example.radiopatio.R
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
 /**
- * Pantalla para el registro de nuevos usuarios completos
+ * Pantalla para el registro de nuevos usuarios con datos de vivienda
  */
 @Composable
 fun RegistroNuevoUsuario(
-    onRegisterClick: (nombre: String, apellidos: String, email: String, pass: String, photoUri: Uri?) -> Unit = { _, _, _, _, _ -> },
+    onRegisterClick: (nombre: String, apellidos: String, vivienda: String, email: String, pass: String, photoUri: Uri?) -> Unit = { _, _, _, _, _, _ -> },
     onVolverClick: () -> Unit = {}
 ) {
     val azulPrincipal = Color(0xFF133E54)
@@ -56,6 +57,7 @@ fun RegistroNuevoUsuario(
 
     var nombre by remember { mutableStateOf("") }
     var apellidos by remember { mutableStateOf("") }
+    var vivienda by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -181,6 +183,15 @@ fun RegistroNuevoUsuario(
                     )
                 }
 
+                // Campo Vivienda / Piso
+                CampoEntradaTexto(
+                    value = vivienda,
+                    onValueChange = { vivienda = it },
+                    placeholder = "Piso / Vivienda (ej. Portal 1, 2ºA)",
+                    icono = Icons.Outlined.Home,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 CampoEntradaTexto(
                     value = email,
                     onValueChange = { email = it },
@@ -239,11 +250,11 @@ fun RegistroNuevoUsuario(
 
             Button(
                 onClick = {
-                    if (aceptoNormas && nombre.isNotBlank() && email.isNotBlank() && password.isNotBlank()) {
-                        onRegisterClick(nombre, apellidos, email, password, photoUri)
+                    if (aceptoNormas && nombre.isNotBlank() && vivienda.isNotBlank() && email.isNotBlank() && password.isNotBlank()) {
+                        onRegisterClick(nombre, apellidos, vivienda, email, password, photoUri)
                     }
                 },
-                enabled = aceptoNormas && nombre.isNotBlank() && email.isNotBlank() && password.isNotBlank(),
+                enabled = aceptoNormas && nombre.isNotBlank() && vivienda.isNotBlank() && email.isNotBlank() && password.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),

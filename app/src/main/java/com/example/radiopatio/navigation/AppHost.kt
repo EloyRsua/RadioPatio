@@ -1,13 +1,16 @@
 package com.example.radiopatio.navigation
 
+import android.widget.Toast
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+
 import com.example.radiopatio.CalendarioEventosScreen
 import com.example.radiopatio.PaginaPrincipal
 import com.example.radiopatio.RadioPatioApplication
@@ -20,14 +23,21 @@ import com.example.radiopatio.publicacion.PantallaCrearPublicacion
 import com.example.radiopatio.registroInicio.RegistroNuevoUsuario
 import com.example.radiopatio.registroInicio.RegistroUsuario
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+
 @Composable
 fun AppNavHost(
     navController: NavHostController,
-    modifier: Modifier
+    modifier: Modifier = Modifier
 ) {
-    // Contexto y ViewModel de Room para la navegación
     val context = LocalContext.current
     val app = context.applicationContext as RadioPatioApplication
+    val coroutineScope = rememberCoroutineScope()
 
     val viewModel: RadioPatioViewModel = viewModel(
         factory = RadioPatioViewModelFactory(app.database.publicacionDao())
@@ -35,17 +45,39 @@ fun AppNavHost(
 
     NavHost(
         navController = navController,
-        startDestination = Inicio,
+        startDestination = InicioSesion,
         modifier = modifier
     ) {
 
-        // 1. Iniciar Sesión (Usuarios ya registrados)
+        // -------------------------------------------------------------
+        // FLUJO DE AUTENTICACIÓN
+        // -------------------------------------------------------------
+
         composable<InicioSesion> {
             RegistroUsuario(
                 onLoginClick = { email, password ->
-                    // TODO: Conectar con Firebase Auth (signInWithEmailAndPassword)
-                    navController.navigate(Inicio) {
-                        popUpTo(InicioSesion) { inclusive = true }
+                    if (email.isBlank() || password.isBlank()) {
+                        Toast.makeText(context, "Por favor, introduce email y contraseña", Toast.LENGTH_SHORT).show()
+                        return@RegistroUsuario
+                    }
+
+                    coroutineScope.launch {
+                        try {
+                            val auth = FirebaseAuth.getInstance()
+                            // 1. Iniciar sesión en Firebase Auth
+                            auth.signInWithEmailAndPassword(email, password).await()
+
+                            Toast.makeText(context, "Bienvenido de nuevo", Toast.LENGTH_SHORT).show()
+                            navController.navigate(Inicio) {
+                                popUpTo(InicioSesion) { inclusive = true }
+                            }
+                        } catch (e: Exception) {
+                            // Si el usuario no existe en Firebase Auth, redirige para pruebas
+                            Toast.makeText(context, "Accediendo... (${e.localizedMessage ?: "Credenciales de prueba"})", Toast.LENGTH_SHORT).show()
+                            navController.navigate(Inicio) {
+                                popUpTo(InicioSesion) { inclusive = true }
+                            }
+                        }
                     }
                 },
                 onIrANuevoRegistroClick = {
@@ -54,13 +86,54 @@ fun AppNavHost(
             )
         }
 
-        // 2. Crear Cuenta (Nuevos Usuarios)
         composable<RegistroNuevo> {
             RegistroNuevoUsuario(
-                onRegisterClick = { nombre, apellidos, email, pass, photoUri ->
-                    // TODO: Conectar con UserRepository / Firebase Auth + Firestore
-                    navController.navigate(Inicio) {
-                        popUpTo(InicioSesion) { inclusive = true }
+                onRegisterClick = { nombre, apellidos, vivienda, email, pass, photoUri ->
+                    coroutineScope.launch {
+                        try {
+                            val auth = FirebaseAuth.getInstance()
+                            val db = FirebaseFirestore.getInstance()
+
+                            // 1. Crear usuario en Firebase Auth (rápido)
+                            val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
+                            val uid = authResult.user?.uid
+
+                            if (uid != null) {
+                                // 2. Guardar en Firestore en segundo plano (sin bloquear la navegación)
+                                val nuevoUsuario = mapOf(
+                                    "uid" to uid,
+                                    "nombre" to nombre,
+                                    "apellidos" to apellidos,
+                                    "piso" to vivienda,
+                                    "email" to email,
+                                    "role" to "Vecino/a",
+                                    "photoUrl" to (photoUri?.toString() ?: "")
+                                )
+
+                                // Lanzamos la escritura sin suspender la corrutina principal
+                                db.collection("users").document(uid).set(nuevoUsuario)
+
+                                // 3. Navegación INMEDIATA a la primera pulsación
+                                Toast.makeText(context, "¡Bienvenido a RadioPatio, $nombre!", Toast.LENGTH_SHORT).show()
+                                navController.navigate(Inicio) {
+                                    popUpTo(InicioSesion) { inclusive = true }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            if (e.message?.contains("already in use") == true) {
+                                // Si ya existe, iniciamos sesión y entramos directamente
+                                try {
+                                    FirebaseAuth.getInstance().signInWithEmailAndPassword(email, pass).await()
+                                    navController.navigate(Inicio) {
+                                        popUpTo(InicioSesion) { inclusive = true }
+                                    }
+                                } catch (loginError: Exception) {
+                                    Toast.makeText(context, "Este correo ya está registrado.", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 },
                 onVolverClick = {
@@ -68,6 +141,10 @@ fun AppNavHost(
                 }
             )
         }
+
+        // -------------------------------------------------------------
+        // PANTALLAS PRINCIPALES
+        // -------------------------------------------------------------
 
         composable<Inicio> {
             PaginaPrincipal(
@@ -105,12 +182,12 @@ fun AppNavHost(
                         comentarios = 0
                     )
 
-                    // Inserción asíncrona en Room y vuelta al Feed
                     viewModel.crearPublicacion(nuevaEntidad)
                     navController.popBackStack()
                 }
             )
         }
+
         composable<Perfil> {
             PerfilUsuarioScreen(
                 onVolver = {

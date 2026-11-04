@@ -12,6 +12,7 @@ composeBom = "2024.09.00"
 firebaseBom = "34.4.0"
 services = "4.4.4"
 coil = "2.6.0"
+googleServices = "4.4.2"
 
 # Navigation & Room
 navigation = "2.9.8"
@@ -47,7 +48,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-googleServices = { id = "com.google.gms.google-services", version.ref = "services" }
+googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 
 # Serialización (para Navigation)
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

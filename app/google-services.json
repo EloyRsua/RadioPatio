@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "210823981805",
+    "project_id": "radiopatio-794c5",
+    "storage_bucket": "radiopatio-794c5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:210823981805:android:2ac4128f0d3880b0b3fae4",
+        "android_client_info": {
+          "package_name": "com.example.radiopatio"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCELWkhEe7EXvIIJfSJB8aFaVppcn7_iik"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

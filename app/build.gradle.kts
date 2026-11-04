@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp) // <-- Plugin de KSP para Room
     alias(libs.plugins.googleServices)
-}
+ }
 
 android {
     namespace = "com.example.radiopatio"
@@ -66,6 +66,9 @@ dependencies {
     // Librería Coil para AsyncImage
     implementation(libs.coil.compose)
 
+    // Carga de imágenes con Coil
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     // Navigation & Serialization
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
@@ -81,4 +84,11 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage)
 
+    // Librerías de Firebase que utiliza la app
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-storage")
+
+    // Soporte para corrutinas .await() con Firebase
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.0")
 }
