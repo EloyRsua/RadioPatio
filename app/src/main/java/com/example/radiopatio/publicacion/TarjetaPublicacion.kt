@@ -30,6 +30,7 @@ import com.example.radiopatio.ui.theme.RadioPatioTheme
 @Composable
 fun TarjetaPublicacion(
     publicacion: Publicacion,
+    esMiPublicacion: Boolean = false, // Controla la visibilidad de la papelera
     onEliminarClick: () -> Unit = {}
 ) {
     Column(
@@ -40,7 +41,7 @@ fun TarjetaPublicacion(
             .border(1.dp, Color(0xFFECEFF1), RoundedCornerShape(14.dp))
             .padding(14.dp)
     ) {
-        // Cabecera: Avatar, Autor, Tiempo/Ubicación y Botón de Eliminar
+        // Cabecera: Avatar, Autor, Tiempo/Ubicación y Botón de Eliminar (condicional)
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -76,14 +77,16 @@ fun TarjetaPublicacion(
                 )
             }
 
-            // Botón de eliminar (papelera)
-            IconButton(onClick = onEliminarClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Delete,
-                    contentDescription = "Eliminar publicación",
-                    tint = Color(0xFFE53935),
-                    modifier = Modifier.size(20.dp)
-                )
+            // 🗑️ Botón de eliminar: ÚNICAMENTE visible si la publicación es del usuario actual
+            if (esMiPublicacion) {
+                IconButton(onClick = onEliminarClick) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Eliminar publicación",
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
 
@@ -159,7 +162,8 @@ private fun TarjetaPublicacionPreview() {
                 contenido = "¡Buenas vecin@s! Este sábado quedada en el parque.",
                 meGusta = 24,
                 comentarios = 6
-            )
+            ),
+            esMiPublicacion = true
         )
     }
 }

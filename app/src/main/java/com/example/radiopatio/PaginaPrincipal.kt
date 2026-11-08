@@ -15,8 +15,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +30,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.radiopatio.publicacion.Publicacion
 import com.example.radiopatio.publicacion.TarjetaPublicacion
 import com.example.radiopatio.ui.theme.RadioPatioTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -45,9 +47,33 @@ fun PaginaPrincipal(
         factory = RadioPatioViewModelFactory(app.database.publicacionDao())
     )
 
-    // Carga inicial desde Room
+    // Identidad del usuario con sesión activa en Firebase
+    var nombreUsuarioActual by remember { mutableStateOf("") }
+    var emailUsuarioActual by remember { mutableStateOf("") }
+
     LaunchedEffect(Unit) {
         viewModel.insertarDatosIniciales()
+
+        // Obtener usuario actual de Firebase Auth y Firestore
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            emailUsuarioActual = currentUser.email ?: ""
+            try {
+                val snapshot = FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(currentUser.uid)
+                    .get()
+                    .await()
+
+                if (snapshot.exists()) {
+                    val nombre = snapshot.getString("nombre") ?: ""
+                    val apellidos = snapshot.getString("apellidos") ?: ""
+                    nombreUsuarioActual = "$nombre $apellidos".trim()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     Scaffold(
@@ -86,6 +112,10 @@ fun PaginaPrincipal(
             }
 
             items(viewModel.publicaciones) { entidad ->
+                // Comprobamos si el autor del post coincide con el usuario autenticado
+                val esMiPublicacion = (nombreUsuarioActual.isNotBlank() && entidad.autor.contains(nombreUsuarioActual, ignoreCase = true)) ||
+                        (emailUsuarioActual.isNotBlank() && entidad.autor.contains(emailUsuarioActual.substringBefore("@"), ignoreCase = true))
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -100,6 +130,7 @@ fun PaginaPrincipal(
                             meGusta = entidad.meGusta,
                             comentarios = entidad.comentarios
                         ),
+                        esMiPublicacion = esMiPublicacion,
                         onEliminarClick = {
                             viewModel.eliminarPublicacion(entidad)
                         }

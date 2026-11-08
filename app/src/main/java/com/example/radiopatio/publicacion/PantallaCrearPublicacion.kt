@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -16,80 +18,81 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaCrearPublicacion(
-    onVolver: () -> Unit,
-    onPublicarClick: (autor: String, ubicacion: String, contenido: String) -> Unit
+    onVolver: () -> Unit = {},
+    onPublicarClick: (autor: String, ubicacion: String, contenido: String) -> Unit = { _, _, _ -> }
 ) {
+    val azulPrincipal = Color(0xFF133E54)
+    val verdeBoton = Color(0xFF0F8A5F)
+
+    // Estados manuales editables (iniciados con valores de ejemplo o vacíos)
     var autor by remember { mutableStateOf("") }
     var ubicacion by remember { mutableStateOf("") }
     var contenido by remember { mutableStateOf("") }
 
-    val verdeBoton = Color(0xFF0F8A5F)
-    val azulPrincipal = Color(0xFF133E54)
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = "Nueva Publicación",
-                        fontWeight = FontWeight.Bold,
-                        color = azulPrincipal
-                    )
-                },
+                title = { Text("Nueva Publicación", fontWeight = FontWeight.Bold, color = azulPrincipal) },
                 navigationIcon = {
                     IconButton(onClick = onVolver) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = azulPrincipal
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = azulPrincipal)
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                }
             )
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF9FAFB))
                 .padding(paddingValues)
+                .background(Color.White)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Campo 1: Nombre del autor
             OutlinedTextField(
                 value = autor,
                 onValueChange = { autor = it },
-                label = { Text("Tu nombre") },
+                label = { Text("Tu nombre o apodo") },
+                placeholder = { Text("Ej. Cayetano Vega") },
+                leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )
 
+            // Campo 2: Ubicación / Piso
             OutlinedTextField(
                 value = ubicacion,
                 onValueChange = { ubicacion = it },
-                label = { Text("Ubicación (ej: Portal 3, 2ºB)") },
+                label = { Text("Ubicación o Piso") },
+                placeholder = { Text("Ej. 45, 3F / Portal 1") },
+                leadingIcon = { Icon(Icons.Outlined.Home, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )
 
+            // Campo 3: Mensaje principal
             OutlinedTextField(
                 value = contenido,
                 onValueChange = { contenido = it },
-                label = { Text("¿Qué quieres compartir hoy?") },
-                minLines = 4,
-                maxLines = 6,
-                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Mensaje") },
+                placeholder = { Text("¿Qué quieres compartir hoy?") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 shape = RoundedCornerShape(12.dp)
             )
 
-            Spacer(modifier = Modifier.weight(1f))
-
+            // Botón Publicar
             Button(
                 onClick = {
-                    onPublicarClick(autor, ubicacion, contenido)
+                    onPublicarClick(
+                        autor.ifBlank { "Vecino Anónimo" },
+                        ubicacion.ifBlank { "Comunidad" },
+                        contenido.trim()
+                    )
                 },
                 enabled = contenido.isNotBlank(),
                 modifier = Modifier
@@ -99,10 +102,10 @@ fun PantallaCrearPublicacion(
                 colors = ButtonDefaults.buttonColors(containerColor = verdeBoton)
             ) {
                 Text(
-                    text = "Publicar",
+                    text = "Publicar anuncio",
+                    color = Color.White,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
