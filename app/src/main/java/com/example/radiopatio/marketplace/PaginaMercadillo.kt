@@ -23,6 +23,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.example.radiopatio.RadioPatioApplication
 
 /**
  * Screen: Responsable de mantener y gestionar el estado mediante el ViewModel.
@@ -31,8 +33,14 @@ import androidx.compose.runtime.setValue
 @Composable
 fun MercadilloScreen(
     onProductoClick: (Int) -> Unit = {},
-    viewModel: MercadilloViewModel = viewModel()
 ){
+    val context = LocalContext.current
+    val app = context.applicationContext as RadioPatioApplication
+
+    val viewModel: MercadilloViewModel = viewModel(
+        factory = MercadilloViewModelFactory(app.database.productoDao())
+    )
+
     val uiState = viewModel.uiState
 
     MercadilloContent(
@@ -144,7 +152,6 @@ fun MercadilloContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DialogoNuevoProducto(
     onDismiss: () -> Unit,
@@ -219,7 +226,7 @@ fun DialogoNuevoProducto(
                 Text("Categoría:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
                 // Usamos FlowRow o un LazyRow para las categorías
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(CategoriaProducto.values().filter { it != CategoriaProducto.TODOS }) { cat ->
+                    items(CategoriaProducto.entries.filter { it != CategoriaProducto.TODOS }) { cat ->
                         FilterChip(
                             selected = categoria == cat,
                             onClick = { categoria = cat },
