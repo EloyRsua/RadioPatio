@@ -97,7 +97,7 @@ fun PaginaPrincipal(
                 .fillMaxSize()
                 .background(Color(0xFFF9FAFB))
                 .padding(rellenoInterior),
-            contentPadding = PaddingValues(bottom = 16.dp),
+            contentPadding = PaddingValues(bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {

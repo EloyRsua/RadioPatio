@@ -96,7 +96,7 @@ fun MercadilloContent(
                 .fillMaxSize()
                 .background(Color.White)
                 .padding(rellenoInterior),
-            contentPadding = PaddingValues(bottom = 16.dp),
+            contentPadding = PaddingValues(bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // 1. Buscador (hace scroll normal)
