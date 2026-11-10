@@ -161,8 +161,7 @@ fun CalendarioEventosContent(
     Scaffold(
         topBar = {
             BarraSuperiorEventos(
-                onVolver = onVolverAInicio,
-                onNuevoEvento = onAbrirDialogoNuevoEvento
+                onVolver = onVolverAInicio
             )
         },
         bottomBar = barraInferior,
@@ -303,8 +302,7 @@ fun CalendarioEventosContent(
  */
 @Composable
 private fun BarraSuperiorEventos(
-    onVolver: () -> Unit,
-    onNuevoEvento: () -> Unit
+    onVolver: () -> Unit
 ) {
     Surface(shadowElevation = 2.dp) {
         Row(
@@ -336,14 +334,6 @@ private fun BarraSuperiorEventos(
                     text = "Actividades y avisos de la comunidad",
                     fontSize = 11.sp,
                     color = Color.Gray
-                )
-            }
-
-            IconButton(onClick = onNuevoEvento) {
-                Icon(
-                    Icons.Outlined.AddCircleOutline,
-                    contentDescription = "Añadir Evento",
-                    tint = Color(0xFF389F82)
                 )
             }
         }
