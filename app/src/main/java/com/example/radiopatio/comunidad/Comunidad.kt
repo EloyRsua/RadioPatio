@@ -11,7 +11,6 @@ data class Comunidad(
     val codigoPostal: String = "",
     val descripcion: String = "",
     val tipo: String = "Residencial",
-    val totalPortales: Int = 1,
     val totalVecinos: Int = 0,
     val photoUrl: String = "",
     val verificada: Boolean = false,

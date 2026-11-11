@@ -58,7 +58,6 @@ data class DatosRegistroComunidad(
     val nuevaComunidadCiudad: String = "",
     val nuevaComunidadCp: String = "",
     val nuevaComunidadTipo: String = "Residencial",
-    val nuevaComunidadPortales: Int = 1,
     val nuevaComunidadDescripcion: String = ""
 ) {
     fun estaConfigurada(): Boolean {

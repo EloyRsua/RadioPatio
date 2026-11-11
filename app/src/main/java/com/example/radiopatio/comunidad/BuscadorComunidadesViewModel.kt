@@ -14,8 +14,7 @@ import java.text.Normalizer
 enum class OrdenComunidad(val etiqueta: String) {
     RELEVANCIA("Relevancia"),
     MAS_VECINOS("Más vecinos"),
-    NOMBRE_AZ("Nombre A-Z"),
-    MAS_PORTALES("Más portales")
+    NOMBRE_AZ("Nombre A-Z")
 }
 
 /**
@@ -145,10 +144,6 @@ fun filtrarYOrdenarComunidades(
                 .thenBy { normalizarTexto(it.nombre) }
         )
         OrdenComunidad.NOMBRE_AZ -> filtradas.sortedBy { normalizarTexto(it.nombre) }
-        OrdenComunidad.MAS_PORTALES -> filtradas.sortedWith(
-            compareByDescending<Comunidad> { it.totalPortales }
-                .thenBy { normalizarTexto(it.nombre) }
-        )
     }
 }
 
@@ -287,7 +282,6 @@ class BuscadorComunidadesViewModel(
         ciudad: String,
         codigoPostal: String,
         tipo: String,
-        totalPortales: Int,
         descripcion: String,
         onExito: () -> Unit
     ) {
@@ -301,7 +295,6 @@ class BuscadorComunidadesViewModel(
                 codigoPostal = codigoPostal,
                 descripcion = descripcion,
                 tipo = tipo,
-                totalPortales = totalPortales,
                 createdByUid = uid
             )
 

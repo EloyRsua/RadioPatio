@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -317,20 +318,30 @@ fun AppNavHost(
         }
 
         composable<Publicar> {
+            var publicando by remember { mutableStateOf(false) }
+
             PantallaCrearPublicacion(
                 autorInicial = viewModel.uiState.usuarioActual?.nombre.orEmpty(),
                 ubicacionInicial = viewModel.uiState.usuarioActual?.vivienda.orEmpty(),
+                publicando = publicando,
                 onVolver = {
-                    navController.popBackStack()
+                    if (!publicando && navController.currentBackStackEntry?.destination?.hasRoute<Publicar>() == true) {
+                        navController.popBackStack()
+                    }
                 },
                 onPublicarClick = { autor, ubicacion, contenido ->
+                    if (publicando) return@PantallaCrearPublicacion
+                    publicando = true
                     viewModel.crearPublicacion(
                         autor = autor,
                         ubicacion = ubicacion,
                         contenido = contenido
                     ) { exito ->
+                        publicando = false
                         if (exito) {
-                            navController.popBackStack()
+                            if (navController.currentBackStackEntry?.destination?.hasRoute<Publicar>() == true) {
+                                navController.popBackStack()
+                            }
                         } else {
                             Toast.makeText(
                                 context,

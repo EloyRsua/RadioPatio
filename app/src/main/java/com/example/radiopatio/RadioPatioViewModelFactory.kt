@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -34,15 +36,17 @@ data class TablonUiState(
     val errorMensaje: String? = null
 ) {
     val publicacionesFiltradas: List<PublicacionEntidad>
-        get() = publicacionesTotales.filter { pub ->
-            val coincideComunidad = comunidadIdActual.isNotBlank() && pub.comunidadId == comunidadIdActual
-            val consulta = textoBusqueda.trim()
-            val coincideTexto = consulta.isBlank() ||
-                pub.contenido.contains(consulta, ignoreCase = true) ||
-                pub.autor.contains(consulta, ignoreCase = true) ||
-                pub.tiempoYUbica.contains(consulta, ignoreCase = true)
-            coincideComunidad && coincideTexto
-        }
+        get() = publicacionesTotales
+            .filter { pub ->
+                val coincideComunidad = comunidadIdActual.isNotBlank() && pub.comunidadId == comunidadIdActual
+                val consulta = textoBusqueda.trim()
+                val coincideTexto = consulta.isBlank() ||
+                    pub.contenido.contains(consulta, ignoreCase = true) ||
+                    pub.autor.contains(consulta, ignoreCase = true) ||
+                    pub.tiempoYUbica.contains(consulta, ignoreCase = true)
+                coincideComunidad && coincideTexto
+            }
+            .distinctBy { it.firestoreId.ifBlank { "local-${it.id}" } }
 }
 
 class RadioPatioViewModelFactory(
@@ -81,6 +85,7 @@ class RadioPatioViewModel(
 
     private var syncFirestoreJob: Job? = null
     private var comunidadSincronizada: String? = null
+    private val roomSyncMutex = Mutex()
 
     init {
         observarTablonEnTiempoReal()
@@ -129,9 +134,13 @@ class RadioPatioViewModel(
         syncFirestoreJob = viewModelScope.launch {
             publicacionRepository.observarPublicacionesDeComunidad(comunidadId)
                 .collect { remotas ->
-                    val filtradas = remotas.filter { it.comunidadId == comunidadId }
-                    withContext(Dispatchers.IO) {
-                        publicacionDao.reemplazarPublicacionesComunidad(comunidadId, filtradas)
+                    val filtradas = remotas
+                        .filter { it.comunidadId == comunidadId }
+                        .distinctBy { it.firestoreId.ifBlank { "local-${it.id}" } }
+                    roomSyncMutex.withLock {
+                        withContext(Dispatchers.IO) {
+                            publicacionDao.reemplazarPublicacionesComunidad(comunidadId, filtradas)
+                        }
                     }
                 }
         }
@@ -177,8 +186,13 @@ class RadioPatioViewModel(
                 contenido = contenido.trim()
             )
             resultado.onSuccess { entidad ->
-                withContext(Dispatchers.IO) {
-                    publicacionDao.insertar(entidad)
+                roomSyncMutex.withLock {
+                    withContext(Dispatchers.IO) {
+                        if (entidad.firestoreId.isNotBlank()) {
+                            publicacionDao.eliminarPorFirestoreId(entidad.firestoreId, comId)
+                        }
+                        publicacionDao.insertar(entidad)
+                    }
                 }
                 onResultado(true)
             }.onFailure { error ->
@@ -203,11 +217,13 @@ class RadioPatioViewModel(
         viewModelScope.launch {
             val resultado = publicacionRepository.eliminarPublicacion(publicacion, comId)
             resultado.onSuccess {
-                withContext(Dispatchers.IO) {
-                    if (publicacion.firestoreId.isNotBlank()) {
-                        publicacionDao.eliminarPorFirestoreId(publicacion.firestoreId, comId)
-                    } else {
-                        publicacionDao.eliminar(publicacion)
+                roomSyncMutex.withLock {
+                    withContext(Dispatchers.IO) {
+                        if (publicacion.firestoreId.isNotBlank()) {
+                            publicacionDao.eliminarPorFirestoreId(publicacion.firestoreId, comId)
+                        } else {
+                            publicacionDao.eliminar(publicacion)
+                        }
                     }
                 }
             }.onFailure { error ->

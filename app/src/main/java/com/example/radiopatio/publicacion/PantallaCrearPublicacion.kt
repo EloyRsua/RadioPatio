@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 fun PantallaCrearPublicacion(
     autorInicial: String = "",
     ubicacionInicial: String = "",
+    publicando: Boolean = false,
     onVolver: () -> Unit = {},
     onPublicarClick: (autor: String, ubicacion: String, contenido: String) -> Unit = { _, _, _ -> }
 ) {
@@ -96,19 +97,27 @@ fun PantallaCrearPublicacion(
                         contenido.trim()
                     )
                 },
-                enabled = contenido.isNotBlank(),
+                enabled = !publicando && contenido.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(25.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = verdeBoton)
             ) {
-                Text(
-                    text = "Publicar anuncio",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (publicando) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Publicar anuncio",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

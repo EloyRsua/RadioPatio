@@ -63,6 +63,17 @@ class MultitenancyIsolationTest {
     }
 
     @Test
+    fun tablonUiState_deduplicaPublicacionesConMismoFirestoreId() {
+        val duplicadas = listOf(
+            PublicacionEntidad(1, "p_dup", comA, "u1", "Carlos", "C", "Ahora · 2ºA", "Aviso", 0, 0, 100L),
+            PublicacionEntidad(2, "p_dup", comA, "u1", "Carlos", "C", "Ahora · 2ºA", "Aviso", 0, 0, 100L)
+        )
+        val state = TablonUiState(comunidadIdActual = comA, publicacionesTotales = duplicadas)
+        assertEquals(1, state.publicacionesFiltradas.size)
+        assertEquals("p_dup", state.publicacionesFiltradas.first().firestoreId)
+    }
+
+    @Test
     fun mercadilloUiState_filtraEstrictamentePorComunidadIdYModo() {
         val productos = listOf(
             Producto(1, "Mesa auxiliar", "15€", "1ºA", CategoriaProducto.MUEBLES, true, comunidadId = comA),

@@ -30,7 +30,6 @@ class ComunidadRepository {
             codigoPostal = doc.getString("codigoPostal") ?: "",
             descripcion = doc.getString("descripcion") ?: "",
             tipo = doc.getString("tipo") ?: "Residencial",
-            totalPortales = (doc.getLong("totalPortales") ?: 1L).toInt().coerceAtLeast(1),
             totalVecinos = (doc.getLong("totalVecinos") ?: 0L).toInt().coerceAtLeast(0),
             photoUrl = doc.getString("photoUrl") ?: "",
             verificada = doc.getBoolean("verificada") ?: false,
@@ -50,7 +49,6 @@ class ComunidadRepository {
             "codigoPostal" to comunidad.codigoPostal,
             "descripcion" to comunidad.descripcion,
             "tipo" to comunidad.tipo,
-            "totalPortales" to comunidad.totalPortales,
             "totalVecinos" to comunidad.totalVecinos,
             "photoUrl" to comunidad.photoUrl,
             "verificada" to comunidad.verificada,
@@ -147,7 +145,6 @@ class ComunidadRepository {
         codigoPostal: String = "",
         descripcion: String = "",
         tipo: String = "Residencial",
-        totalPortales: Int = 1,
         createdByUid: String = ""
     ): Result<Comunidad> {
         val nombreLimpio = nombre.trim()
@@ -166,7 +163,6 @@ class ComunidadRepository {
                 codigoPostal = codigoPostal.trim(),
                 descripcion = descripcion.trim().ifBlank { "Comunidad de vecinos de $nombreLimpio" },
                 tipo = tipo.ifBlank { "Residencial" },
-                totalPortales = totalPortales.coerceAtLeast(1),
                 totalVecinos = 0,
                 photoUrl = "",
                 verificada = false,

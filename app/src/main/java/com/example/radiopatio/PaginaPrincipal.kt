@@ -9,7 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -200,10 +200,16 @@ fun PaginaPrincipalContent(
                                 )
                             }
                         } else {
-                            items(
+                            itemsIndexed(
                                 items = publicacionesVisibles,
-                                key = { it.firestoreId.ifBlank { "local-${it.id}" } }
-                            ) { entidad ->
+                                key = { index, pub ->
+                                    if (pub.firestoreId.isNotBlank()) {
+                                        "${pub.firestoreId}-$index"
+                                    } else {
+                                        "local-${pub.id}-$index"
+                                    }
+                                }
+                            ) { _, entidad ->
                                 val esMiPublicacion =
                                     (uidActual.isNotBlank() && entidad.autorUid == uidActual) ||
                                         (entidad.autorUid.isBlank() && (
