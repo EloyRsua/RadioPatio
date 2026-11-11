@@ -29,11 +29,9 @@ data class BuscadorComunidadesUiState(
     val textoBusqueda: String = "",
     val tipoSeleccionado: String = "Todos",
     val ciudadSeleccionada: String = "Todas",
-    val soloVerificadas: Boolean = false,
     val ordenSeleccionado: OrdenComunidad = OrdenComunidad.RELEVANCIA,
     val cargando: Boolean = true,
     val procesando: Boolean = false,
-    val mostrarDialogoCrear: Boolean = false,
     val mensajeExito: String? = null,
     val errorMensaje: String? = null
 ) {
@@ -48,13 +46,7 @@ data class BuscadorComunidadesUiState(
         }
     }
     val tiposDisponibles: List<String>
-        get() {
-            val base = listOf("Residencial", "Urbanización", "Edificio")
-            val deFirestore = comunidadesTotales
-                .map { it.tipo.trim() }
-                .filter { it.isNotBlank() }
-            return listOf("Todos") + (base + deFirestore).distinctBy { normalizarTexto(it) }
-        }
+        get() = listOf("Todos") + Comunidad.TIPOS_COMUNIDAD
 
     val ciudadesDisponibles: List<String>
         get() {
@@ -70,7 +62,6 @@ data class BuscadorComunidadesUiState(
         get() = listOf(
             tipoSeleccionado != "Todos",
             ciudadSeleccionada != "Todas",
-            soloVerificadas,
             ordenSeleccionado != OrdenComunidad.RELEVANCIA
         ).count { it }
 
@@ -83,7 +74,6 @@ data class BuscadorComunidadesUiState(
             textoBusqueda = textoBusqueda,
             tipoSeleccionado = tipoSeleccionado,
             ciudadSeleccionada = ciudadSeleccionada,
-            soloVerificadas = soloVerificadas,
             ordenSeleccionado = ordenSeleccionado
         )
 }
@@ -96,14 +86,14 @@ internal fun normalizarTexto(texto: String): String {
 }
 
 /**
- * Motor puro de búsqueda multipalabra insensible a tildes, filtrado y ordenación de comunidades.
+ * Motor puro de búsqueda directa por código, multipalabra insensible a tildes,
+ * filtrado y ordenación de comunidades.
  */
 fun filtrarYOrdenarComunidades(
     comunidades: List<Comunidad>,
     textoBusqueda: String,
     tipoSeleccionado: String = "Todos",
     ciudadSeleccionada: String = "Todas",
-    soloVerificadas: Boolean = false,
     ordenSeleccionado: OrdenComunidad = OrdenComunidad.RELEVANCIA
 ): List<Comunidad> {
     val consultaNorm = normalizarTexto(textoBusqueda)
@@ -112,11 +102,15 @@ fun filtrarYOrdenarComunidades(
     val ciudadNorm = normalizarTexto(ciudadSeleccionada)
 
     val filtradas = comunidades.filter { com ->
+        if (com.coincideConCodigoDirecto(textoBusqueda)) {
+            return@filter true
+        }
+
+        val tipoComunidad = Comunidad.normalizarTipo(com.tipo)
         val coincideTipo = tipoSeleccionado == "Todos" ||
-            normalizarTexto(com.tipo) == tipoNorm
+            normalizarTexto(tipoComunidad) == tipoNorm
         val coincideCiudad = ciudadSeleccionada == "Todas" ||
             normalizarTexto(com.ciudad) == ciudadNorm
-        val coincideVerificada = !soloVerificadas || com.verificada
 
         val coincideTexto = if (tokens.isEmpty()) {
             true
@@ -124,31 +118,31 @@ fun filtrarYOrdenarComunidades(
             val textoIndexado = normalizarTexto(
                 listOf(
                     com.nombre,
+                    com.codigoCompartible,
                     com.direccion,
                     com.ciudad,
                     com.codigoPostal,
-                    com.tipo,
+                    tipoComunidad,
                     com.descripcion
                 ).joinToString(" ")
             )
             tokens.all { token -> textoIndexado.contains(token) }
         }
 
-        coincideTipo && coincideCiudad && coincideVerificada && coincideTexto
+        coincideTipo && coincideCiudad && coincideTexto
     }
 
     return when (ordenSeleccionado) {
         OrdenComunidad.RELEVANCIA -> {
             if (tokens.isEmpty()) {
                 filtradas.sortedWith(
-                    compareByDescending<Comunidad> { it.verificada }
-                        .thenByDescending { it.totalVecinos }
+                    compareByDescending<Comunidad> { it.totalVecinos }
                         .thenBy { normalizarTexto(it.nombre) }
                 )
             } else {
                 filtradas.sortedWith(
-                    compareByDescending<Comunidad> { puntuarRelevancia(it, consultaNorm, tokens) }
-                        .thenByDescending { it.verificada }
+                    compareByDescending<Comunidad> { puntuarRelevancia(it, textoBusqueda, consultaNorm, tokens) }
+                        .thenByDescending { it.totalVecinos }
                         .thenBy { normalizarTexto(it.nombre) }
                 )
             }
@@ -163,21 +157,27 @@ fun filtrarYOrdenarComunidades(
 
 private fun puntuarRelevancia(
     comunidad: Comunidad,
+    consultaCruda: String,
     consultaCompleta: String,
     tokens: List<String>
 ): Int {
+    if (comunidad.coincideConCodigoDirecto(consultaCruda)) return 1000
+
+    val codigoNorm = normalizarTexto(comunidad.codigoCompartible)
     val nombre = normalizarTexto(comunidad.nombre)
     val direccion = normalizarTexto(comunidad.direccion)
     val ciudad = normalizarTexto(comunidad.ciudad)
     val cp = normalizarTexto(comunidad.codigoPostal)
 
     var puntos = 0
+    if (codigoNorm.isNotBlank() && codigoNorm.startsWith(consultaCompleta)) puntos += 250
     if (nombre == consultaCompleta) puntos += 100
     if (nombre.startsWith(consultaCompleta)) puntos += 60
     if (nombre.contains(consultaCompleta)) puntos += 40
     if (cp == consultaCompleta) puntos += 35
 
     tokens.forEach { token ->
+        if (codigoNorm.contains(token)) puntos += 30
         if (nombre.contains(token)) puntos += 20
         if (direccion.contains(token)) puntos += 12
         if (ciudad.contains(token)) puntos += 10
@@ -241,10 +241,6 @@ class BuscadorComunidadesViewModel(
         uiState = uiState.copy(ciudadSeleccionada = ciudad)
     }
 
-    fun onToggleSoloVerificadas() {
-        uiState = uiState.copy(soloVerificadas = !uiState.soloVerificadas)
-    }
-
     fun onOrdenSeleccionadoChange(orden: OrdenComunidad) {
         uiState = uiState.copy(ordenSeleccionado = orden)
     }
@@ -254,26 +250,8 @@ class BuscadorComunidadesViewModel(
             textoBusqueda = "",
             tipoSeleccionado = "Todos",
             ciudadSeleccionada = "Todas",
-            soloVerificadas = false,
             ordenSeleccionado = OrdenComunidad.RELEVANCIA
         )
-    }
-
-    fun onAbrirDialogoCrear(
-        modoRegistro: Boolean = false,
-        esAdministradorRegistro: Boolean = false
-    ) {
-        if (!uiState.puedeCrearComunidad(modoRegistro, esAdministradorRegistro)) {
-            uiState = uiState.copy(
-                errorMensaje = "Solo los administradores de fincas pueden crear comunidades."
-            )
-            return
-        }
-        uiState = uiState.copy(mostrarDialogoCrear = true, errorMensaje = null)
-    }
-
-    fun onCerrarDialogoCrear() {
-        uiState = uiState.copy(mostrarDialogoCrear = false, errorMensaje = null)
     }
 
     fun onLimpiarError() {
@@ -390,10 +368,7 @@ class BuscadorComunidadesViewModel(
             creacion.onSuccess { nuevaComunidad ->
                 val asignacion = userRepository.asignarComunidadCreadaAdministrador(nuevaComunidad)
                 if (asignacion.isSuccess) {
-                    uiState = uiState.copy(
-                        procesando = false,
-                        mostrarDialogoCrear = false
-                    )
+                    uiState = uiState.copy(procesando = false)
                     onExito()
                 } else {
                     uiState = uiState.copy(

@@ -33,8 +33,8 @@ data class VecinosUiState(
     val textoBusqueda: String = "",
     val filtroRol: String = "Todos",
     val cargando: Boolean = true,
-    val mostrarDialogoTransferirPresidencia: Boolean = false,
-    val procesandoTransferencia: Boolean = false,
+    val mostrarDialogoGestionarPresidencia: Boolean = false,
+    val procesandoPresidencia: Boolean = false,
     val mostrarDialogoEditarPisos: Boolean = false,
     val procesandoPisos: Boolean = false,
     val procesandoCambioComunidad: Boolean = false,
@@ -54,22 +54,6 @@ data class VecinosUiState(
         }
 
     /**
-     * Indica si el usuario autenticado actual es el presidente efectivo de la comunidad.
-     */
-    val esPresidenteActual: Boolean
-        get() {
-            val uid = usuarioActual?.uid.orEmpty()
-            if (comunidadIdActual.isBlank() || uid.isBlank()) return false
-            val presUid = comunidad?.presidenteUid.orEmpty()
-            val adminUid = comunidad?.administradorUid.orEmpty()
-            return if (presUid.isNotBlank()) {
-                presUid == uid
-            } else {
-                adminUid.isBlank() && usuarioActual?.rol.equals(ROL_PRESIDENTE, ignoreCase = true)
-            }
-        }
-
-    /**
      * Indica si el usuario autenticado actual es el administrador de fincas único de esta comunidad.
      */
     val esAdministradorActual: Boolean
@@ -81,18 +65,38 @@ data class VecinosUiState(
         }
 
     /**
-     * Miembros de la misma comunidad elegibles para recibir la presidencia (excluyendo al presidente actual).
+     * Miembro que ocupa actualmente la presidencia de la comunidad, o null si aún no hay ninguno.
+     */
+    val presidenteActualComunidad: Usuario?
+        get() {
+            if (comunidadIdActual.isBlank()) return null
+            val miembrosVecinos = vecinos.filter {
+                it.perteneceAComunidad(comunidadIdActual) &&
+                    it.uid.isNotBlank() &&
+                    !it.esAdministradorFincas
+            }
+            val presUid = comunidad?.presidenteUid?.trim().orEmpty()
+            return if (presUid.isNotBlank()) {
+                miembrosVecinos.find { it.uid == presUid }
+            } else {
+                miembrosVecinos.firstOrNull { it.rol.equals(ROL_PRESIDENTE, ignoreCase = true) }
+            }
+        }
+
+    /**
+     * Vecinos de la comunidad elegibles para ser designados o recibir la presidencia
+     * por parte del Administrador de fincas (cualquier vecino si aún no hay presidente,
+     * o cualquier otro vecino distinto al presidente actual).
      */
     val candidatosPresidencia: List<Usuario>
         get() {
-            val uid = usuarioActual?.uid.orEmpty()
-            if (!esPresidenteActual) return emptyList()
+            if (!esAdministradorActual || comunidadIdActual.isBlank()) return emptyList()
+            val presActualUid = presidenteActualComunidad?.uid.orEmpty()
             return vecinos.filter {
-                comunidadIdActual.isNotBlank() &&
-                    it.perteneceAComunidad(comunidadIdActual) &&
+                it.perteneceAComunidad(comunidadIdActual) &&
                     it.uid.isNotBlank() &&
-                    it.uid != uid &&
-                    !it.esAdministradorFincas
+                    !it.esAdministradorFincas &&
+                    it.uid != presActualUid
             }
         }
 
@@ -246,16 +250,18 @@ class VecinosViewModel(
         uiState = uiState.copy(filtroRol = nuevoRol)
     }
 
-    fun onAbrirDialogoTransferirPresidencia() {
-        if (!uiState.esPresidenteActual) {
-            uiState = uiState.copy(errorMensaje = "Solo el presidente de la comunidad puede transferir la presidencia.")
+    fun onAbrirDialogoGestionarPresidencia() {
+        if (!uiState.esAdministradorActual) {
+            uiState = uiState.copy(errorMensaje = "Solo el administrador de fincas puede designar o cambiar la presidencia.")
             return
         }
-        uiState = uiState.copy(mostrarDialogoTransferirPresidencia = true, errorMensaje = null)
+        uiState = uiState.copy(mostrarDialogoGestionarPresidencia = true, errorMensaje = null)
     }
 
-    fun onCerrarDialogoTransferirPresidencia() {
-        uiState = uiState.copy(mostrarDialogoTransferirPresidencia = false)
+    fun onCerrarDialogoGestionarPresidencia() {
+        if (!uiState.procesandoPresidencia) {
+            uiState = uiState.copy(mostrarDialogoGestionarPresidencia = false)
+        }
     }
 
     fun onAbrirDialogoEditarPisos() {
@@ -414,42 +420,55 @@ class VecinosViewModel(
         }
     }
 
-    fun onTransferirPresidencia(nuevoPresidente: Usuario) {
+    fun onAsignarPresidencia(nuevoPresidente: Usuario) {
         val comId = uiState.comunidadIdActual
         val uidActual = uiState.usuarioActual?.uid.orEmpty()
+        val presidenteActual = uiState.presidenteActualComunidad
 
-        if (!uiState.esPresidenteActual) {
+        if (!uiState.esAdministradorActual) {
             uiState = uiState.copy(
-                errorMensaje = "Solo el presidente de la comunidad puede transferir la presidencia.",
-                mostrarDialogoTransferirPresidencia = false
+                errorMensaje = "Solo el administrador de fincas de esta comunidad puede designar o cambiar la presidencia.",
+                mostrarDialogoGestionarPresidencia = false
             )
             return
         }
-        if (comId.isBlank() || !nuevoPresidente.perteneceAComunidad(comId) || nuevoPresidente.uid.isBlank() || nuevoPresidente.uid == uidActual) {
+        if (comId.isBlank() ||
+            !nuevoPresidente.perteneceAComunidad(comId) ||
+            nuevoPresidente.uid.isBlank() ||
+            nuevoPresidente.esAdministradorFincas
+        ) {
             uiState = uiState.copy(
-                errorMensaje = "El miembro seleccionado no pertenece a tu comunidad."
+                errorMensaje = "El vecino seleccionado no es elegible para ocupar la presidencia."
+            )
+            return
+        }
+        if (nuevoPresidente.uid == presidenteActual?.uid) {
+            uiState = uiState.copy(
+                errorMensaje = "${nuevoPresidente.nombre} ya es el presidente actual."
             )
             return
         }
 
         viewModelScope.launch {
-            uiState = uiState.copy(procesandoTransferencia = true, errorMensaje = null)
-            val resultado = comunidadRepository.transferirPresidencia(
+            uiState = uiState.copy(procesandoPresidencia = true, errorMensaje = null)
+            val resultado = comunidadRepository.asignarOCambiarPresidencia(
                 comunidadId = comId,
-                presidenteActualUid = uidActual,
-                nuevoPresidenteUid = nuevoPresidente.uid
+                administradorUid = uidActual,
+                nuevoPresidenteUid = nuevoPresidente.uid,
+                presidentePrevioFallbackUid = presidenteActual?.uid.orEmpty()
             )
             uiState = if (resultado.isSuccess) {
+                val verbo = if (presidenteActual == null) "designado" else "cambiado"
                 uiState.copy(
-                    procesandoTransferencia = false,
-                    mostrarDialogoTransferirPresidencia = false,
-                    mensajeExito = "Presidencia transferida a ${nuevoPresidente.nombre}"
+                    procesandoPresidencia = false,
+                    mostrarDialogoGestionarPresidencia = false,
+                    mensajeExito = "Presidente $verbo: ${nuevoPresidente.nombre}"
                 )
             } else {
                 uiState.copy(
-                    procesandoTransferencia = false,
+                    procesandoPresidencia = false,
                     errorMensaje = resultado.exceptionOrNull()?.localizedMessage
-                        ?: "No se pudo transferir la presidencia."
+                        ?: "No se pudo actualizar la presidencia."
                 )
             }
         }

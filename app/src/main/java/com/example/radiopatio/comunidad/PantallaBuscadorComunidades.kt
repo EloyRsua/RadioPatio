@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -23,11 +22,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
@@ -35,7 +31,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Groups
@@ -79,7 +74,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -120,7 +114,7 @@ fun BuscadorComunidadesScreen(
     comunidadPreseleccionadaId: String = "",
     onVolver: () -> Unit,
     onComunidadSeleccionadaEnRegistro: (Comunidad, Boolean) -> Unit = { _, _ -> },
-    onNuevaComunidadEnRegistro: (NuevaComunidadFormulario) -> Unit = {},
+    onIrACrearComunidad: (String) -> Unit = {},
     onComunidadCambiada: () -> Unit = {},
     viewModel: BuscadorComunidadesViewModel = viewModel(factory = BuscadorComunidadesViewModelFactory())
 ) {
@@ -169,16 +163,19 @@ fun BuscadorComunidadesScreen(
         onTextoBusquedaChange = viewModel::onTextoBusquedaChange,
         onTipoSeleccionadoChange = viewModel::onTipoSeleccionadoChange,
         onCiudadSeleccionadaChange = viewModel::onCiudadSeleccionadaChange,
-        onToggleSoloVerificadas = viewModel::onToggleSoloVerificadas,
         onOrdenSeleccionadoChange = viewModel::onOrdenSeleccionadoChange,
         onLimpiarFiltros = viewModel::onLimpiarFiltros,
-        onAbrirDialogoCrear = {
-            viewModel.onAbrirDialogoCrear(
-                modoRegistro = modoRegistro,
-                esAdministradorRegistro = esAdministradorRegistro
-            )
+        onIrACrearComunidad = {
+            if (puedeCrear) {
+                onIrACrearComunidad(uiState.textoBusqueda.trim())
+            } else {
+                Toast.makeText(
+                    context,
+                    "Solo los administradores de fincas pueden crear comunidades.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         },
-        onCerrarDialogoCrear = viewModel::onCerrarDialogoCrear,
         onSeleccionarComunidad = { comunidad ->
             if (modoRegistro) {
                 val requiereSolicitud = esAdministradorRegistro && comunidad.administradorUid.isNotBlank()
@@ -206,26 +203,6 @@ fun BuscadorComunidadesScreen(
                             onComunidadCambiada()
                         }
                     }
-                }
-            }
-        },
-        onConfirmarCrearComunidad = { formulario ->
-            if (modoRegistro) {
-                if (esAdministradorRegistro) {
-                    viewModel.onCerrarDialogoCrear()
-                    onNuevaComunidadEnRegistro(formulario)
-                }
-            } else {
-                viewModel.onCrearYUnirseAComunidad(
-                    nombre = formulario.nombre,
-                    direccion = formulario.direccion,
-                    ciudad = formulario.ciudad,
-                    codigoPostal = formulario.codigoPostal,
-                    tipo = formulario.tipo,
-                    numeroPisos = formulario.numeroPisos,
-                    descripcion = formulario.descripcion
-                ) {
-                    onComunidadCambiada()
                 }
             }
         }
@@ -280,13 +257,10 @@ fun BuscadorComunidadesContent(
     onTextoBusquedaChange: (String) -> Unit,
     onTipoSeleccionadoChange: (String) -> Unit,
     onCiudadSeleccionadaChange: (String) -> Unit,
-    onToggleSoloVerificadas: () -> Unit,
     onOrdenSeleccionadoChange: (OrdenComunidad) -> Unit,
     onLimpiarFiltros: () -> Unit,
-    onAbrirDialogoCrear: () -> Unit,
-    onCerrarDialogoCrear: () -> Unit,
-    onSeleccionarComunidad: (Comunidad) -> Unit,
-    onConfirmarCrearComunidad: (NuevaComunidadFormulario) -> Unit
+    onIrACrearComunidad: () -> Unit,
+    onSeleccionarComunidad: (Comunidad) -> Unit
 ) {
     var filtrosExpandidos by remember { mutableStateOf(false) }
     val comunidadesFiltradas = uiState.comunidadesFiltradas
@@ -299,13 +273,13 @@ fun BuscadorComunidadesContent(
                 resultados = comunidadesFiltradas.size,
                 total = uiState.comunidadesTotales.size,
                 onVolver = onVolver,
-                onNuevaComunidad = onAbrirDialogoCrear
+                onNuevaComunidad = onIrACrearComunidad
             )
         },
         floatingActionButton = {
             if (puedeCrearComunidad) {
                 FloatingActionButton(
-                    onClick = onAbrirDialogoCrear,
+                    onClick = onIrACrearComunidad,
                     containerColor = VerdeAccion,
                     contentColor = Color.White,
                     shape = CircleShape,
@@ -342,7 +316,7 @@ fun BuscadorComunidadesContent(
                             modifier = Modifier.weight(1f),
                             placeholder = {
                                 Text(
-                                    text = "Nombre, calle, ciudad o C.P...",
+                                    text = "Código, nombre, calle, ciudad o C.P...",
                                     fontSize = 13.sp,
                                     color = Color.Gray
                                 )
@@ -421,7 +395,6 @@ fun BuscadorComunidadesContent(
                     // Chips rápidos horizontales
                     FilaChipsFiltrosRapidos(
                         uiState = uiState,
-                        onToggleSoloVerificadas = onToggleSoloVerificadas,
                         onTipoSeleccionadoChange = onTipoSeleccionadoChange,
                         onCiudadSeleccionadaChange = onCiudadSeleccionadaChange,
                         onOrdenSeleccionadoChange = onOrdenSeleccionadoChange
@@ -457,7 +430,7 @@ fun BuscadorComunidadesContent(
                             hayFiltrosActivos = uiState.hayFiltrosActivos,
                             puedeCrearComunidad = puedeCrearComunidad,
                             onLimpiarFiltros = onLimpiarFiltros,
-                            onCrearComunidad = onAbrirDialogoCrear
+                            onCrearComunidad = onIrACrearComunidad
                         )
                     }
 
@@ -522,6 +495,7 @@ fun BuscadorComunidadesContent(
                                 TarjetaComunidadBuscador(
                                     comunidad = comunidad,
                                     esSeleccionada = esActiva,
+                                    esCoincidenciaCodigo = comunidad.coincideConCodigoDirecto(uiState.textoBusqueda),
                                     etiquetaAccion = etiquetaAccion,
                                     esSecundaria = esAdminFlujo && (yaSolicitada || (comunidad.administradorUid.isNotBlank() && !yaAdministrada)),
                                     habilitado = !uiState.procesando,
@@ -566,15 +540,6 @@ fun BuscadorComunidadesContent(
                 }
             }
         }
-    }
-
-    if (uiState.mostrarDialogoCrear && puedeCrearComunidad) {
-        DialogoCrearComunidad(
-            nombreInicial = uiState.textoBusqueda.trim(),
-            procesando = uiState.procesando,
-            onDismiss = onCerrarDialogoCrear,
-            onConfirmar = onConfirmarCrearComunidad
-        )
     }
 }
 
@@ -642,7 +607,6 @@ private fun BarraSuperiorBuscadorComunidades(
 @Composable
 private fun FilaChipsFiltrosRapidos(
     uiState: BuscadorComunidadesUiState,
-    onToggleSoloVerificadas: () -> Unit,
     onTipoSeleccionadoChange: (String) -> Unit,
     onCiudadSeleccionadaChange: (String) -> Unit,
     onOrdenSeleccionadoChange: (OrdenComunidad) -> Unit
@@ -704,27 +668,6 @@ private fun FilaChipsFiltrosRapidos(
                     }
                 }
             }
-        }
-
-        // Chip Verificadas
-        item {
-            FilterChip(
-                selected = uiState.soloVerificadas,
-                onClick = onToggleSoloVerificadas,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Verified,
-                        contentDescription = null,
-                        modifier = Modifier.size(15.dp)
-                    )
-                },
-                label = { Text("Verificadas", fontSize = 12.sp) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = VerdeSuave,
-                    selectedLabelColor = VerdeOscuro,
-                    selectedLeadingIconColor = VerdeOscuro
-                )
-            )
         }
 
         // Chip Ciudad (si hay ciudades registradas)
@@ -876,6 +819,7 @@ private fun PanelFiltrosAvanzados(
 private fun TarjetaComunidadBuscador(
     comunidad: Comunidad,
     esSeleccionada: Boolean,
+    esCoincidenciaCodigo: Boolean = false,
     etiquetaAccion: String,
     esSecundaria: Boolean = false,
     habilitado: Boolean,
@@ -892,11 +836,30 @@ private fun TarjetaComunidadBuscador(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = androidx.compose.ui.graphics.SolidColor(
-                if (esSeleccionada) VerdeAccion else BordeSuave
+                when {
+                    esSeleccionada -> VerdeAccion
+                    esCoincidenciaCodigo -> VerdeOscuro
+                    else -> BordeSuave
+                }
             )
         )
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            if (esCoincidenciaCodigo) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = VerdeSuave
+                ) {
+                    Text(
+                        text = "Coincidencia directa · Código ${comunidad.codigoCompartible}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = VerdeOscuro,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top
@@ -928,26 +891,14 @@ private fun TarjetaComunidadBuscador(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = comunidad.nombre,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AzulPrincipal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        if (comunidad.verificada) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Filled.Verified,
-                                contentDescription = "Verificada",
-                                tint = VerdeAccion,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
+                    Text(
+                        text = comunidad.nombre,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AzulPrincipal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
                     Spacer(modifier = Modifier.height(3.dp))
 
@@ -1013,7 +964,7 @@ private fun TarjetaComunidadBuscador(
             ) {
                 EtiquetaComunidad(
                     icono = Icons.Outlined.Apartment,
-                    texto = comunidad.tipo.ifBlank { "Residencial" }
+                    texto = comunidad.tipoNormalizado
                 )
                 if (comunidad.esEdificio && comunidad.numeroPisos > 0) {
                     EtiquetaComunidad(
@@ -1133,179 +1084,21 @@ private fun EstadoSinComunidades(
     }
 }
 
-@Composable
-private fun DialogoCrearComunidad(
-    nombreInicial: String,
-    procesando: Boolean,
-    onDismiss: () -> Unit,
-    onConfirmar: (NuevaComunidadFormulario) -> Unit
-) {
-    var nombre by remember(nombreInicial) { mutableStateOf(nombreInicial) }
-    var direccion by remember { mutableStateOf("") }
-    var ciudad by remember { mutableStateOf("") }
-    var codigoPostal by remember { mutableStateOf("") }
-    var tipo by remember { mutableStateOf("Residencial") }
-    var numeroPisosTexto by remember { mutableStateOf("") }
-    var descripcion by remember { mutableStateOf("") }
-
-    val tipos = listOf("Residencial", "Urbanización", Comunidad.TIPO_EDIFICIO, "Mancomunidad")
-    val esEdificio = tipo.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true)
-    val numeroPisosValido = numeroPisosTexto.toIntOrNull()?.takeIf { it > 0 }
-
-    AlertDialog(
-        onDismissRequest = { if (!procesando) onDismiss() },
-        title = {
-            Text(
-                text = "Crear nueva comunidad",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = AzulPrincipal
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = nombre,
-                    onValueChange = { nombre = it },
-                    label = { Text("Nombre de la comunidad *", fontSize = 12.sp) },
-                    placeholder = { Text("Ej: Residencial Montecerrao") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = direccion,
-                    onValueChange = { direccion = it },
-                    label = { Text("Dirección *", fontSize = 12.sp) },
-                    placeholder = { Text("Ej: Calle Fuertes Acevedo, 42") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = ciudad,
-                        onValueChange = { ciudad = it },
-                        label = { Text("Ciudad", fontSize = 12.sp) },
-                        placeholder = { Text("Oviedo") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = codigoPostal,
-                        onValueChange = { codigoPostal = it },
-                        label = { Text("C.P.", fontSize = 12.sp) },
-                        placeholder = { Text("33006") },
-                        singleLine = true,
-                        modifier = Modifier.weight(0.7f)
-                    )
-                }
-
-                Text(
-                    text = "Tipo de comunidad",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.Gray
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(tipos) { itemTipo ->
-                        FilterChip(
-                            selected = tipo == itemTipo,
-                            onClick = {
-                                tipo = itemTipo
-                                if (!itemTipo.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true)) {
-                                    numeroPisosTexto = ""
-                                }
-                            },
-                            label = { Text(itemTipo, fontSize = 11.sp) }
-                        )
-                    }
-                }
-
-                if (esEdificio) {
-                    OutlinedTextField(
-                        value = numeroPisosTexto,
-                        onValueChange = { nuevo ->
-                            numeroPisosTexto = nuevo.filter { it.isDigit() }.take(3)
-                        },
-                        label = { Text("Número de pisos del edificio *", fontSize = 12.sp) },
-                        placeholder = { Text("Ej: 5") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                OutlinedTextField(
-                    value = descripcion,
-                    onValueChange = { descripcion = it },
-                    label = { Text("Descripción", fontSize = 12.sp) },
-                    maxLines = 2,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onConfirmar(
-                        NuevaComunidadFormulario(
-                            nombre = nombre.trim(),
-                            direccion = direccion.trim(),
-                            ciudad = ciudad.trim(),
-                            codigoPostal = codigoPostal.trim(),
-                            tipo = tipo,
-                            numeroPisos = if (esEdificio) (numeroPisosValido ?: 0) else 0,
-                            descripcion = descripcion.trim()
-                        )
-                    )
-                },
-                enabled = !procesando &&
-                    nombre.isNotBlank() &&
-                    direccion.isNotBlank() &&
-                    (!esEdificio || numeroPisosValido != null),
-                colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro)
-            ) {
-                if (procesando) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Guardar comunidad")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !procesando) {
-                Text("Cancelar", color = Color.Gray)
-            }
-        }
-    )
-}
-
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun BuscadorComunidadesContentPreview() {
     val comunidades = listOf(
         Comunidad(
             id = "c1",
-            nombre = "Residencial Montecerrao",
+            nombre = "Edificio Montecerrao",
             direccion = "Calle Fuertes Acevedo, 42",
             ciudad = "Oviedo",
             codigoPostal = "33006",
-            descripcion = "Comunidad residencial con zonas verdes y garaje comunitario.",
-            tipo = "Residencial",
+            descripcion = "Edificio de viviendas con garaje comunitario.",
+            tipo = Comunidad.TIPO_EDIFICIO,
+            numeroPisos = 6,
             totalVecinos = 28,
-            verificada = true
+            codigo = "MNT42A"
         ),
         Comunidad(
             id = "c2",
@@ -1314,9 +1107,9 @@ fun BuscadorComunidadesContentPreview() {
             ciudad = "Oviedo",
             codigoPostal = "33012",
             descripcion = "Urbanización familiar con pistas deportivas.",
-            tipo = "Urbanización",
+            tipo = Comunidad.TIPO_URBANIZACION,
             totalVecinos = 42,
-            verificada = false
+            codigo = "FLR15B"
         )
     )
 
@@ -1333,13 +1126,10 @@ fun BuscadorComunidadesContentPreview() {
             onTextoBusquedaChange = {},
             onTipoSeleccionadoChange = {},
             onCiudadSeleccionadaChange = {},
-            onToggleSoloVerificadas = {},
             onOrdenSeleccionadoChange = {},
             onLimpiarFiltros = {},
-            onAbrirDialogoCrear = {},
-            onCerrarDialogoCrear = {},
-            onSeleccionarComunidad = {},
-            onConfirmarCrearComunidad = {}
+            onIrACrearComunidad = {},
+            onSeleccionarComunidad = {}
         )
     }
 }

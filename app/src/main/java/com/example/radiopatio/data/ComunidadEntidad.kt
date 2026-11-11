@@ -26,7 +26,7 @@ data class ComunidadEntidad(
     val descripcion: String = "",
 
     @ColumnInfo(name = "tipo")
-    val tipo: String = "Residencial",
+    val tipo: String = Comunidad.TIPO_URBANIZACION,
 
     @ColumnInfo(name = "numero_pisos")
     val numeroPisos: Int = 0,
@@ -40,8 +40,8 @@ data class ComunidadEntidad(
     @ColumnInfo(name = "administrador_uid")
     val administradorUid: String = "",
 
-    @ColumnInfo(name = "verificada")
-    val verificada: Boolean = false
+    @ColumnInfo(name = "codigo")
+    val codigo: String = ""
 )
 
 fun Comunidad.toEntidad(): ComunidadEntidad = ComunidadEntidad(
@@ -51,12 +51,12 @@ fun Comunidad.toEntidad(): ComunidadEntidad = ComunidadEntidad(
     ciudad = ciudad,
     codigoPostal = codigoPostal,
     descripcion = descripcion,
-    tipo = tipo,
+    tipo = Comunidad.normalizarTipo(tipo),
     numeroPisos = numeroPisos,
     totalVecinos = totalVecinos,
     presidenteUid = presidenteUid,
     administradorUid = administradorUid,
-    verificada = verificada
+    codigo = codigoCompartible
 )
 
 fun ComunidadEntidad.toModelo(): Comunidad = Comunidad(
@@ -66,11 +66,11 @@ fun ComunidadEntidad.toModelo(): Comunidad = Comunidad(
     ciudad = ciudad,
     codigoPostal = codigoPostal,
     descripcion = descripcion,
-    tipo = tipo,
+    tipo = Comunidad.normalizarTipo(tipo),
     numeroPisos = numeroPisos,
     totalVecinos = totalVecinos,
     presidenteUid = presidenteUid,
     administradorUid = administradorUid,
-    verificada = verificada
+    codigo = codigo.ifBlank { Comunidad.codigoDesdeId(id) }
 )
 

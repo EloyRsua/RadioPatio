@@ -37,3 +37,10 @@ data class BuscarComunidad(
     val modoRegistro: Boolean = false,
     val esAdministradorRegistro: Boolean = false
 )
+
+@Serializable
+data class CrearComunidad(
+    val modoRegistro: Boolean = false,
+    val esAdministradorRegistro: Boolean = false,
+    val nombreInicial: String = ""
+)

@@ -378,24 +378,11 @@ class UserRepository(
                 val esPresidenteSaliente = (presAnteriorUid == currentUser.uid) ||
                     (presAnteriorUid.isBlank() && rolAnterior.equals("Presidente", ignoreCase = true))
 
-                if (esPresidenteSaliente) {
-                    val miembrosAnteriores = db.collection(COLECCION_USERS)
-                        .whereEqualTo("comunidadId", comunidadAnteriorId)
-                        .get()
+                if (esPresidenteSaliente && comAnteriorSnap.exists()) {
+                    db.collection(ComunidadRepository.COLECCION_COMUNIDADES)
+                        .document(comunidadAnteriorId)
+                        .update("presidenteUid", "")
                         .await()
-                    val hayOtrosMiembros = miembrosAnteriores.documents.any { it.id != currentUser.uid }
-                    if (hayOtrosMiembros) {
-                        return Result.failure(
-                            IllegalStateException(
-                                "Eres el presidente de tu comunidad actual. Transfiere la presidencia a otro miembro antes de cambiarte."
-                            )
-                        )
-                    } else if (comAnteriorSnap.exists()) {
-                        db.collection(ComunidadRepository.COLECCION_COMUNIDADES)
-                            .document(comunidadAnteriorId)
-                            .update("presidenteUid", "")
-                            .await()
-                    }
                 }
             }
 

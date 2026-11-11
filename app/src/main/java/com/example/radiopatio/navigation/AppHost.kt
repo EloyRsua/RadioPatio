@@ -25,6 +25,7 @@ import com.example.radiopatio.RadioPatioViewModelFactory
 import com.example.radiopatio.comunidad.BuscadorComunidadesScreen
 import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.comunidad.ComunidadRepository
+import com.example.radiopatio.comunidad.CrearComunidadScreen
 import com.example.radiopatio.informacionUsuario.PerfilUsuarioScreen
 import com.example.radiopatio.informacionUsuario.ROL_ADMINISTRADOR_FINCAS
 import com.example.radiopatio.informacionUsuario.ROL_VECINO
@@ -50,8 +51,9 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
             datos.comunidadExistente?.direccion ?: "",
             datos.comunidadExistente?.ciudad ?: "",
             datos.comunidadExistente?.codigoPostal ?: "",
-            datos.comunidadExistente?.tipo ?: "Residencial",
+            datos.comunidadExistente?.tipoNormalizado ?: Comunidad.TIPO_URBANIZACION,
             datos.comunidadExistente?.numeroPisos ?: 0,
+            datos.comunidadExistente?.codigoCompartible ?: "",
             datos.comunidadExistente?.administradorUid ?: "",
             datos.nuevaComunidadNombre,
             datos.nuevaComunidadDireccion,
@@ -71,9 +73,10 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
                 direccion = lista[4] as String,
                 ciudad = lista[5] as String,
                 codigoPostal = lista[6] as String,
-                tipo = lista[7] as String,
+                tipo = Comunidad.normalizarTipo(lista[7] as String),
                 numeroPisos = lista[8] as Int,
-                administradorUid = lista[9] as String
+                codigo = lista[9] as String,
+                administradorUid = lista[10] as String
             )
         } else null
 
@@ -81,13 +84,13 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
             crearNueva = lista[0] as Boolean,
             solicitarTraspaso = lista[1] as Boolean,
             comunidadExistente = comExistente,
-            nuevaComunidadNombre = lista[10] as String,
-            nuevaComunidadDireccion = lista[11] as String,
-            nuevaComunidadCiudad = lista[12] as String,
-            nuevaComunidadCp = lista[13] as String,
-            nuevaComunidadTipo = lista[14] as String,
-            nuevaComunidadPisos = lista[15] as Int,
-            nuevaComunidadDescripcion = lista[16] as String
+            nuevaComunidadNombre = lista[11] as String,
+            nuevaComunidadDireccion = lista[12] as String,
+            nuevaComunidadCiudad = lista[13] as String,
+            nuevaComunidadCp = lista[14] as String,
+            nuevaComunidadTipo = Comunidad.normalizarTipo(lista[15] as String),
+            nuevaComunidadPisos = lista[16] as Int,
+            nuevaComunidadDescripcion = lista[17] as String
         )
     }
 )
@@ -356,6 +359,33 @@ fun AppNavHost(
                     )
                     navController.popBackStack()
                 },
+                onIrACrearComunidad = { nombreInicial ->
+                    navController.navigate(
+                        CrearComunidad(
+                            modoRegistro = ruta.modoRegistro,
+                            esAdministradorRegistro = ruta.esAdministradorRegistro,
+                            nombreInicial = nombreInicial
+                        )
+                    )
+                },
+                onComunidadCambiada = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<CrearComunidad> { backStackEntry ->
+            val ruta = backStackEntry.toRoute<CrearComunidad>()
+
+            CrearComunidadScreen(
+                modoRegistro = ruta.modoRegistro,
+                esAdministradorRegistro = ruta.esAdministradorRegistro,
+                nombreInicial = ruta.nombreInicial,
+                onVolver = {
+                    if (navController.currentBackStackEntry?.destination?.hasRoute<CrearComunidad>() == true) {
+                        navController.popBackStack()
+                    }
+                },
                 onNuevaComunidadEnRegistro = { formulario ->
                     if (ruta.esAdministradorRegistro) {
                         datosComunidadRegistro = DatosRegistroComunidad(
@@ -366,15 +396,25 @@ fun AppNavHost(
                             nuevaComunidadDireccion = formulario.direccion,
                             nuevaComunidadCiudad = formulario.ciudad,
                             nuevaComunidadCp = formulario.codigoPostal,
-                            nuevaComunidadTipo = formulario.tipo,
+                            nuevaComunidadTipo = Comunidad.normalizarTipo(formulario.tipo),
                             nuevaComunidadPisos = formulario.numeroPisos,
                             nuevaComunidadDescripcion = formulario.descripcion
                         )
-                        navController.popBackStack()
+                        Toast.makeText(
+                            context,
+                            "Comunidad \"${formulario.nombre}\" seleccionada para el registro.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        navController.popBackStack<RegistroNuevo>(inclusive = false)
                     }
                 },
-                onComunidadCambiada = {
-                    navController.popBackStack()
+                onComunidadCreada = {
+                    Toast.makeText(
+                        context,
+                        "Comunidad creada y seleccionada como activa.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    navController.popBackStack<BuscarComunidad>(inclusive = true)
                 }
             )
         }

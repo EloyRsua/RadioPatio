@@ -61,7 +61,7 @@ data class DatosRegistroComunidad(
     val nuevaComunidadDireccion: String = "",
     val nuevaComunidadCiudad: String = "",
     val nuevaComunidadCp: String = "",
-    val nuevaComunidadTipo: String = "Residencial",
+    val nuevaComunidadTipo: String = Comunidad.TIPO_URBANIZACION,
     val nuevaComunidadPisos: Int = 0,
     val nuevaComunidadDescripcion: String = ""
 ) {
@@ -705,9 +705,10 @@ fun RegistroNuevoUsuarioPreview() {
             datosComunidad = DatosRegistroComunidad(
                 comunidadExistente = Comunidad(
                     id = "com_1",
-                    nombre = "Residencial Montecerrao",
+                    nombre = "Urbanización Montecerrao",
                     direccion = "Calle Fuertes Acevedo, 42",
-                    ciudad = "Oviedo"
+                    ciudad = "Oviedo",
+                    tipo = Comunidad.TIPO_URBANIZACION
                 )
             )
         )

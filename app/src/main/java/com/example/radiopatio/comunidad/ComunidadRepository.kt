@@ -42,23 +42,25 @@ class ComunidadRepository {
      * Convierte un [DocumentSnapshot] de Firestore en un objeto [Comunidad].
      */
     fun documentToComunidad(doc: DocumentSnapshot): Comunidad {
+        val comId = doc.getString("id")?.takeIf { it.isNotBlank() } ?: doc.id
         val adminUid = doc.getString("administradorUid")?.trim().orEmpty()
         val createdByUid = doc.getString("createdByUid") ?: ""
         val presidenteUid = doc.getString("presidenteUid")?.takeIf { it.isNotBlank() }
             ?: if (adminUid.isBlank()) createdByUid else ""
+        val codigoDoc = doc.getString("codigo")?.trim()?.uppercase().orEmpty()
 
         return Comunidad(
-            id = doc.getString("id")?.takeIf { it.isNotBlank() } ?: doc.id,
+            id = comId,
             nombre = doc.getString("nombre") ?: "",
             direccion = doc.getString("direccion") ?: "",
             ciudad = doc.getString("ciudad") ?: "",
             codigoPostal = doc.getString("codigoPostal") ?: "",
             descripcion = doc.getString("descripcion") ?: "",
-            tipo = doc.getString("tipo") ?: "Residencial",
+            tipo = Comunidad.normalizarTipo(doc.getString("tipo")),
             numeroPisos = (doc.getLong("numeroPisos") ?: 0L).toInt().coerceAtLeast(0),
             totalVecinos = (doc.getLong("totalVecinos") ?: 0L).toInt().coerceAtLeast(0),
             photoUrl = doc.getString("photoUrl") ?: "",
-            verificada = doc.getBoolean("verificada") ?: false,
+            codigo = codigoDoc.ifBlank { Comunidad.codigoDesdeId(comId) },
             presidenteUid = presidenteUid,
             administradorUid = adminUid,
             createdByUid = createdByUid
@@ -77,11 +79,11 @@ class ComunidadRepository {
             "ciudad" to comunidad.ciudad,
             "codigoPostal" to comunidad.codigoPostal,
             "descripcion" to comunidad.descripcion,
-            "tipo" to comunidad.tipo,
+            "tipo" to Comunidad.normalizarTipo(comunidad.tipo),
             "numeroPisos" to pisosFinales,
             "totalVecinos" to comunidad.totalVecinos,
             "photoUrl" to comunidad.photoUrl,
-            "verificada" to comunidad.verificada,
+            "codigo" to comunidad.codigoCompartible,
             "presidenteUid" to comunidad.presidenteUid,
             "administradorUid" to comunidad.administradorUid,
             "createdByUid" to comunidad.createdByUid
@@ -177,7 +179,7 @@ class ComunidadRepository {
         ciudad: String = "",
         codigoPostal: String = "",
         descripcion: String = "",
-        tipo: String = "Residencial",
+        tipo: String = Comunidad.TIPO_URBANIZACION,
         numeroPisos: Int = 0,
         createdByUid: String = "",
         creadorEsAdministrador: Boolean = false
@@ -187,7 +189,8 @@ class ComunidadRepository {
         if (nombreLimpio.isBlank() || direccionLimpia.isBlank()) {
             return Result.failure(IllegalArgumentException("El nombre y la dirección de la comunidad son obligatorios."))
         }
-        val esEdificio = tipo.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true)
+        val tipoNormalizado = Comunidad.normalizarTipo(tipo)
+        val esEdificio = tipoNormalizado == Comunidad.TIPO_EDIFICIO
         val pisosFinales = if (esEdificio) numeroPisos else 0
         if (esEdificio && pisosFinales <= 0) {
             return Result.failure(IllegalArgumentException("Indica un número de pisos válido para el edificio."))
@@ -210,6 +213,7 @@ class ComunidadRepository {
             }
 
             val docRef = db.collection(COLECCION_COMUNIDADES).document()
+            val codigoUnico = generarCodigoUnicoComunidad(docRef.id)
             val nuevaComunidad = Comunidad(
                 id = docRef.id,
                 nombre = nombreLimpio,
@@ -217,11 +221,11 @@ class ComunidadRepository {
                 ciudad = ciudad.trim(),
                 codigoPostal = codigoPostal.trim(),
                 descripcion = descripcion.trim().ifBlank { "Comunidad de vecinos de $nombreLimpio" },
-                tipo = tipo.ifBlank { "Residencial" },
+                tipo = tipoNormalizado,
                 numeroPisos = pisosFinales,
                 totalVecinos = 0,
                 photoUrl = "",
-                verificada = false,
+                codigo = codigoUnico,
                 presidenteUid = "",
                 administradorUid = createdByUid,
                 createdByUid = createdByUid
@@ -231,6 +235,19 @@ class ComunidadRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private suspend fun generarCodigoUnicoComunidad(fallbackId: String): String {
+        repeat(5) {
+            val candidato = Comunidad.generarCodigoAleatorio()
+            val existente = db.collection(COLECCION_COMUNIDADES)
+                .whereEqualTo("codigo", candidato)
+                .limit(1)
+                .get()
+                .await()
+            if (existente.isEmpty) return candidato
+        }
+        return Comunidad.codigoDesdeId(fallbackId)
     }
 
     /**
@@ -274,60 +291,72 @@ class ComunidadRepository {
     }
 
     /**
-     * Transfiere de forma atómica la presidencia de [comunidadId] desde [presidenteActualUid]
-     * hacia [nuevoPresidenteUid]. Solo el presidente actual puede ejecutar esta operación y el
-     * destinatario debe pertenecer obligatoriamente a la misma comunidad.
+     * Designa por primera vez o cambia de forma atómica al presidente de [comunidadId] hacia
+     * [nuevoPresidenteUid]. ÚNICAMENTE el administrador de fincas actual de esa comunidad puede
+     * ejecutar esta operación; nunca los usuarios ni el propio presidente.
      */
-    suspend fun transferirPresidencia(
+    suspend fun asignarOCambiarPresidencia(
         comunidadId: String,
-        presidenteActualUid: String,
-        nuevoPresidenteUid: String
+        administradorUid: String,
+        nuevoPresidenteUid: String,
+        presidentePrevioFallbackUid: String = ""
     ): Result<Unit> {
-        if (comunidadId.isBlank() || presidenteActualUid.isBlank() || nuevoPresidenteUid.isBlank()) {
-            return Result.failure(IllegalArgumentException("Datos de transferencia incompletos."))
-        }
-        if (presidenteActualUid == nuevoPresidenteUid) {
-            return Result.failure(IllegalArgumentException("No puedes transferirte la presidencia a ti mismo."))
+        if (comunidadId.isBlank() || administradorUid.isBlank() || nuevoPresidenteUid.isBlank()) {
+            return Result.failure(IllegalArgumentException("Datos de presidencia incompletos."))
         }
 
         return try {
             val comRef = db.collection(COLECCION_COMUNIDADES).document(comunidadId)
-            val actualUserRef = db.collection("users").document(presidenteActualUid)
+            val adminUserRef = db.collection("users").document(administradorUid)
             val nuevoUserRef = db.collection("users").document(nuevoPresidenteUid)
 
             db.runTransaction { transaction ->
                 val comSnap = transaction.get(comRef)
-                val actualSnap = transaction.get(actualUserRef)
+                val adminSnap = transaction.get(adminUserRef)
                 val nuevoSnap = transaction.get(nuevoUserRef)
 
                 if (!comSnap.exists()) {
                     throw IllegalStateException("La comunidad no existe en Firestore.")
                 }
-                if (!actualSnap.exists() || !nuevoSnap.exists()) {
-                    throw IllegalStateException("Alguno de los miembros no existe en Firestore.")
+                if (!adminSnap.exists() || !nuevoSnap.exists()) {
+                    throw IllegalStateException("Alguno de los usuarios no existe en Firestore.")
                 }
-                val actualEnCom = actualSnap.getString("comunidadId") == comunidadId ||
-                    comunidadId in leerListaStrings(actualSnap, "comunidadesIds")
+
+                val adminEnComunidad = comSnap.getString("administradorUid")?.trim().orEmpty()
+                if (adminEnComunidad != administradorUid || !esUsuarioDocAdministrador(adminSnap)) {
+                    throw SecurityException("Solo el administrador de fincas de la comunidad puede designar o cambiar la presidencia.")
+                }
+
                 val nuevoEnCom = nuevoSnap.getString("comunidadId") == comunidadId ||
                     comunidadId in leerListaStrings(nuevoSnap, "comunidadesIds")
-                if (!actualEnCom || !nuevoEnCom) {
-                    throw SecurityException("Ambos usuarios deben pertenecer a la misma comunidad.")
+                if (!nuevoEnCom) {
+                    throw SecurityException("El miembro elegido debe pertenecer a esta comunidad.")
+                }
+                if (esUsuarioDocAdministrador(nuevoSnap)) {
+                    throw IllegalArgumentException("El administrador de fincas no puede ocupar la presidencia vecinal.")
                 }
 
-                val presUidDoc = comSnap.getString("presidenteUid").orEmpty()
-                val rolActualDoc = actualSnap.getString("role")
-                    ?: actualSnap.getString("rol")
-                    ?: ""
-                val esPresidenteValido = (presUidDoc == presidenteActualUid) ||
-                    (presUidDoc.isBlank() && rolActualDoc.equals(ROL_PRESIDENTE, ignoreCase = true))
-
-                if (!esPresidenteValido) {
-                    throw SecurityException("Solo el presidente de la comunidad puede transferir la presidencia.")
+                val presAnteriorUid = comSnap.getString("presidenteUid")?.trim().orEmpty()
+                    .ifBlank { presidentePrevioFallbackUid.trim() }
+                if (presAnteriorUid == nuevoPresidenteUid) {
+                    throw IllegalStateException("Este vecino ya ocupa la presidencia de la comunidad.")
                 }
+
+                val presAnteriorRef = if (presAnteriorUid.isNotBlank()) {
+                    db.collection("users").document(presAnteriorUid)
+                } else {
+                    null
+                }
+                val presAnteriorSnap = presAnteriorRef?.let { transaction.get(it) }
 
                 transaction.update(comRef, "presidenteUid", nuevoPresidenteUid)
-                if (!esUsuarioDocAdministrador(actualSnap)) {
-                    transaction.update(actualUserRef, "role", ROL_VECINO)
+                if (presAnteriorRef != null &&
+                    presAnteriorSnap?.exists() == true &&
+                    !esUsuarioDocAdministrador(presAnteriorSnap) &&
+                    (presAnteriorSnap.getString("comunidadId") == comunidadId ||
+                        comunidadId in leerListaStrings(presAnteriorSnap, "comunidadesIds"))
+                ) {
+                    transaction.update(presAnteriorRef, "role", ROL_VECINO)
                 }
                 transaction.update(nuevoUserRef, "role", ROL_PRESIDENTE)
                 null
