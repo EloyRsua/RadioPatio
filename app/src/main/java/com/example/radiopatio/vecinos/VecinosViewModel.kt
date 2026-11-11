@@ -24,13 +24,10 @@ data class VecinosUiState(
     val comunidad: Comunidad? = null,
     val usuarioActual: Usuario? = null,
     val vecinos: List<Usuario> = emptyList(),
-    val comunidadesDisponibles: List<Comunidad> = emptyList(),
     val textoBusqueda: String = "",
     val filtroRol: String = "Todos",
     val cargando: Boolean = true,
-    val procesandoComunidad: Boolean = false,
-    val errorMensaje: String? = null,
-    val mostrarDialogoComunidad: Boolean = false
+    val errorMensaje: String? = null
 ) {
     val rolesDisponibles: List<String>
         get() {
@@ -85,7 +82,6 @@ class VecinosViewModel(
 
     init {
         observarComunidadYVecinosEnTiempoReal()
-        observarCatalogoComunidades()
     }
 
     private fun observarComunidadYVecinosEnTiempoReal() {
@@ -135,14 +131,6 @@ class VecinosViewModel(
         }
     }
 
-    private fun observarCatalogoComunidades() {
-        viewModelScope.launch {
-            comunidadRepository.observarComunidades().collect { comunidades ->
-                uiState = uiState.copy(comunidadesDisponibles = comunidades)
-            }
-        }
-    }
-
     fun onTextoBusquedaChange(nuevoTexto: String) {
         uiState = uiState.copy(textoBusqueda = nuevoTexto)
     }
@@ -150,87 +138,4 @@ class VecinosViewModel(
     fun onFiltroRolChange(nuevoRol: String) {
         uiState = uiState.copy(filtroRol = nuevoRol)
     }
-
-    fun onAbrirDialogoComunidad() {
-        uiState = uiState.copy(mostrarDialogoComunidad = true, errorMensaje = null)
-    }
-
-    fun onCerrarDialogoComunidad() {
-        uiState = uiState.copy(mostrarDialogoComunidad = false, errorMensaje = null)
-    }
-
-    fun onLimpiarError() {
-        uiState = uiState.copy(errorMensaje = null)
-    }
-
-    fun onUnirseAComunidad(comunidad: Comunidad) {
-        viewModelScope.launch {
-            uiState = uiState.copy(procesandoComunidad = true, errorMensaje = null)
-            val resultado = userRepository.asignarComunidadUsuario(
-                comunidadId = comunidad.id,
-                comunidadNombre = comunidad.nombre
-            )
-            uiState = if (resultado.isSuccess) {
-                uiState.copy(
-                    procesandoComunidad = false,
-                    mostrarDialogoComunidad = false
-                )
-            } else {
-                uiState.copy(
-                    procesandoComunidad = false,
-                    errorMensaje = resultado.exceptionOrNull()?.localizedMessage
-                        ?: "No se pudo unir a la comunidad."
-                )
-            }
-        }
-    }
-
-    fun onCrearYUnirseAComunidad(
-        nombre: String,
-        direccion: String,
-        ciudad: String,
-        codigoPostal: String,
-        descripcion: String,
-        totalPortales: Int
-    ) {
-        viewModelScope.launch {
-            uiState = uiState.copy(procesandoComunidad = true, errorMensaje = null)
-            val uid = uiState.usuarioActual?.uid.orEmpty()
-            val creacion = comunidadRepository.crearComunidad(
-                nombre = nombre,
-                direccion = direccion,
-                ciudad = ciudad,
-                codigoPostal = codigoPostal,
-                descripcion = descripcion,
-                totalPortales = totalPortales,
-                createdByUid = uid
-            )
-
-            creacion.onSuccess { nuevaComunidad ->
-                val asignacion = userRepository.asignarComunidadUsuario(
-                    comunidadId = nuevaComunidad.id,
-                    comunidadNombre = nuevaComunidad.nombre,
-                    nuevoRol = "Presidente"
-                )
-                uiState = if (asignacion.isSuccess) {
-                    uiState.copy(
-                        procesandoComunidad = false,
-                        mostrarDialogoComunidad = false
-                    )
-                } else {
-                    uiState.copy(
-                        procesandoComunidad = false,
-                        errorMensaje = asignacion.exceptionOrNull()?.localizedMessage
-                            ?: "Comunidad creada, pero no se pudo asignar al perfil."
-                    )
-                }
-            }.onFailure { error ->
-                uiState = uiState.copy(
-                    procesandoComunidad = false,
-                    errorMensaje = error.localizedMessage ?: "No se pudo crear la comunidad."
-                )
-            }
-        }
-    }
 }
-

@@ -1,7 +1,6 @@
 package com.example.radiopatio.vecinos
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -20,13 +18,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Verified
@@ -37,13 +33,11 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.PersonSearch
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,10 +49,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +79,7 @@ private val BordeSuave = Color(0xFFECEFF1)
  */
 @Composable
 fun VecinosScreen(
+    onIrABuscarComunidad: () -> Unit = {},
     viewModel: VecinosViewModel = viewModel(factory = VecinosViewModelFactory())
 ) {
     val uiState = viewModel.uiState
@@ -97,11 +88,7 @@ fun VecinosScreen(
         uiState = uiState,
         onTextoBusquedaChange = viewModel::onTextoBusquedaChange,
         onFiltroRolChange = viewModel::onFiltroRolChange,
-        onAbrirDialogoComunidad = viewModel::onAbrirDialogoComunidad,
-        onCerrarDialogoComunidad = viewModel::onCerrarDialogoComunidad,
-        onUnirseAComunidad = viewModel::onUnirseAComunidad,
-        onCrearYUnirseAComunidad = viewModel::onCrearYUnirseAComunidad,
-        onLimpiarError = viewModel::onLimpiarError
+        onIrABuscarComunidad = onIrABuscarComunidad
     )
 }
 
@@ -113,18 +100,7 @@ fun VecinosContent(
     uiState: VecinosUiState,
     onTextoBusquedaChange: (String) -> Unit,
     onFiltroRolChange: (String) -> Unit,
-    onAbrirDialogoComunidad: () -> Unit,
-    onCerrarDialogoComunidad: () -> Unit,
-    onUnirseAComunidad: (Comunidad) -> Unit,
-    onCrearYUnirseAComunidad: (
-        nombre: String,
-        direccion: String,
-        ciudad: String,
-        codigoPostal: String,
-        descripcion: String,
-        totalPortales: Int
-    ) -> Unit,
-    onLimpiarError: () -> Unit = {}
+    onIrABuscarComunidad: () -> Unit = {}
 ) {
     val vecinosFiltrados = uiState.vecinosFiltrados
 
@@ -152,7 +128,7 @@ fun VecinosContent(
 
                 uiState.comunidadIdActual.isBlank() -> {
                     TarjetaSinComunidad(
-                        onSeleccionarOCrear = onAbrirDialogoComunidad,
+                        onSeleccionarOCrear = onIrABuscarComunidad,
                         modifier = Modifier
                             .align(Alignment.Center)
                             .padding(24.dp)
@@ -171,7 +147,7 @@ fun VecinosContent(
                                 TarjetaInfoComunidad(
                                     comunidad = comunidad,
                                     totalMiembrosReales = uiState.vecinos.size,
-                                    onCambiarComunidad = onAbrirDialogoComunidad
+                                    onCambiarComunidad = onIrABuscarComunidad
                                 )
                             }
                         }
@@ -237,10 +213,12 @@ fun VecinosContent(
                                 )
                             }
                         } else {
-                            items(
+                            itemsIndexed(
                                 items = vecinosFiltrados,
-                                key = { it.uid.ifBlank { "${it.email}_${it.nombre}_${it.vivienda}" } }
-                            ) { vecino ->
+                                key = { index, vecino ->
+                                    vecino.uid.ifBlank { "${vecino.email}_${vecino.nombre}_$index" }
+                                }
+                            ) { _, vecino ->
                                 TarjetaVecino(
                                     vecino = vecino,
                                     esUsuarioActual = uiState.usuarioActual?.uid?.isNotBlank() == true &&
@@ -252,19 +230,6 @@ fun VecinosContent(
                 }
             }
         }
-    }
-
-    if (uiState.mostrarDialogoComunidad) {
-        DialogoSeleccionarOCrearComunidad(
-            comunidadActualId = uiState.comunidadIdActual,
-            comunidadesDisponibles = uiState.comunidadesDisponibles,
-            procesando = uiState.procesandoComunidad,
-            errorMensaje = uiState.errorMensaje,
-            onDismiss = onCerrarDialogoComunidad,
-            onLimpiarError = onLimpiarError,
-            onUnirseAComunidad = onUnirseAComunidad,
-            onCrearYUnirseAComunidad = onCrearYUnirseAComunidad
-        )
     }
 }
 
@@ -791,257 +756,6 @@ private fun EstadoVecinosVacio(
     }
 }
 
-@Composable
-private fun DialogoSeleccionarOCrearComunidad(
-    comunidadActualId: String,
-    comunidadesDisponibles: List<Comunidad>,
-    procesando: Boolean,
-    errorMensaje: String?,
-    onDismiss: () -> Unit,
-    onLimpiarError: () -> Unit,
-    onUnirseAComunidad: (Comunidad) -> Unit,
-    onCrearYUnirseAComunidad: (
-        nombre: String,
-        direccion: String,
-        ciudad: String,
-        codigoPostal: String,
-        descripcion: String,
-        totalPortales: Int
-    ) -> Unit
-) {
-    var modoCrear by remember { mutableStateOf(comunidadesDisponibles.isEmpty()) }
-    var filtroComunidad by remember { mutableStateOf("") }
-
-    var nombreNueva by remember { mutableStateOf("") }
-    var direccionNueva by remember { mutableStateOf("") }
-    var ciudadNueva by remember { mutableStateOf("") }
-    var cpNuevo by remember { mutableStateOf("") }
-    var portalesNuevo by remember { mutableStateOf("1") }
-    var descripcionNueva by remember { mutableStateOf("") }
-
-    val comunidadesFiltradas = remember(comunidadesDisponibles, filtroComunidad) {
-        val q = filtroComunidad.trim()
-        if (q.isBlank()) {
-            comunidadesDisponibles
-        } else {
-            comunidadesDisponibles.filter {
-                it.nombre.contains(q, ignoreCase = true) ||
-                    it.direccion.contains(q, ignoreCase = true) ||
-                    it.ciudad.contains(q, ignoreCase = true)
-            }
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = { if (!procesando) onDismiss() },
-        title = {
-            Text(
-                text = if (modoCrear) "Nueva Comunidad" else "Comunidades en RadioPatio",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = AzulPrincipal
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = !modoCrear,
-                        onClick = {
-                            modoCrear = false
-                            onLimpiarError()
-                        },
-                        label = { Text("Unirse (${comunidadesDisponibles.size})", fontSize = 12.sp) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilterChip(
-                        selected = modoCrear,
-                        onClick = {
-                            modoCrear = true
-                            onLimpiarError()
-                        },
-                        label = { Text("Crear nueva", fontSize = 12.sp) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                if (!errorMensaje.isNullOrBlank()) {
-                    Text(
-                        text = errorMensaje,
-                        fontSize = 12.sp,
-                        color = Color(0xFFD32F2F)
-                    )
-                }
-
-                if (!modoCrear) {
-                    OutlinedTextField(
-                        value = filtroComunidad,
-                        onValueChange = { filtroComunidad = it },
-                        placeholder = { Text("Buscar por nombre o calle", fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (comunidadesFiltradas.isEmpty()) {
-                        Text(
-                            text = "No se encontraron comunidades. Puedes crear una nueva desde la pestaña \"Crear nueva\".",
-                            fontSize = 12.sp,
-                            color = Color.Gray,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    } else {
-                        comunidadesFiltradas.forEach { comunidad ->
-                            val esActual = comunidad.id == comunidadActualId
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (esActual) VerdeSuave else Color(0xFFF8FAFC),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (esActual) VerdeAccion else BordeSuave,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable(enabled = !procesando) {
-                                        onUnirseAComunidad(comunidad)
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = comunidad.nombre,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                            color = AzulPrincipal
-                                        )
-                                        Text(
-                                            text = comunidad.direccionCompleta(),
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF607D8B)
-                                        )
-                                    }
-                                    if (esActual) {
-                                        Icon(
-                                            imageVector = Icons.Filled.CheckCircle,
-                                            contentDescription = "Actual",
-                                            tint = VerdeOscuro,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    OutlinedTextField(
-                        value = nombreNueva,
-                        onValueChange = { nombreNueva = it },
-                        label = { Text("Nombre de la comunidad *", fontSize = 12.sp) },
-                        placeholder = { Text("Ej: Residencial Montecerrao") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = direccionNueva,
-                        onValueChange = { direccionNueva = it },
-                        label = { Text("Dirección *", fontSize = 12.sp) },
-                        placeholder = { Text("Ej: Calle Mayor, 12") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = ciudadNueva,
-                            onValueChange = { ciudadNueva = it },
-                            label = { Text("Ciudad", fontSize = 12.sp) },
-                            placeholder = { Text("Oviedo") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = cpNuevo,
-                            onValueChange = { cpNuevo = it },
-                            label = { Text("C.P.", fontSize = 12.sp) },
-                            placeholder = { Text("33006") },
-                            singleLine = true,
-                            modifier = Modifier.weight(0.7f)
-                        )
-                    }
-                    OutlinedTextField(
-                        value = portalesNuevo,
-                        onValueChange = { soloDigitos ->
-                            if (soloDigitos.all { it.isDigit() }) {
-                                portalesNuevo = soloDigitos
-                            }
-                        },
-                        label = { Text("Número de portales", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = descripcionNueva,
-                        onValueChange = { descripcionNueva = it },
-                        label = { Text("Descripción", fontSize = 12.sp) },
-                        maxLines = 2,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            if (modoCrear) {
-                Button(
-                    onClick = {
-                        onCrearYUnirseAComunidad(
-                            nombreNueva,
-                            direccionNueva,
-                            ciudadNueva,
-                            cpNuevo,
-                            descripcionNueva,
-                            portalesNuevo.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                        )
-                    },
-                    enabled = !procesando && nombreNueva.isNotBlank() && direccionNueva.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro)
-                ) {
-                    if (procesando) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("Crear y unirme")
-                    }
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                enabled = !procesando
-            ) {
-                Text("Cerrar", color = Color.Gray)
-            }
-        }
-    )
-}
-
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun VecinosContentPreview() {
@@ -1101,10 +815,7 @@ fun VecinosContentPreview() {
             ),
             onTextoBusquedaChange = {},
             onFiltroRolChange = {},
-            onAbrirDialogoComunidad = {},
-            onCerrarDialogoComunidad = {},
-            onUnirseAComunidad = {},
-            onCrearYUnirseAComunidad = { _, _, _, _, _, _ -> }
+            onIrABuscarComunidad = {}
         )
     }
 }

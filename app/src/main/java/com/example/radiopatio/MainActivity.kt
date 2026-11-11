@@ -21,6 +21,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.radiopatio.navigation.AppNavHost
+import com.example.radiopatio.navigation.BuscarComunidad
 import com.example.radiopatio.navigation.Eventos
 import com.example.radiopatio.navigation.Inicio
 import com.example.radiopatio.navigation.InicioSesion
@@ -43,7 +44,8 @@ class MainActivity : ComponentActivity() {
             val mostrarBarraInferior = destinoActual != null &&
                 !destinoActual.hasRoute<InicioSesion>() &&
                 !destinoActual.hasRoute<RegistroNuevo>() &&
-                !destinoActual.hasRoute<Publicar>()
+                !destinoActual.hasRoute<Publicar>() &&
+                !destinoActual.hasRoute<BuscarComunidad>()
 
             RadioPatioTheme {
                 Scaffold(

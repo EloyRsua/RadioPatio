@@ -15,18 +15,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,16 +54,30 @@ data class DatosRegistroComunidad(
     val crearNueva: Boolean = false,
     val comunidadExistente: Comunidad? = null,
     val nuevaComunidadNombre: String = "",
-    val nuevaComunidadDireccion: String = ""
-)
+    val nuevaComunidadDireccion: String = "",
+    val nuevaComunidadCiudad: String = "",
+    val nuevaComunidadCp: String = "",
+    val nuevaComunidadTipo: String = "Residencial",
+    val nuevaComunidadPortales: Int = 1,
+    val nuevaComunidadDescripcion: String = ""
+) {
+    fun estaConfigurada(): Boolean {
+        return if (crearNueva) {
+            nuevaComunidadNombre.isNotBlank() && nuevaComunidadDireccion.isNotBlank()
+        } else {
+            comunidadExistente != null
+        }
+    }
+}
 
 /**
- * Pantalla para el registro de nuevos usuarios con datos de vivienda y asignación de comunidad.
+ * Pantalla para el registro de nuevos usuarios con datos de vivienda y selector unificado de comunidad.
  */
 @Composable
 fun RegistroNuevoUsuario(
-    comunidadesDisponibles: List<Comunidad> = emptyList(),
+    datosComunidad: DatosRegistroComunidad = DatosRegistroComunidad(),
     cargando: Boolean = false,
+    onAbrirBuscadorComunidades: () -> Unit = {},
     onRegisterClick: (
         nombre: String,
         apellidos: String,
@@ -79,40 +95,15 @@ fun RegistroNuevoUsuario(
     val bordeGris = Color(0xFFE2E8F0)
     val textoSecundario = Color(0xFF64748B)
 
-    var nombre by remember { mutableStateOf("") }
-    var apellidos by remember { mutableStateOf("") }
-    var vivienda by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var aceptoNormas by remember { mutableStateOf(true) }
-    var photoUri by remember { mutableStateOf<Uri?>(null) }
-
-    var crearNuevaComunidad by remember { mutableStateOf(comunidadesDisponibles.isEmpty()) }
-    var usuarioTocoModoComunidad by remember { mutableStateOf(false) }
-    var comunidadSeleccionada by remember { mutableStateOf(comunidadesDisponibles.firstOrNull()) }
-    var menuComunidadesAbierto by remember { mutableStateOf(false) }
-    var nombreNuevaComunidad by remember { mutableStateOf("") }
-    var direccionNuevaComunidad by remember { mutableStateOf("") }
-
-    LaunchedEffect(comunidadesDisponibles) {
-        if (comunidadesDisponibles.isNotEmpty()) {
-            if (!usuarioTocoModoComunidad) {
-                crearNuevaComunidad = false
-            }
-            if (comunidadSeleccionada == null || comunidadesDisponibles.none { it.id == comunidadSeleccionada?.id }) {
-                comunidadSeleccionada = comunidadesDisponibles.firstOrNull()
-            }
-        } else if (!usuarioTocoModoComunidad) {
-            crearNuevaComunidad = true
-        }
-    }
-
-    val comunidadValida = if (crearNuevaComunidad) {
-        nombreNuevaComunidad.isNotBlank() && direccionNuevaComunidad.isNotBlank()
-    } else {
-        comunidadSeleccionada != null
-    }
+    var nombre by rememberSaveable { mutableStateOf("") }
+    var apellidos by rememberSaveable { mutableStateOf("") }
+    var vivienda by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var aceptoNormas by rememberSaveable { mutableStateOf(true) }
+    var photoUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    val photoUri = photoUriString?.let { Uri.parse(it) }
 
     val formularioValido = !cargando &&
         aceptoNormas &&
@@ -120,12 +111,12 @@ fun RegistroNuevoUsuario(
         vivienda.isNotBlank() &&
         email.isNotBlank() &&
         password.length >= 6 &&
-        comunidadValida
+        datosComunidad.estaConfigurada()
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        photoUri = uri
+        photoUriString = uri?.toString()
     }
 
     Box(
@@ -251,117 +242,11 @@ fun RegistroNuevoUsuario(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Selección o creación de comunidad
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = !crearNuevaComunidad,
-                        onClick = {
-                            usuarioTocoModoComunidad = true
-                            crearNuevaComunidad = false
-                        },
-                        enabled = comunidadesDisponibles.isNotEmpty(),
-                        label = {
-                            Text(
-                                text = "Unirme (${comunidadesDisponibles.size})",
-                                fontSize = 12.sp
-                            )
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilterChip(
-                        selected = crearNuevaComunidad,
-                        onClick = {
-                            usuarioTocoModoComunidad = true
-                            crearNuevaComunidad = true
-                        },
-                        label = { Text("Crear comunidad", fontSize = 12.sp) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                if (!crearNuevaComunidad && comunidadesDisponibles.isNotEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .clip(RoundedCornerShape(25.dp))
-                                .background(fondoGrisClaro)
-                                .border(1.dp, bordeGris, RoundedCornerShape(25.dp))
-                                .clickable { menuComunidadesAbierto = true }
-                                .padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Apartment,
-                                contentDescription = null,
-                                tint = textoSecundario,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = comunidadSeleccionada?.nombre ?: "Selecciona tu comunidad",
-                                fontSize = 14.sp,
-                                color = if (comunidadSeleccionada != null) Color(0xFF0F172A) else textoSecundario,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                imageVector = Icons.Filled.ArrowDropDown,
-                                contentDescription = null,
-                                tint = textoSecundario
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = menuComunidadesAbierto,
-                            onDismissRequest = { menuComunidadesAbierto = false },
-                            modifier = Modifier.background(Color.White)
-                        ) {
-                            comunidadesDisponibles.forEach { comunidad ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(
-                                                text = comunidad.nombre,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = azulPrincipal
-                                            )
-                                            if (comunidad.direccion.isNotBlank()) {
-                                                Text(
-                                                    text = comunidad.direccionCompleta(),
-                                                    fontSize = 11.sp,
-                                                    color = textoSecundario
-                                                )
-                                            }
-                                        }
-                                    },
-                                    onClick = {
-                                        comunidadSeleccionada = comunidad
-                                        menuComunidadesAbierto = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    CampoEntradaTexto(
-                        value = nombreNuevaComunidad,
-                        onValueChange = { nombreNuevaComunidad = it },
-                        placeholder = "Nombre de tu comunidad",
-                        icono = Icons.Outlined.Apartment,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    CampoEntradaTexto(
-                        value = direccionNuevaComunidad,
-                        onValueChange = { direccionNuevaComunidad = it },
-                        placeholder = "Dirección de la comunidad",
-                        icono = Icons.Outlined.LocationOn,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                // Selector unificado que abre la ventana de búsqueda avanzada de comunidades
+                SelectorComunidadRegistro(
+                    datosComunidad = datosComunidad,
+                    onClick = onAbrirBuscadorComunidades
+                )
 
                 CampoEntradaTexto(
                     value = email,
@@ -429,12 +314,7 @@ fun RegistroNuevoUsuario(
                             email.trim(),
                             password,
                             photoUri,
-                            DatosRegistroComunidad(
-                                crearNueva = crearNuevaComunidad,
-                                comunidadExistente = comunidadSeleccionada,
-                                nuevaComunidadNombre = nombreNuevaComunidad.trim(),
-                                nuevaComunidadDireccion = direccionNuevaComunidad.trim()
-                            )
+                            datosComunidad
                         )
                     }
                 },
@@ -474,6 +354,82 @@ fun RegistroNuevoUsuario(
                 modifier = Modifier.clickable(enabled = !cargando) { onVolverClick() }
             )
         }
+    }
+}
+
+@Composable
+private fun SelectorComunidadRegistro(
+    datosComunidad: DatosRegistroComunidad,
+    onClick: () -> Unit
+) {
+    val azulPrincipal = Color(0xFF133E54)
+    val verdeBoton = Color(0xFF0F8A5F)
+    val fondoGrisClaro = Color(0xFFF4F6F8)
+    val bordeGris = Color(0xFFE2E8F0)
+    val textoSecundario = Color(0xFF64748B)
+
+    val seleccionada = datosComunidad.estaConfigurada()
+    val titulo = when {
+        datosComunidad.crearNueva && datosComunidad.nuevaComunidadNombre.isNotBlank() ->
+            "Nueva: ${datosComunidad.nuevaComunidadNombre}"
+        datosComunidad.comunidadExistente != null ->
+            datosComunidad.comunidadExistente.nombre
+        else -> "Buscar o crear tu comunidad"
+    }
+    val subtitulo = when {
+        datosComunidad.crearNueva && datosComunidad.nuevaComunidadDireccion.isNotBlank() ->
+            listOf(
+                datosComunidad.nuevaComunidadDireccion,
+                datosComunidad.nuevaComunidadCiudad
+            ).filter { it.isNotBlank() }.joinToString(" · ")
+        datosComunidad.comunidadExistente != null ->
+            datosComunidad.comunidadExistente.direccionCompleta()
+        else -> "Pulsa para buscar con filtros o dar de alta una"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (seleccionada) Color(0xFFEAF5EC) else fondoGrisClaro)
+            .border(
+                width = 1.dp,
+                color = if (seleccionada) Color(0xFF389F82) else bordeGris,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (seleccionada) Icons.Outlined.Apartment else Icons.Outlined.Search,
+            contentDescription = null,
+            tint = if (seleccionada) verdeBoton else textoSecundario,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = titulo,
+                fontSize = 14.sp,
+                fontWeight = if (seleccionada) FontWeight.Bold else FontWeight.Medium,
+                color = if (seleccionada) azulPrincipal else textoSecundario,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitulo,
+                fontSize = 11.sp,
+                color = if (seleccionada) Color(0xFF455A64) else textoSecundario,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            imageVector = Icons.Filled.ChevronRight,
+            contentDescription = "Abrir buscador de comunidades",
+            tint = if (seleccionada) verdeBoton else textoSecundario
+        )
     }
 }
 
@@ -533,8 +489,8 @@ private fun CampoEntradaTexto(
 fun RegistroNuevoUsuarioPreview() {
     RadioPatioTheme {
         RegistroNuevoUsuario(
-            comunidadesDisponibles = listOf(
-                Comunidad(
+            datosComunidad = DatosRegistroComunidad(
+                comunidadExistente = Comunidad(
                     id = "com_1",
                     nombre = "Residencial Montecerrao",
                     direccion = "Calle Fuertes Acevedo, 42",
