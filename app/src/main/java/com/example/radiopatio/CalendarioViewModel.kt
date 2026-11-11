@@ -31,6 +31,7 @@ data class CalendarioUiState(
     val usuarioActual: Usuario? = null,
     val listaEventos: List<Evento> = emptyList(),
     val mostrarDialogoNuevoEvento: Boolean = false,
+    val creandoEvento: Boolean = false,
     val cargando: Boolean = true,
     val errorMensaje: String? = null
 ) {
@@ -94,7 +95,9 @@ class CalendarioViewModel(
                     } else {
                         combine(
                             comunidadRepository.observarComunidadPorId(comId),
-                            calendarioRepository.observarEventosDeComunidad(comId, uid)
+                            calendarioRepository.observarEventosDeComunidad(comId, uid) { mensaje ->
+                                uiState = uiState.copy(errorMensaje = mensaje)
+                            }
                         ) { comunidad, eventos ->
                             val nombreCom = comunidad?.nombre?.takeIf { it.isNotBlank() }
                                 ?: usuario?.comunidadNombre
@@ -151,7 +154,9 @@ class CalendarioViewModel(
     }
 
     fun onCerrarDialogoNuevoEvento() {
-        uiState = uiState.copy(mostrarDialogoNuevoEvento = false, errorMensaje = null)
+        if (!uiState.creandoEvento) {
+            uiState = uiState.copy(mostrarDialogoNuevoEvento = false, errorMensaje = null)
+        }
     }
 
     fun onLimpiarError() {
@@ -181,6 +186,7 @@ class CalendarioViewModel(
     }
 
     fun onCrearEvento(nuevoEvento: Evento) {
+        if (uiState.creandoEvento) return
         val comId = uiState.comunidadActualId
         if (comId.isBlank()) {
             uiState = uiState.copy(errorMensaje = "Debes pertenecer a una comunidad para crear eventos.")
@@ -196,6 +202,7 @@ class CalendarioViewModel(
             organizador = organizadorNombre
         )
 
+        uiState = uiState.copy(creandoEvento = true, errorMensaje = null)
         viewModelScope.launch {
             val resultado = calendarioRepository.crearEvento(eventoConUsuario, comId, uid)
             uiState = if (resultado.isSuccess) {
@@ -206,11 +213,13 @@ class CalendarioViewModel(
                 }
                 uiState.copy(
                     mostrarDialogoNuevoEvento = false,
+                    creandoEvento = false,
                     diaSeleccionado = enfocarDia,
                     errorMensaje = null
                 )
             } else {
                 uiState.copy(
+                    creandoEvento = false,
                     errorMensaje = resultado.exceptionOrNull()?.localizedMessage
                         ?: "No se pudo publicar el evento."
                 )

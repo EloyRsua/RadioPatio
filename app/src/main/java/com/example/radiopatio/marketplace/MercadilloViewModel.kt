@@ -89,7 +89,9 @@ class MercadilloViewModel(
                     } else {
                         combine(
                             comunidadRepository.observarComunidadPorId(comId),
-                            mercadilloRepository.observarProductosDeComunidad(comId)
+                            mercadilloRepository.observarProductosDeComunidad(comId) { mensaje ->
+                                uiState = uiState.copy(errorMensaje = mensaje)
+                            }
                         ) { comunidad, productos ->
                             val nombreCom = comunidad?.nombre?.takeIf { it.isNotBlank() }
                                 ?: usuario?.comunidadNombre

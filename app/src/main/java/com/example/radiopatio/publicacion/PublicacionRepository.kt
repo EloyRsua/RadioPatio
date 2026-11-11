@@ -1,5 +1,8 @@
 package com.example.radiopatio.publicacion
 
+import android.util.Log
+import com.example.radiopatio.comunidad.migrarDocumentosRaizAComunidad
+import com.example.radiopatio.comunidad.subcoleccionComunidad
 import com.example.radiopatio.data.PublicacionEntidad
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -7,11 +10,13 @@ import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
- * Repositorio para gestionar las publicaciones del tablón en tiempo real con Cloud Firestore,
- * aplicando aislamiento multi-inquilino obligatorio por `comunidadId`.
+ * Repositorio para gestionar las publicaciones del tablón en tiempo real con Cloud Firestore
+ * dentro de la subcolección `comunidades/{comunidadId}/publicaciones`,
+ * aplicando aislamiento obligatorio por `comunidadId`.
  */
 class PublicacionRepository {
 
@@ -47,20 +52,36 @@ class PublicacionRepository {
     /**
      * Escucha en tiempo real únicamente las publicaciones pertenecientes a [comunidadId].
      */
-    fun observarPublicacionesDeComunidad(comunidadId: String): Flow<List<PublicacionEntidad>> = callbackFlow {
+    fun observarPublicacionesDeComunidad(
+        comunidadId: String,
+        onError: (String) -> Unit = {}
+    ): Flow<List<PublicacionEntidad>> = callbackFlow {
         if (comunidadId.isBlank()) {
             trySend(emptyList())
             awaitClose { }
             return@callbackFlow
         }
 
+        launch {
+            db.migrarDocumentosRaizAComunidad(comunidadId, COLECCION_PUBLICACIONES)
+        }
+
         var listener: ListenerRegistration? = null
+        var emitioAlMenosUnaVez = false
+        val subcoleccionRef = db.subcoleccionComunidad(comunidadId, COLECCION_PUBLICACIONES)
+        Log.i("PublicacionRepository", "Suscribiendo listener a ${subcoleccionRef.path}")
+
         try {
-            listener = db.collection(COLECCION_PUBLICACIONES)
+            listener = subcoleccionRef
                 .whereEqualTo("comunidadId", comunidadId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        trySend(emptyList())
+                        Log.e("PublicacionRepository", "Error escuchando publicaciones en ${subcoleccionRef.path}", error)
+                        onError("Error de Firestore al cargar publicaciones: ${error.localizedMessage ?: error.code}")
+                        if (!emitioAlMenosUnaVez) {
+                            emitioAlMenosUnaVez = true
+                            trySend(emptyList())
+                        }
                         return@addSnapshotListener
                     }
 
@@ -70,10 +91,20 @@ class PublicacionRepository {
                         ?.sortedByDescending { it.timestamp }
                         ?: emptyList()
 
+                    Log.i(
+                        "PublicacionRepository",
+                        "Snapshot ${subcoleccionRef.path}: ${publicaciones.size} docs (fromCache=${snapshot?.metadata?.isFromCache}, pending=${snapshot?.metadata?.hasPendingWrites()})"
+                    )
+                    emitioAlMenosUnaVez = true
                     trySend(publicaciones)
                 }
-        } catch (_: Exception) {
-            trySend(emptyList())
+        } catch (e: Exception) {
+            Log.e("PublicacionRepository", "Excepción escuchando publicaciones en ${subcoleccionRef.path}", e)
+            onError("Error al conectar con Firestore: ${e.localizedMessage ?: "Error desconocido"}")
+            if (!emitioAlMenosUnaVez) {
+                emitioAlMenosUnaVez = true
+                trySend(emptyList())
+            }
         }
 
         awaitClose {
@@ -82,7 +113,8 @@ class PublicacionRepository {
     }
 
     /**
-     * Crea una nueva publicación en Firestore asociada obligatoriamente a [comunidadId].
+     * Crea una nueva publicación en la subcolección `comunidades/{comunidadId}/publicaciones`
+     * asociada obligatoriamente a [comunidadId].
      */
     suspend fun crearPublicacion(
         comunidadId: String,
@@ -100,7 +132,7 @@ class PublicacionRepository {
         }
 
         return try {
-            val docRef = db.collection(COLECCION_PUBLICACIONES).document()
+            val docRef = db.subcoleccionComunidad(comunidadId, COLECCION_PUBLICACIONES).document()
             val timestamp = System.currentTimeMillis()
             val entidad = PublicacionEntidad(
                 firestoreId = docRef.id,
@@ -129,8 +161,10 @@ class PublicacionRepository {
             )
 
             docRef.set(payload).await()
+            Log.i("PublicacionRepository", "Publicación guardada en Firestore: ${docRef.path}")
             Result.success(entidad)
         } catch (e: Exception) {
+            Log.e("PublicacionRepository", "Error creando publicación en Firestore", e)
             Result.failure(e)
         }
     }
@@ -148,13 +182,14 @@ class PublicacionRepository {
 
         return try {
             if (publicacion.firestoreId.isNotBlank()) {
-                db.collection(COLECCION_PUBLICACIONES)
+                db.subcoleccionComunidad(comunidadIdActual, COLECCION_PUBLICACIONES)
                     .document(publicacion.firestoreId)
                     .delete()
                     .await()
             }
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e("PublicacionRepository", "Error eliminando publicación en Firestore", e)
             Result.failure(e)
         }
     }

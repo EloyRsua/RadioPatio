@@ -2,9 +2,25 @@ package com.example.radiopatio.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "publicaciones")
+@Entity(
+    tableName = "publicaciones",
+    foreignKeys = [
+        ForeignKey(
+            entity = ComunidadEntidad::class,
+            parentColumns = ["id"],
+            childColumns = ["comunidad_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["comunidad_id"]),
+        Index(value = ["firestore_id"])
+    ]
+)
 data class PublicacionEntidad(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,

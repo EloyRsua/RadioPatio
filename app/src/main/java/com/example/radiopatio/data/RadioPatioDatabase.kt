@@ -3,7 +3,12 @@ package com.example.radiopatio.data
 import androidx.room.Database
 import androidx.room.RoomDatabase
 
-@Database(entities = [PublicacionEntidad::class], version = 2, exportSchema = false)
+@Database(
+    entities = [ComunidadEntidad::class, PublicacionEntidad::class],
+    version = 3,
+    exportSchema = false
+)
 abstract class RadioPatioDatabase : RoomDatabase() {
+    abstract fun comunidadDao(): ComunidadDao
     abstract fun publicacionDao(): PublicacionDao
 }

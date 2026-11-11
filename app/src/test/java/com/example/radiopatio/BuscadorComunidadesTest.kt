@@ -19,7 +19,6 @@ class BuscadorComunidadesTest {
             ciudad = "Oviedo",
             codigoPostal = "33006",
             tipo = "Residencial",
-            totalPortales = 3,
             totalVecinos = 28,
             verificada = true
         ),
@@ -30,7 +29,6 @@ class BuscadorComunidadesTest {
             ciudad = "Oviedo",
             codigoPostal = "33012",
             tipo = "Urbanización",
-            totalPortales = 5,
             totalVecinos = 45,
             verificada = false
         ),
@@ -41,7 +39,6 @@ class BuscadorComunidadesTest {
             ciudad = "Oviedo",
             codigoPostal = "33003",
             tipo = "Edificio",
-            totalPortales = 1,
             totalVecinos = 12,
             verificada = true
         ),
@@ -52,7 +49,6 @@ class BuscadorComunidadesTest {
             ciudad = "Gijón",
             codigoPostal = "33203",
             tipo = "Residencial",
-            totalPortales = 4,
             totalVecinos = 30,
             verificada = false
         )
@@ -89,20 +85,13 @@ class BuscadorComunidadesTest {
     }
 
     @Test
-    fun ordenacionPorVecinosNombreYPortales() {
+    fun ordenacionPorVecinosYNombre() {
         val porVecinos = filtrarYOrdenarComunidades(
             comunidades = comunidades,
             textoBusqueda = "",
             ordenSeleccionado = OrdenComunidad.MAS_VECINOS
         )
         assertEquals(listOf("c2", "c4", "c1", "c3"), porVecinos.map { it.id })
-
-        val porPortales = filtrarYOrdenarComunidades(
-            comunidades = comunidades,
-            textoBusqueda = "",
-            ordenSeleccionado = OrdenComunidad.MAS_PORTALES
-        )
-        assertEquals(listOf("c2", "c4", "c1", "c3"), porPortales.map { it.id })
 
         val porNombre = filtrarYOrdenarComunidades(
             comunidades = comunidades,

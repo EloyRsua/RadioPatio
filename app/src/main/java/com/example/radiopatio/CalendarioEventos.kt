@@ -272,6 +272,7 @@ fun CalendarioEventosContent(
         DialogoNuevoEvento(
             diaInicial = diaPorDefecto,
             organizadorInicial = uiState.usuarioActual?.nombre?.takeIf { it.isNotBlank() } ?: "Vecino RadioPatio",
+            creandoEvento = uiState.creandoEvento,
             onDismiss = onCerrarDialogoNuevoEvento,
             onCrearEvento = onCrearEvento
         )
@@ -959,6 +960,7 @@ private fun EstadoEventosVacio(
 fun DialogoNuevoEvento(
     diaInicial: LocalDate,
     organizadorInicial: String = "Vecino RadioPatio",
+    creandoEvento: Boolean = false,
     onDismiss: () -> Unit,
     onCrearEvento: (Evento) -> Unit
 ) {
@@ -971,7 +973,7 @@ fun DialogoNuevoEvento(
     var diaSeleccionado by remember { mutableStateOf(diaInicial) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!creandoEvento) onDismiss() },
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -1072,7 +1074,7 @@ fun DialogoNuevoEvento(
         confirmButton = {
             Button(
                 onClick = {
-                    if (titulo.isNotBlank() && ubicacion.isNotBlank()) {
+                    if (!creandoEvento && titulo.isNotBlank() && ubicacion.isNotBlank()) {
                         val nuevoEvento = Evento(
                             id = "evt-${System.currentTimeMillis()}",
                             titulo = titulo.trim(),
@@ -1090,14 +1092,25 @@ fun DialogoNuevoEvento(
                         onCrearEvento(nuevoEvento)
                     }
                 },
-                enabled = titulo.isNotBlank() && ubicacion.isNotBlank(),
+                enabled = !creandoEvento && titulo.isNotBlank() && ubicacion.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF389F82))
             ) {
-                Text("Publicar Evento")
+                if (creandoEvento) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Publicar Evento")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !creandoEvento
+            ) {
                 Text("Cancelar", color = Color.Gray)
             }
         }

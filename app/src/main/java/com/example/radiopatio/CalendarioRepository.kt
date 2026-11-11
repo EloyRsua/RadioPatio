@@ -1,5 +1,8 @@
 package com.example.radiopatio
 
+import android.util.Log
+import com.example.radiopatio.comunidad.migrarDocumentosRaizAComunidad
+import com.example.radiopatio.comunidad.subcoleccionComunidad
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -7,12 +10,14 @@ import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 
 /**
- * Repositorio de Cloud Firestore para el Calendario de Eventos vecinales,
- * con sincronización en tiempo real y aislamiento obligatorio por `comunidadId`.
+ * Repositorio de Cloud Firestore para el Calendario de Eventos vecinales dentro de la
+ * subcolección `comunidades/{comunidadId}/eventos`, con sincronización en tiempo real
+ * y aislamiento obligatorio por `comunidadId`.
  */
 class CalendarioRepository {
 
@@ -75,20 +80,37 @@ class CalendarioRepository {
     /**
      * Observa en tiempo real los eventos pertenecientes exclusivamente a [comunidadId].
      */
-    fun observarEventosDeComunidad(comunidadId: String, currentUid: String): Flow<List<Evento>> = callbackFlow {
+    fun observarEventosDeComunidad(
+        comunidadId: String,
+        currentUid: String,
+        onError: (String) -> Unit = {}
+    ): Flow<List<Evento>> = callbackFlow {
         if (comunidadId.isBlank()) {
             trySend(emptyList())
             awaitClose { }
             return@callbackFlow
         }
 
+        launch {
+            db.migrarDocumentosRaizAComunidad(comunidadId, COLECCION_EVENTOS)
+        }
+
         var listener: ListenerRegistration? = null
+        var emitioAlMenosUnaVez = false
+        val subcoleccionRef = db.subcoleccionComunidad(comunidadId, COLECCION_EVENTOS)
+        Log.i("CalendarioRepository", "Suscribiendo listener a ${subcoleccionRef.path}")
+
         try {
-            listener = db.collection(COLECCION_EVENTOS)
+            listener = subcoleccionRef
                 .whereEqualTo("comunidadId", comunidadId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        trySend(emptyList())
+                        Log.e("CalendarioRepository", "Error escuchando eventos en ${subcoleccionRef.path}", error)
+                        onError("Error de Firestore al cargar eventos: ${error.localizedMessage ?: error.code}")
+                        if (!emitioAlMenosUnaVez) {
+                            emitioAlMenosUnaVez = true
+                            trySend(emptyList())
+                        }
                         return@addSnapshotListener
                     }
 
@@ -98,10 +120,20 @@ class CalendarioRepository {
                         ?.sortedBy { it.fecha }
                         ?: emptyList()
 
+                    Log.i(
+                        "CalendarioRepository",
+                        "Snapshot ${subcoleccionRef.path}: ${lista.size} docs (fromCache=${snapshot?.metadata?.isFromCache}, pending=${snapshot?.metadata?.hasPendingWrites()})"
+                    )
+                    emitioAlMenosUnaVez = true
                     trySend(lista)
                 }
-        } catch (_: Exception) {
-            trySend(emptyList())
+        } catch (e: Exception) {
+            Log.e("CalendarioRepository", "Excepción escuchando eventos en ${subcoleccionRef.path}", e)
+            onError("Error al conectar eventos con Firestore: ${e.localizedMessage ?: "Error desconocido"}")
+            if (!emitioAlMenosUnaVez) {
+                emitioAlMenosUnaVez = true
+                trySend(emptyList())
+            }
         }
 
         awaitClose {
@@ -110,7 +142,7 @@ class CalendarioRepository {
     }
 
     /**
-     * Crea un evento en Firestore asociado obligatoriamente a [comunidadId].
+     * Crea un evento en `comunidades/{comunidadId}/eventos` asociado obligatoriamente a [comunidadId].
      */
     suspend fun crearEvento(
         evento: Evento,
@@ -125,7 +157,7 @@ class CalendarioRepository {
         }
 
         return try {
-            val docRef = db.collection(COLECCION_EVENTOS).document()
+            val docRef = db.subcoleccionComunidad(comunidadId, COLECCION_EVENTOS).document()
             val asistentesIniciales = if (creadorUid.isNotBlank()) listOf(creadorUid) else emptyList()
             val eventoCreado = evento.copy(
                 id = docRef.id,
@@ -155,8 +187,10 @@ class CalendarioRepository {
             )
 
             docRef.set(payload).await()
+            Log.i("CalendarioRepository", "Evento guardado en Firestore: ${docRef.path}")
             Result.success(eventoCreado)
         } catch (e: Exception) {
+            Log.e("CalendarioRepository", "Error creando evento en Firestore", e)
             Result.failure(e)
         }
     }
@@ -177,7 +211,7 @@ class CalendarioRepository {
         }
 
         return try {
-            val docRef = db.collection(COLECCION_EVENTOS).document(evento.id)
+            val docRef = db.subcoleccionComunidad(comunidadIdActual, COLECCION_EVENTOS).document(evento.id)
             val op = if (evento.asistiendoUsuario) {
                 FieldValue.arrayRemove(uid)
             } else {
@@ -186,6 +220,7 @@ class CalendarioRepository {
             docRef.update("asistentesUids", op).await()
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e("CalendarioRepository", "Error actualizando asistencia en Firestore", e)
             Result.failure(e)
         }
     }
@@ -206,7 +241,7 @@ class CalendarioRepository {
         }
 
         return try {
-            val docRef = db.collection(COLECCION_EVENTOS).document(evento.id)
+            val docRef = db.subcoleccionComunidad(comunidadIdActual, COLECCION_EVENTOS).document(evento.id)
             val op = if (evento.recordatorioActivado) {
                 FieldValue.arrayRemove(uid)
             } else {
@@ -215,6 +250,7 @@ class CalendarioRepository {
             docRef.update("recordatoriosUids", op).await()
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e("CalendarioRepository", "Error actualizando recordatorio en Firestore", e)
             Result.failure(e)
         }
     }

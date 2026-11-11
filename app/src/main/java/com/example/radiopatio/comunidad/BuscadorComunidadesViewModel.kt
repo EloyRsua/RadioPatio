@@ -261,7 +261,8 @@ class BuscadorComunidadesViewModel(
             uiState = uiState.copy(procesando = true, errorMensaje = null)
             val resultado = userRepository.asignarComunidadUsuario(
                 comunidadId = comunidad.id,
-                comunidadNombre = comunidad.nombre
+                comunidadNombre = comunidad.nombre,
+                nuevoRol = "Vecino/a"
             )
             if (resultado.isSuccess) {
                 uiState = uiState.copy(procesando = false)

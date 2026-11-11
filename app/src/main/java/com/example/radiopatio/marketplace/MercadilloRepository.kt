@@ -1,17 +1,22 @@
 package com.example.radiopatio.marketplace
 
+import android.util.Log
+import com.example.radiopatio.comunidad.migrarDocumentosRaizAComunidad
+import com.example.radiopatio.comunidad.subcoleccionComunidad
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlin.math.abs
 
 /**
- * Repositorio de Cloud Firestore para el módulo de Mercadillo,
- * con sincronización en tiempo real y aislamiento obligatorio por `comunidadId`.
+ * Repositorio de Cloud Firestore para el módulo de Mercadillo dentro de la subcolección
+ * `comunidades/{comunidadId}/productos`, con sincronización en tiempo real
+ * y aislamiento obligatorio por `comunidadId`.
  */
 class MercadilloRepository {
 
@@ -53,20 +58,36 @@ class MercadilloRepository {
     /**
      * Observa en tiempo real los anuncios del mercadillo pertenecientes exclusivamente a [comunidadId].
      */
-    fun observarProductosDeComunidad(comunidadId: String): Flow<List<Producto>> = callbackFlow {
+    fun observarProductosDeComunidad(
+        comunidadId: String,
+        onError: (String) -> Unit = {}
+    ): Flow<List<Producto>> = callbackFlow {
         if (comunidadId.isBlank()) {
             trySend(emptyList())
             awaitClose { }
             return@callbackFlow
         }
 
+        launch {
+            db.migrarDocumentosRaizAComunidad(comunidadId, COLECCION_PRODUCTOS)
+        }
+
         var listener: ListenerRegistration? = null
+        var emitioAlMenosUnaVez = false
+        val subcoleccionRef = db.subcoleccionComunidad(comunidadId, COLECCION_PRODUCTOS)
+        Log.i("MercadilloRepository", "Suscribiendo listener a ${subcoleccionRef.path}")
+
         try {
-            listener = db.collection(COLECCION_PRODUCTOS)
+            listener = subcoleccionRef
                 .whereEqualTo("comunidadId", comunidadId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        trySend(emptyList())
+                        Log.e("MercadilloRepository", "Error escuchando productos en ${subcoleccionRef.path}", error)
+                        onError("Error de Firestore al cargar mercadillo: ${error.localizedMessage ?: error.code}")
+                        if (!emitioAlMenosUnaVez) {
+                            emitioAlMenosUnaVez = true
+                            trySend(emptyList())
+                        }
                         return@addSnapshotListener
                     }
 
@@ -76,10 +97,20 @@ class MercadilloRepository {
                         ?.sortedByDescending { it.timestamp }
                         ?: emptyList()
 
+                    Log.i(
+                        "MercadilloRepository",
+                        "Snapshot ${subcoleccionRef.path}: ${lista.size} docs (fromCache=${snapshot?.metadata?.isFromCache}, pending=${snapshot?.metadata?.hasPendingWrites()})"
+                    )
+                    emitioAlMenosUnaVez = true
                     trySend(lista)
                 }
-        } catch (_: Exception) {
-            trySend(emptyList())
+        } catch (e: Exception) {
+            Log.e("MercadilloRepository", "Excepción escuchando productos en ${subcoleccionRef.path}", e)
+            onError("Error al conectar mercadillo con Firestore: ${e.localizedMessage ?: "Error desconocido"}")
+            if (!emitioAlMenosUnaVez) {
+                emitioAlMenosUnaVez = true
+                trySend(emptyList())
+            }
         }
 
         awaitClose {
@@ -88,7 +119,8 @@ class MercadilloRepository {
     }
 
     /**
-     * Publica un nuevo anuncio en Firestore asociándolo obligatoriamente a [comunidadId].
+     * Publica un nuevo anuncio en `comunidades/{comunidadId}/productos`
+     * asociándolo obligatoriamente a [comunidadId].
      */
     suspend fun crearProducto(
         producto: Producto,
@@ -104,7 +136,7 @@ class MercadilloRepository {
         }
 
         return try {
-            val docRef = db.collection(COLECCION_PRODUCTOS).document()
+            val docRef = db.subcoleccionComunidad(comunidadId, COLECCION_PRODUCTOS).document()
             val timestamp = System.currentTimeMillis()
             val creado = producto.copy(
                 id = abs(docRef.id.hashCode()),
@@ -130,14 +162,16 @@ class MercadilloRepository {
             )
 
             docRef.set(payload).await()
+            Log.i("MercadilloRepository", "Producto guardado en Firestore: ${docRef.path}")
             Result.success(creado)
         } catch (e: Exception) {
+            Log.e("MercadilloRepository", "Error creando producto en Firestore", e)
             Result.failure(e)
         }
     }
 
     /**
-     * Elimina un anuncio verificando que pertenezca a la comunidad activa.
+     * Elimina un anuncio de Firestore verificando que pertenezca a la comunidad activa.
      */
     suspend fun eliminarProducto(
         producto: Producto,
@@ -151,12 +185,13 @@ class MercadilloRepository {
         }
 
         return try {
-            db.collection(COLECCION_PRODUCTOS)
+            db.subcoleccionComunidad(comunidadIdActual, COLECCION_PRODUCTOS)
                 .document(producto.firestoreId)
                 .delete()
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e("MercadilloRepository", "Error eliminando producto en Firestore", e)
             Result.failure(e)
         }
     }

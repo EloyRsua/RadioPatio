@@ -7,8 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.radiopatio.comunidad.ComunidadRepository
+import com.example.radiopatio.data.ComunidadDao
+import com.example.radiopatio.data.ComunidadEntidad
 import com.example.radiopatio.data.PublicacionDao
 import com.example.radiopatio.data.PublicacionEntidad
+import com.example.radiopatio.data.toEntidad
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.publicacion.PublicacionRepository
 import com.example.radiopatio.usuarios.UserRepository
@@ -51,6 +54,7 @@ data class TablonUiState(
 
 class RadioPatioViewModelFactory(
     private val publicacionDao: PublicacionDao,
+    private val comunidadDao: ComunidadDao? = null,
     private val userRepository: UserRepository = UserRepository(),
     private val publicacionRepository: PublicacionRepository = PublicacionRepository(),
     private val comunidadRepository: ComunidadRepository = ComunidadRepository()
@@ -60,6 +64,7 @@ class RadioPatioViewModelFactory(
         if (modelClass.isAssignableFrom(RadioPatioViewModel::class.java)) {
             return RadioPatioViewModel(
                 publicacionDao = publicacionDao,
+                comunidadDao = comunidadDao,
                 userRepository = userRepository,
                 publicacionRepository = publicacionRepository,
                 comunidadRepository = comunidadRepository
@@ -72,6 +77,7 @@ class RadioPatioViewModelFactory(
 @OptIn(ExperimentalCoroutinesApi::class)
 class RadioPatioViewModel(
     private val publicacionDao: PublicacionDao,
+    private val comunidadDao: ComunidadDao? = null,
     private val userRepository: UserRepository = UserRepository(),
     private val publicacionRepository: PublicacionRepository = PublicacionRepository(),
     private val comunidadRepository: ComunidadRepository = ComunidadRepository()
@@ -84,6 +90,7 @@ class RadioPatioViewModel(
         get() = uiState.publicacionesFiltradas
 
     private var syncFirestoreJob: Job? = null
+    private var syncComunidadRoomJob: Job? = null
     private var comunidadSincronizada: String? = null
     private val roomSyncMutex = Mutex()
 
@@ -129,21 +136,51 @@ class RadioPatioViewModel(
         if (comunidadSincronizada == comunidadId) return
         comunidadSincronizada = comunidadId
         syncFirestoreJob?.cancel()
+        syncComunidadRoomJob?.cancel()
         if (comunidadId.isBlank()) return
 
+        syncComunidadRoomJob = viewModelScope.launch {
+            comunidadRepository.observarComunidadPorId(comunidadId).collect { comunidad ->
+                if (comunidad != null) {
+                    roomSyncMutex.withLock {
+                        withContext(Dispatchers.IO) {
+                            comunidadDao?.upsert(comunidad.toEntidad())
+                        }
+                    }
+                }
+            }
+        }
+
         syncFirestoreJob = viewModelScope.launch {
-            publicacionRepository.observarPublicacionesDeComunidad(comunidadId)
+            publicacionRepository.observarPublicacionesDeComunidad(
+                comunidadId = comunidadId,
+                onError = { mensaje ->
+                    uiState = uiState.copy(errorMensaje = mensaje)
+                }
+            )
                 .collect { remotas ->
                     val filtradas = remotas
                         .filter { it.comunidadId == comunidadId }
                         .distinctBy { it.firestoreId.ifBlank { "local-${it.id}" } }
                     roomSyncMutex.withLock {
                         withContext(Dispatchers.IO) {
+                            asegurarComunidadPadreEnRoom(comunidadId)
                             publicacionDao.reemplazarPublicacionesComunidad(comunidadId, filtradas)
                         }
                     }
                 }
         }
+    }
+
+    private suspend fun asegurarComunidadPadreEnRoom(comunidadId: String) {
+        if (comunidadDao == null || comunidadId.isBlank()) return
+        comunidadDao.insertarSiNoExiste(
+            ComunidadEntidad(
+                id = comunidadId,
+                nombre = uiState.comunidadNombre.ifBlank { comunidadId },
+                direccion = ""
+            )
+        )
     }
 
     fun onTextoBusquedaChange(nuevoTexto: String) {
@@ -188,6 +225,7 @@ class RadioPatioViewModel(
             resultado.onSuccess { entidad ->
                 roomSyncMutex.withLock {
                     withContext(Dispatchers.IO) {
+                        asegurarComunidadPadreEnRoom(comId)
                         if (entidad.firestoreId.isNotBlank()) {
                             publicacionDao.eliminarPorFirestoreId(entidad.firestoreId, comId)
                         }

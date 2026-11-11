@@ -52,7 +52,6 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
             datos.nuevaComunidadCiudad,
             datos.nuevaComunidadCp,
             datos.nuevaComunidadTipo,
-            datos.nuevaComunidadPortales,
             datos.nuevaComunidadDescripcion
         )
     },
@@ -77,8 +76,7 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
             nuevaComunidadCiudad = lista[9] as String,
             nuevaComunidadCp = lista[10] as String,
             nuevaComunidadTipo = lista[11] as String,
-            nuevaComunidadPortales = lista[12] as Int,
-            nuevaComunidadDescripcion = lista[13] as String
+            nuevaComunidadDescripcion = lista[12] as String
         )
     }
 )
@@ -98,6 +96,7 @@ fun AppNavHost(
     val viewModel: RadioPatioViewModel = viewModel(
         factory = RadioPatioViewModelFactory(
             publicacionDao = app.database.publicacionDao(),
+            comunidadDao = app.database.comunidadDao(),
             userRepository = userRepository,
             comunidadRepository = comunidadRepository
         )
@@ -181,7 +180,6 @@ fun AppNavHost(
                                         codigoPostal = datosComunidad.nuevaComunidadCp,
                                         descripcion = datosComunidad.nuevaComunidadDescripcion,
                                         tipo = datosComunidad.nuevaComunidadTipo,
-                                        totalPortales = datosComunidad.nuevaComunidadPortales,
                                         createdByUid = uid
                                     ).getOrThrow()
                                     Triple(comunidadCreada.id, comunidadCreada.nombre, "Presidente")
@@ -257,7 +255,6 @@ fun AppNavHost(
                         nuevaComunidadCiudad = formulario.ciudad,
                         nuevaComunidadCp = formulario.codigoPostal,
                         nuevaComunidadTipo = formulario.tipo,
-                        nuevaComunidadPortales = formulario.totalPortales,
                         nuevaComunidadDescripcion = formulario.descripcion
                     )
                     navController.popBackStack()

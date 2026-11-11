@@ -2,12 +2,15 @@ package com.example.radiopatio
 
 import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.data.PublicacionEntidad
+import com.example.radiopatio.data.toEntidad
+import com.example.radiopatio.data.toModelo
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.marketplace.CategoriaProducto
 import com.example.radiopatio.marketplace.MercadilloUiState
 import com.example.radiopatio.marketplace.Producto
 import com.example.radiopatio.vecinos.VecinosUiState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
@@ -139,6 +142,51 @@ class MultitenancyIsolationTest {
 
         val vacia = Comunidad(id = "c2", nombre = "Sin Dirección")
         assertEquals("Dirección no especificada", vacia.direccionCompleta())
+    }
+
+    @Test
+    fun soloElPresidentePuedeTransferirPresidenciaYEntreMiembrosDeSuComunidad() {
+        val comunidad = Comunidad(id = comA, nombre = "Montecerrao", presidenteUid = "u1")
+        val presidente = Usuario("Carlos", "C", "1ºA", "c@rp.es", "", rol = "Presidente", uid = "u1", comunidadId = comA)
+        val vecinaA = Usuario("Lucía", "L", "2ºB", "l@rp.es", "", rol = "Vecino/a", uid = "u2", comunidadId = comA)
+        val vecinoB = Usuario("Elena", "E", "3ºC", "e@rp.es", "", rol = "Vecino/a", uid = "u3", comunidadId = comB)
+
+        val todos = listOf(presidente, vecinaA, vecinoB)
+
+        val statePresidente = VecinosUiState(
+            comunidadIdActual = comA,
+            comunidad = comunidad,
+            usuarioActual = presidente,
+            vecinos = todos
+        )
+        assertTrue(statePresidente.esPresidenteActual)
+        assertEquals(listOf("u2"), statePresidente.candidatosPresidencia.map { it.uid })
+
+        val stateVecina = statePresidente.copy(usuarioActual = vecinaA)
+        assertFalse(stateVecina.esPresidenteActual)
+        assertTrue(stateVecina.candidatosPresidencia.isEmpty())
+    }
+
+    @Test
+    fun comunidadEntidad_mapeaIdaYVueltaPreservandoCampos() {
+        val original = Comunidad(
+            id = "com_1",
+            nombre = "Residencial Montecerrao",
+            direccion = "Calle Mayor, 12",
+            ciudad = "Oviedo",
+            codigoPostal = "33006",
+            descripcion = "Comunidad residencial",
+            tipo = "Residencial",
+            totalVecinos = 15,
+            verificada = true,
+            presidenteUid = "u1"
+        )
+        val reconstruida = original.toEntidad().toModelo()
+        assertEquals(original.id, reconstruida.id)
+        assertEquals(original.nombre, reconstruida.nombre)
+        assertEquals(original.presidenteUid, reconstruida.presidenteUid)
+        assertEquals(original.totalVecinos, reconstruida.totalVecinos)
+        assertEquals(original.verificada, reconstruida.verificada)
     }
 }
 

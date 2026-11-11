@@ -48,7 +48,8 @@ fun PaginaPrincipal(
     onIrAComunidad: () -> Unit = {},
     viewModel: RadioPatioViewModel = viewModel(
         factory = RadioPatioViewModelFactory(
-            (LocalContext.current.applicationContext as RadioPatioApplication).database.publicacionDao()
+            publicacionDao = (LocalContext.current.applicationContext as RadioPatioApplication).database.publicacionDao(),
+            comunidadDao = (LocalContext.current.applicationContext as RadioPatioApplication).database.comunidadDao()
         )
     )
 ) {

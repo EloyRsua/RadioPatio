@@ -27,6 +27,9 @@ data class VecinosUiState(
     val textoBusqueda: String = "",
     val filtroRol: String = "Todos",
     val cargando: Boolean = true,
+    val mostrarDialogoTransferirPresidencia: Boolean = false,
+    val procesandoTransferencia: Boolean = false,
+    val mensajeExito: String? = null,
     val errorMensaje: String? = null
 ) {
     val rolesDisponibles: List<String>
@@ -38,6 +41,36 @@ data class VecinosUiState(
                 .distinct()
                 .sorted()
             return listOf("Todos") + roles
+        }
+
+    /**
+     * Indica si el usuario autenticado actual es el presidente efectivo de la comunidad.
+     */
+    val esPresidenteActual: Boolean
+        get() {
+            val uid = usuarioActual?.uid.orEmpty()
+            if (comunidadIdActual.isBlank() || uid.isBlank()) return false
+            val presUid = comunidad?.presidenteUid.orEmpty()
+            return if (presUid.isNotBlank()) {
+                presUid == uid
+            } else {
+                usuarioActual?.rol.equals("Presidente", ignoreCase = true)
+            }
+        }
+
+    /**
+     * Miembros de la misma comunidad elegibles para recibir la presidencia (excluyendo al presidente actual).
+     */
+    val candidatosPresidencia: List<Usuario>
+        get() {
+            val uid = usuarioActual?.uid.orEmpty()
+            if (!esPresidenteActual) return emptyList()
+            return vecinos.filter {
+                comunidadIdActual.isNotBlank() &&
+                    it.comunidadId == comunidadIdActual &&
+                    it.uid.isNotBlank() &&
+                    it.uid != uid
+            }
         }
 
     /**
@@ -137,5 +170,66 @@ class VecinosViewModel(
 
     fun onFiltroRolChange(nuevoRol: String) {
         uiState = uiState.copy(filtroRol = nuevoRol)
+    }
+
+    fun onAbrirDialogoTransferirPresidencia() {
+        if (!uiState.esPresidenteActual) {
+            uiState = uiState.copy(errorMensaje = "Solo el presidente de la comunidad puede transferir la presidencia.")
+            return
+        }
+        uiState = uiState.copy(mostrarDialogoTransferirPresidencia = true, errorMensaje = null)
+    }
+
+    fun onCerrarDialogoTransferirPresidencia() {
+        uiState = uiState.copy(mostrarDialogoTransferirPresidencia = false)
+    }
+
+    fun onLimpiarError() {
+        uiState = uiState.copy(errorMensaje = null)
+    }
+
+    fun onLimpiarMensajeExito() {
+        uiState = uiState.copy(mensajeExito = null)
+    }
+
+    fun onTransferirPresidencia(nuevoPresidente: Usuario) {
+        val comId = uiState.comunidadIdActual
+        val uidActual = uiState.usuarioActual?.uid.orEmpty()
+
+        if (!uiState.esPresidenteActual) {
+            uiState = uiState.copy(
+                errorMensaje = "Solo el presidente de la comunidad puede transferir la presidencia.",
+                mostrarDialogoTransferirPresidencia = false
+            )
+            return
+        }
+        if (comId.isBlank() || nuevoPresidente.comunidadId != comId || nuevoPresidente.uid.isBlank() || nuevoPresidente.uid == uidActual) {
+            uiState = uiState.copy(
+                errorMensaje = "El miembro seleccionado no pertenece a tu comunidad."
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            uiState = uiState.copy(procesandoTransferencia = true, errorMensaje = null)
+            val resultado = comunidadRepository.transferirPresidencia(
+                comunidadId = comId,
+                presidenteActualUid = uidActual,
+                nuevoPresidenteUid = nuevoPresidente.uid
+            )
+            uiState = if (resultado.isSuccess) {
+                uiState.copy(
+                    procesandoTransferencia = false,
+                    mostrarDialogoTransferirPresidencia = false,
+                    mensajeExito = "Presidencia transferida a ${nuevoPresidente.nombre}"
+                )
+            } else {
+                uiState.copy(
+                    procesandoTransferencia = false,
+                    errorMensaje = resultado.exceptionOrNull()?.localizedMessage
+                        ?: "No se pudo transferir la presidencia."
+                )
+            }
+        }
     }
 }

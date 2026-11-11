@@ -1,6 +1,8 @@
 package com.example.radiopatio.vecinos
 
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -19,20 +22,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.PersonSearch
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,15 +56,23 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -83,12 +98,30 @@ fun VecinosScreen(
     viewModel: VecinosViewModel = viewModel(factory = VecinosViewModelFactory())
 ) {
     val uiState = viewModel.uiState
+    val context = LocalContext.current
+
+    LaunchedEffect(uiState.errorMensaje) {
+        uiState.errorMensaje?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            viewModel.onLimpiarError()
+        }
+    }
+
+    LaunchedEffect(uiState.mensajeExito) {
+        uiState.mensajeExito?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            viewModel.onLimpiarMensajeExito()
+        }
+    }
 
     VecinosContent(
         uiState = uiState,
         onTextoBusquedaChange = viewModel::onTextoBusquedaChange,
         onFiltroRolChange = viewModel::onFiltroRolChange,
-        onIrABuscarComunidad = onIrABuscarComunidad
+        onIrABuscarComunidad = onIrABuscarComunidad,
+        onAbrirDialogoTransferirPresidencia = viewModel::onAbrirDialogoTransferirPresidencia,
+        onCerrarDialogoTransferirPresidencia = viewModel::onCerrarDialogoTransferirPresidencia,
+        onConfirmarTransferenciaPresidencia = viewModel::onTransferirPresidencia
     )
 }
 
@@ -100,9 +133,13 @@ fun VecinosContent(
     uiState: VecinosUiState,
     onTextoBusquedaChange: (String) -> Unit,
     onFiltroRolChange: (String) -> Unit,
-    onIrABuscarComunidad: () -> Unit = {}
+    onIrABuscarComunidad: () -> Unit = {},
+    onAbrirDialogoTransferirPresidencia: () -> Unit = {},
+    onCerrarDialogoTransferirPresidencia: () -> Unit = {},
+    onConfirmarTransferenciaPresidencia: (Usuario) -> Unit = {}
 ) {
     val vecinosFiltrados = uiState.vecinosFiltrados
+    val candidatosPresidencia = uiState.candidatosPresidencia
 
     Scaffold(
         topBar = {
@@ -147,7 +184,10 @@ fun VecinosContent(
                                 TarjetaInfoComunidad(
                                     comunidad = comunidad,
                                     totalMiembrosReales = uiState.vecinos.size,
-                                    onCambiarComunidad = onIrABuscarComunidad
+                                    esPresidenteActual = uiState.esPresidenteActual,
+                                    hayOtrosMiembros = candidatosPresidencia.isNotEmpty(),
+                                    onCambiarComunidad = onIrABuscarComunidad,
+                                    onTransferirPresidencia = onAbrirDialogoTransferirPresidencia
                                 )
                             }
                         }
@@ -231,6 +271,16 @@ fun VecinosContent(
             }
         }
     }
+
+    if (uiState.mostrarDialogoTransferirPresidencia && uiState.esPresidenteActual) {
+        DialogoTransferirPresidencia(
+            nombreComunidad = uiState.comunidad?.nombre.orEmpty(),
+            candidatos = candidatosPresidencia,
+            procesando = uiState.procesandoTransferencia,
+            onDismiss = onCerrarDialogoTransferirPresidencia,
+            onConfirmar = onConfirmarTransferenciaPresidencia
+        )
+    }
 }
 
 @Composable
@@ -274,7 +324,10 @@ private fun BarraSuperiorVecinos(
 private fun TarjetaInfoComunidad(
     comunidad: Comunidad,
     totalMiembrosReales: Int,
-    onCambiarComunidad: () -> Unit
+    esPresidenteActual: Boolean,
+    hayOtrosMiembros: Boolean,
+    onCambiarComunidad: () -> Unit,
+    onTransferirPresidencia: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -399,15 +452,41 @@ private fun TarjetaInfoComunidad(
                     modifier = Modifier.weight(1f)
                 )
                 DatoComunidadPill(
-                    icono = Icons.Outlined.MeetingRoom,
-                    texto = "${comunidad.totalPortales} portal${if (comunidad.totalPortales == 1) "" else "es"}",
-                    modifier = Modifier.weight(1f)
-                )
-                DatoComunidadPill(
                     icono = Icons.Outlined.Apartment,
                     texto = comunidad.tipo.ifBlank { "Residencial" },
                     modifier = Modifier.weight(1f)
                 )
+            }
+
+            if (esPresidenteActual) {
+                Spacer(modifier = Modifier.height(10.dp))
+                if (hayOtrosMiembros) {
+                    OutlinedButton(
+                        onClick = onTransferirPresidencia,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AdminPanelSettings,
+                            contentDescription = null,
+                            tint = AzulPrincipal,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Transferir presidencia",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AzulPrincipal
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Eres el presidente. Cuando se unan otros vecinos podrás transferir la presidencia.",
+                        fontSize = 11.sp,
+                        color = Color(0xFF607D8B)
+                    )
+                }
             }
         }
     }
@@ -548,29 +627,11 @@ private fun TarjetaVecino(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar (foto remota si existe, con inicial como respaldo)
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(AzulPrincipal),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = vecino.inicial.ifBlank { "V" },
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-                if (vecino.photoUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = vecino.photoUrl,
-                        contentDescription = "Avatar de ${vecino.nombre}",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
+            AvatarVecino(
+                vecino = vecino,
+                tamano = 48.dp,
+                tamanoTexto = 18.sp
+            )
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -756,6 +817,154 @@ private fun EstadoVecinosVacio(
     }
 }
 
+@Composable
+private fun DialogoTransferirPresidencia(
+    nombreComunidad: String,
+    candidatos: List<Usuario>,
+    procesando: Boolean,
+    onDismiss: () -> Unit,
+    onConfirmar: (Usuario) -> Unit
+) {
+    var seleccionado by remember(candidatos) { mutableStateOf<Usuario?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!procesando) onDismiss() },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.AdminPanelSettings,
+                    contentDescription = null,
+                    tint = VerdeOscuro,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Transferir presidencia",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = AzulPrincipal
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Selecciona al vecino de ${nombreComunidad.ifBlank { "tu comunidad" }} que asumirá la presidencia. Tú pasarás a tener el rol de Vecino/a.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF546E7A)
+                )
+
+                candidatos.forEach { vecino ->
+                    val esElegido = seleccionado?.uid == vecino.uid
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (esElegido) VerdeSuave else Color(0xFFF8FAFC),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 1.dp,
+                                color = if (esElegido) VerdeAccion else BordeSuave,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable(enabled = !procesando) { seleccionado = vecino }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AvatarVecino(
+                                vecino = vecino,
+                                tamano = 36.dp,
+                                tamanoTexto = 14.sp
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = vecino.nombre,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = AzulPrincipal
+                                )
+                                Text(
+                                    text = "${vecino.vivienda} · ${vecino.rol}",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF607D8B)
+                                )
+                            }
+                            if (esElegido) {
+                                Icon(
+                                    imageVector = Icons.Filled.CheckCircle,
+                                    contentDescription = "Seleccionado",
+                                    tint = VerdeOscuro,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { seleccionado?.let(onConfirmar) },
+                enabled = !procesando && seleccionado != null,
+                colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro)
+            ) {
+                if (procesando) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Confirmar transferencia")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !procesando) {
+                Text("Cancelar", color = Color.Gray)
+            }
+        }
+    )
+}
+
+@Composable
+private fun AvatarVecino(
+    vecino: Usuario,
+    tamano: Dp,
+    tamanoTexto: TextUnit
+) {
+    Box(
+        modifier = Modifier
+            .size(tamano)
+            .clip(CircleShape)
+            .background(AzulPrincipal),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = vecino.inicial.ifBlank { "V" },
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = tamanoTexto
+        )
+        if (vecino.photoUrl.isNotBlank()) {
+            AsyncImage(
+                model = vecino.photoUrl,
+                contentDescription = "Avatar de ${vecino.nombre}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun VecinosContentPreview() {
@@ -767,9 +976,9 @@ fun VecinosContentPreview() {
         codigoPostal = "33006",
         descripcion = "Comunidad residencial con zonas verdes, garaje comunitario y pista deportiva.",
         tipo = "Residencial",
-        totalPortales = 3,
         totalVecinos = 3,
-        verificada = true
+        verificada = true,
+        presidenteUid = "u1"
     )
     val vecinosEjemplo = listOf(
         Usuario(

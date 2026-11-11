@@ -39,7 +39,6 @@ import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
@@ -104,7 +103,6 @@ data class NuevaComunidadFormulario(
     val ciudad: String,
     val codigoPostal: String,
     val tipo: String,
-    val totalPortales: Int,
     val descripcion: String
 )
 
@@ -171,7 +169,6 @@ fun BuscadorComunidadesScreen(
                     ciudad = formulario.ciudad,
                     codigoPostal = formulario.codigoPostal,
                     tipo = formulario.tipo,
-                    totalPortales = formulario.totalPortales,
                     descripcion = formulario.descripcion
                 ) {
                     onComunidadCambiada()
@@ -901,10 +898,6 @@ private fun TarjetaComunidadBuscador(
                     icono = Icons.Outlined.Groups,
                     texto = "${comunidad.totalVecinos} vecino${if (comunidad.totalVecinos == 1) "" else "s"}"
                 )
-                EtiquetaComunidad(
-                    icono = Icons.Outlined.MeetingRoom,
-                    texto = "${comunidad.totalPortales} portal${if (comunidad.totalPortales == 1) "" else "es"}"
-                )
             }
         }
     }
@@ -1022,7 +1015,6 @@ private fun DialogoCrearComunidad(
     var ciudad by remember { mutableStateOf("") }
     var codigoPostal by remember { mutableStateOf("") }
     var tipo by remember { mutableStateOf("Residencial") }
-    var totalPortales by remember { mutableStateOf("1") }
     var descripcion by remember { mutableStateOf("") }
 
     val tipos = listOf("Residencial", "Urbanización", "Edificio", "Mancomunidad")
@@ -1100,16 +1092,6 @@ private fun DialogoCrearComunidad(
                 }
 
                 OutlinedTextField(
-                    value = totalPortales,
-                    onValueChange = { digitos ->
-                        if (digitos.all { it.isDigit() }) totalPortales = digitos
-                    },
-                    label = { Text("Número de portales", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
                     value = descripcion,
                     onValueChange = { descripcion = it },
                     label = { Text("Descripción", fontSize = 12.sp) },
@@ -1128,7 +1110,6 @@ private fun DialogoCrearComunidad(
                             ciudad = ciudad.trim(),
                             codigoPostal = codigoPostal.trim(),
                             tipo = tipo,
-                            totalPortales = totalPortales.toIntOrNull()?.coerceAtLeast(1) ?: 1,
                             descripcion = descripcion.trim()
                         )
                     )
@@ -1167,7 +1148,6 @@ fun BuscadorComunidadesContentPreview() {
             codigoPostal = "33006",
             descripcion = "Comunidad residencial con zonas verdes y garaje comunitario.",
             tipo = "Residencial",
-            totalPortales = 3,
             totalVecinos = 28,
             verificada = true
         ),
@@ -1179,7 +1159,6 @@ fun BuscadorComunidadesContentPreview() {
             codigoPostal = "33012",
             descripcion = "Urbanización familiar con pistas deportivas.",
             tipo = "Urbanización",
-            totalPortales = 5,
             totalVecinos = 42,
             verificada = false
         )

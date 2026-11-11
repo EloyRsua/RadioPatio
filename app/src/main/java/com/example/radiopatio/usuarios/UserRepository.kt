@@ -1,6 +1,7 @@
 package com.example.radiopatio.usuarios
 
 import android.net.Uri
+import android.util.Log
 import com.example.radiopatio.comunidad.ComunidadRepository
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.google.firebase.auth.FirebaseAuth
@@ -111,17 +112,28 @@ class UserRepository(
                     .document(firebaseUser.uid)
                     .addSnapshotListener { snapshot, error ->
                         if (error != null) {
+                            Log.e("UserRepository", "Error leyendo users/${firebaseUser.uid}", error)
                             trySend(buildFallbackUsuario(firebaseUser))
                             return@addSnapshotListener
                         }
 
                         if (snapshot != null && snapshot.exists()) {
-                            trySend(documentToUsuario(snapshot, firebaseUser))
+                            val usuario = documentToUsuario(snapshot, firebaseUser)
+                            Log.i(
+                                "UserRepository",
+                                "Usuario activo uid=${usuario.uid}, comunidadId='${usuario.comunidadId}', nombre='${usuario.nombre}'"
+                            )
+                            trySend(usuario)
                         } else {
+                            Log.w(
+                                "UserRepository",
+                                "Documento users/${firebaseUser.uid} no existe en Firestore; usando fallback sin comunidadId"
+                            )
                             trySend(buildFallbackUsuario(firebaseUser))
                         }
                     }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.e("UserRepository", "Excepción suscribiendo users/${firebaseUser.uid}", e)
                 trySend(buildFallbackUsuario(firebaseUser))
             }
         }
@@ -284,6 +296,39 @@ class UserRepository(
             val userRef = db.collection(COLECCION_USERS).document(currentUser.uid)
             val snapshotAnterior = userRef.get().await()
             val comunidadAnteriorId = snapshotAnterior.getString("comunidadId").orEmpty()
+            val rolAnterior = snapshotAnterior.getString("role")
+                ?: snapshotAnterior.getString("rol")
+                ?: ""
+
+            if (comunidadAnteriorId.isNotBlank() && comunidadAnteriorId != comunidadId) {
+                val comAnteriorSnap = db.collection(ComunidadRepository.COLECCION_COMUNIDADES)
+                    .document(comunidadAnteriorId)
+                    .get()
+                    .await()
+                val presAnteriorUid = comAnteriorSnap.getString("presidenteUid").orEmpty()
+                val esPresidenteSaliente = (presAnteriorUid == currentUser.uid) ||
+                    (presAnteriorUid.isBlank() && rolAnterior.equals("Presidente", ignoreCase = true))
+
+                if (esPresidenteSaliente) {
+                    val miembrosAnteriores = db.collection(COLECCION_USERS)
+                        .whereEqualTo("comunidadId", comunidadAnteriorId)
+                        .get()
+                        .await()
+                    val hayOtrosMiembros = miembrosAnteriores.documents.any { it.id != currentUser.uid }
+                    if (hayOtrosMiembros) {
+                        return Result.failure(
+                            IllegalStateException(
+                                "Eres el presidente de tu comunidad actual. Transfiere la presidencia a otro miembro antes de cambiarte."
+                            )
+                        )
+                    } else if (comAnteriorSnap.exists()) {
+                        db.collection(ComunidadRepository.COLECCION_COMUNIDADES)
+                            .document(comunidadAnteriorId)
+                            .update("presidenteUid", "")
+                            .await()
+                    }
+                }
+            }
 
             val cambios = mutableMapOf<String, Any>(
                 "uid" to currentUser.uid,
@@ -302,6 +347,9 @@ class UserRepository(
                 cambios["photoUrl"] = ""
             } else if (!nuevoRol.isNullOrBlank()) {
                 cambios["role"] = nuevoRol
+            } else if (comunidadAnteriorId != comunidadId) {
+                // Al cambiar a una comunidad ajena nunca se conserva el rol de Presidente anterior
+                cambios["role"] = "Vecino/a"
             }
 
             userRef.set(cambios, SetOptions.merge()).await()

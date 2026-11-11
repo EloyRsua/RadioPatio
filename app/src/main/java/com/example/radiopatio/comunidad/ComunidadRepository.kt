@@ -33,6 +33,9 @@ class ComunidadRepository {
             totalVecinos = (doc.getLong("totalVecinos") ?: 0L).toInt().coerceAtLeast(0),
             photoUrl = doc.getString("photoUrl") ?: "",
             verificada = doc.getBoolean("verificada") ?: false,
+            presidenteUid = doc.getString("presidenteUid")?.takeIf { it.isNotBlank() }
+                ?: doc.getString("createdByUid")
+                ?: "",
             createdByUid = doc.getString("createdByUid") ?: ""
         )
     }
@@ -52,6 +55,7 @@ class ComunidadRepository {
             "totalVecinos" to comunidad.totalVecinos,
             "photoUrl" to comunidad.photoUrl,
             "verificada" to comunidad.verificada,
+            "presidenteUid" to comunidad.presidenteUid,
             "createdByUid" to comunidad.createdByUid
         )
     }
@@ -166,10 +170,73 @@ class ComunidadRepository {
                 totalVecinos = 0,
                 photoUrl = "",
                 verificada = false,
+                presidenteUid = createdByUid,
                 createdByUid = createdByUid
             )
             docRef.set(comunidadToMap(nuevaComunidad)).await()
             Result.success(nuevaComunidad)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Transfiere de forma atómica la presidencia de [comunidadId] desde [presidenteActualUid]
+     * hacia [nuevoPresidenteUid]. Solo el presidente actual puede ejecutar esta operación y el
+     * destinatario debe pertenecer obligatoriamente a la misma comunidad.
+     */
+    suspend fun transferirPresidencia(
+        comunidadId: String,
+        presidenteActualUid: String,
+        nuevoPresidenteUid: String
+    ): Result<Unit> {
+        if (comunidadId.isBlank() || presidenteActualUid.isBlank() || nuevoPresidenteUid.isBlank()) {
+            return Result.failure(IllegalArgumentException("Datos de transferencia incompletos."))
+        }
+        if (presidenteActualUid == nuevoPresidenteUid) {
+            return Result.failure(IllegalArgumentException("No puedes transferirte la presidencia a ti mismo."))
+        }
+
+        return try {
+            val comRef = db.collection(COLECCION_COMUNIDADES).document(comunidadId)
+            val actualUserRef = db.collection("users").document(presidenteActualUid)
+            val nuevoUserRef = db.collection("users").document(nuevoPresidenteUid)
+
+            db.runTransaction { transaction ->
+                val comSnap = transaction.get(comRef)
+                val actualSnap = transaction.get(actualUserRef)
+                val nuevoSnap = transaction.get(nuevoUserRef)
+
+                if (!comSnap.exists()) {
+                    throw IllegalStateException("La comunidad no existe en Firestore.")
+                }
+                if (!actualSnap.exists() || !nuevoSnap.exists()) {
+                    throw IllegalStateException("Alguno de los miembros no existe en Firestore.")
+                }
+                if (actualSnap.getString("comunidadId") != comunidadId ||
+                    nuevoSnap.getString("comunidadId") != comunidadId
+                ) {
+                    throw SecurityException("Ambos usuarios deben pertenecer a la misma comunidad.")
+                }
+
+                val presUidDoc = comSnap.getString("presidenteUid").orEmpty()
+                val rolActualDoc = actualSnap.getString("role")
+                    ?: actualSnap.getString("rol")
+                    ?: ""
+                val esPresidenteValido = (presUidDoc == presidenteActualUid) ||
+                    (presUidDoc.isBlank() && rolActualDoc.equals("Presidente", ignoreCase = true))
+
+                if (!esPresidenteValido) {
+                    throw SecurityException("Solo el presidente de la comunidad puede transferir la presidencia.")
+                }
+
+                transaction.update(comRef, "presidenteUid", nuevoPresidenteUid)
+                transaction.update(actualUserRef, "role", "Vecino/a")
+                transaction.update(nuevoUserRef, "role", "Presidente")
+                null
+            }.await()
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
