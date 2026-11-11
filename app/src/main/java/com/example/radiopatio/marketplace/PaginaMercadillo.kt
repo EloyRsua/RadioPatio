@@ -1,5 +1,6 @@
 package com.example.radiopatio.marketplace
 
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.radiopatio.RadioPatioApplication
+import com.example.radiopatio.usuarios.UserRepository
 
 /**
  * Screen: Responsable de mantener y gestionar el estado mediante el ViewModel.
@@ -37,8 +39,10 @@ fun MercadilloScreen(
     val context = LocalContext.current
     val app = context.applicationContext as RadioPatioApplication
 
+    val userRepository = remember { UserRepository() }
+
     val viewModel: MercadilloViewModel = viewModel(
-        factory = MercadilloViewModelFactory(app.database.productoDao())
+        factory = MercadilloViewModelFactory(app.database.productoDao(), userRepository)
     )
 
     val uiState = viewModel.uiState
@@ -56,7 +60,11 @@ fun MercadilloScreen(
         mostrarDialogo = uiState.mostrarDialogoNuevoProducto,
         onAbrirDialogo = { viewModel.onAbrirDialogoNuevoProducto() },
         onCerrarDialogo = { viewModel.onCerrarDialogoNuevoProducto() },
-        onCrearProducto = { viewModel.onCrearProducto(it) }
+        onCrearProducto = { productoNuevo ->
+            viewModel.onCrearProducto(productoNuevo){
+                Toast.makeText(context, "Anuncio publicado correctamente", Toast.LENGTH_LONG).show()
+            }
+        }
     )
 
 }

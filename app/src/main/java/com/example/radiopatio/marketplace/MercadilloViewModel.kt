@@ -8,6 +8,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.radiopatio.data.producto.ProductoDao
 import com.example.radiopatio.data.producto.ProductoEntidad
+import com.example.radiopatio.usuarios.UserRepository
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -17,12 +19,13 @@ import kotlinx.coroutines.withContext
  * Factory necesario para poder inyectar el DAO en el ViewModel
  */
 class MercadilloViewModelFactory(
-    private val productoDao: ProductoDao
+    private val productoDao: ProductoDao,
+    private val userRepository: UserRepository
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T{
         if(modelClass.isAssignableFrom(MercadilloViewModel::class.java)){
-            return MercadilloViewModel(productoDao) as T
+            return MercadilloViewModel(productoDao, userRepository) as T
         }
         throw IllegalArgumentException("Clase ViewModel desconocida")
     }
@@ -57,7 +60,8 @@ data class MercadilloUiState(
  * Gestiona el estaod y la lógica de la pantalla
  */
 class MercadilloViewModel(
-    private val productoDao: ProductoDao
+    private val productoDao: ProductoDao,
+    private val userRepository: UserRepository
 ) : ViewModel(){
 
 //    private val listaInicial = listOf(
@@ -73,6 +77,7 @@ class MercadilloViewModel(
         private set
 
     private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
     init{
         cargarProductosDesdeRoom()
@@ -90,13 +95,22 @@ class MercadilloViewModel(
     }
 
     private fun descargarProductosDeFirebase(){
+        val currentUserUid = auth.currentUser?.uid
+
         db.collection("productos").get().addOnSuccessListener { documentos ->
             val listaNuevosProductos = mutableListOf<ProductoEntidad>()
 
             for(documento in documentos){
+                // Filtramos para NO descargar los productos del propio usuario al mercadillo
+                val autorUid = documento.getString("autorUid")
+                if(autorUid != null && autorUid == currentUserUid){
+                    continue // Si el producto es del usuario no lo muestro
+                }
+
                 val titulo = documento.getString("titulo") ?: ""
                 val precio = documento.getString("precio") ?: ""
-                val ubicacionYTiempo = documento.getString("ubicacionYTiempo") ?: ""
+                val ubicacion = documento.getString("ubicacion") ?: ""
+                val fechaCreacion = documento.getLong("fechaCreacion") ?: System.currentTimeMillis()
                 val categoria = documento.getString("categoria") ?: CategoriaProducto.TODOS.name
                 val esParaComprar = documento.getBoolean("esParaComprar") ?: true
 
@@ -104,7 +118,8 @@ class MercadilloViewModel(
                     // Al ser autogenerado en Room, le pasamos 0 o dejamos que Room le asigne el ID
                     titulo = titulo,
                     precio = precio,
-                    ubicacionYTiempo = ubicacionYTiempo,
+                    ubicacion = ubicacion,
+                    fechaCreacion = fechaCreacion,
                     categoria = categoria,
                     esParaComprar = esParaComprar,
                     imagenRes = null // De momento null hasta que integremos Coil para URLs
@@ -114,6 +129,7 @@ class MercadilloViewModel(
 
             viewModelScope.launch {
                 withContext(Dispatchers.IO){
+                    productoDao.obtenerProductos().forEach{ productoDao.eliminar(it) }
                     listaNuevosProductos.forEach { productoDao.insertar(it) }
                 }
                 cargarProductosDesdeRoom()
@@ -123,11 +139,14 @@ class MercadilloViewModel(
 
     private fun actualizarUiStateConEntidades(listaEntidades: List<ProductoEntidad>) {
         val listaProductos = listaEntidades.map { entidad ->
+
+            val tiempoString = calcularTiempoTranscurrido(entidad.fechaCreacion)
+
             Producto(
                 id = entidad.id,
                 titulo = entidad.titulo,
                 precio = entidad.precio,
-                ubicacionYTiempo = entidad.ubicacionYTiempo,
+                ubicacionYTiempo = "${entidad.ubicacion} - $tiempoString",
                 categoriaProducto = CategoriaProducto.valueOf(entidad.categoria),
                 esParaComprar = entidad.esParaComprar,
                 imagenRes = entidad.imagenRes
@@ -136,34 +155,54 @@ class MercadilloViewModel(
         uiState = uiState.copy(productosTotales = listaProductos)
     }
 
-    fun onCrearProducto(nuevoProducto: Producto){
-        val productoMap = hashMapOf(
-            "titulo" to nuevoProducto.titulo,
-            "precio" to nuevoProducto.precio,
-            "ubicacionYTiempo" to nuevoProducto.ubicacionYTiempo,
-            "categoria" to nuevoProducto.categoriaProducto.name,
-            "esParaComprar" to nuevoProducto.esParaComprar
-        )
+    fun onCrearProducto(nuevoProducto: Producto, onSuccess: () -> Unit){
+        viewModelScope.launch {
+            val resultadoUsuario = userRepository.getCurrentUserData()
+            val usuarioActual = resultadoUsuario.getOrNull()
 
-        db.collection("productos").document().set(productoMap)
-            .addOnSuccessListener {
-                val entidad = ProductoEntidad(
-                    titulo = nuevoProducto.titulo,
-                    precio = nuevoProducto.precio,
-                    ubicacionYTiempo = nuevoProducto.ubicacionYTiempo,
-                    categoria = nuevoProducto.categoriaProducto.name,
-                    esParaComprar = nuevoProducto.esParaComprar,
-                    imagenRes = nuevoProducto.imagenRes
-                )
-
-                viewModelScope.launch {
-                    withContext(Dispatchers.IO){
-                        productoDao.insertar(entidad)
-                    }
-                    cargarProductosDesdeRoom()
-                    uiState = uiState.copy(mostrarDialogoNuevoProducto = false)
-                }
+            val ubicacionReal = if(usuarioActual != null && usuarioActual.vivienda.isNotBlank()){
+                usuarioActual.vivienda
+            } else {
+                "Mi portal"
             }
+
+            val fechaActual = System.currentTimeMillis()
+
+            val productoMap = hashMapOf(
+                "titulo" to nuevoProducto.titulo,
+                "precio" to nuevoProducto.precio,
+                "ubicacion" to ubicacionReal,
+                "fechaCreacion" to fechaActual,
+                "categoria" to nuevoProducto.categoriaProducto.name,
+                "esParaComprar" to nuevoProducto.esParaComprar
+            )
+
+            db.collection("productos").document().set(productoMap)
+                .addOnSuccessListener {
+                    // Este producto no lo guardamos en la bd local de Room del mercadillo
+                    // porque no lo queremos en esa ventana.
+                    uiState = uiState.copy(mostrarDialogoNuevoProducto = false)
+                    onSuccess()
+                }
+        }
+    }
+
+    private fun calcularTiempoTranscurrido(tiempoMilisegundos: Long): String {
+        val ahora = System.currentTimeMillis()
+        val diferencia = ahora - tiempoMilisegundos
+
+        val segundos = diferencia / 1000
+        val minutos = segundos / 60
+        val horas = minutos / 60
+        val dias = horas / 24
+
+        return when{
+            segundos < 60 -> "Ahora mismo"
+            minutos < 60 -> "Hace $minutos min"
+            horas < 24 -> "Hace $horas h"
+            dias == 1L -> "Ayer"
+            else -> "Hace $dias"
+        }
     }
 
     fun onTextoBusquedaChange(nuevoTexto: String){

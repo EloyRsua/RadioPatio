@@ -15,8 +15,11 @@ data class ProductoEntidad (
     @ColumnInfo(name = "precio")
     val precio: String,
 
-    @ColumnInfo(name = "ubicacion_tiempo")
-    val ubicacionYTiempo: String,
+    @ColumnInfo(name = "ubicacion")
+    val ubicacion: String,
+
+    @ColumnInfo(name = "fecha_creacion")
+    val fechaCreacion: Long,
 
     @ColumnInfo(name = "categoria")
     val categoria: String,
