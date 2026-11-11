@@ -1,6 +1,7 @@
 package com.example.radiopatio.registroInicio
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -42,7 +44,7 @@ import com.example.radiopatio.R
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
 /**
- * Pantalla para el registro de nuevos usuarios con datos de vivienda
+ * Pantalla para el registro de nuevos usuarios con datos de vivienda y validaciones completas.
  */
 @Composable
 fun RegistroNuevoUsuario(
@@ -55,12 +57,16 @@ fun RegistroNuevoUsuario(
     val bordeGris = Color(0xFFE2E8F0)
     val textoSecundario = Color(0xFF64748B)
 
+    val context = LocalContext.current
+
     var nombre by remember { mutableStateOf("") }
     var apellidos by remember { mutableStateOf("") }
     var vivienda by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
     var aceptoNormas by remember { mutableStateOf(true) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -201,6 +207,7 @@ fun RegistroNuevoUsuario(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Campo Contraseña
                 CampoEntradaTexto(
                     value = password,
                     onValueChange = { password = it },
@@ -210,6 +217,19 @@ fun RegistroNuevoUsuario(
                     isPassword = true,
                     passwordVisible = passwordVisible,
                     onPasswordToggle = { passwordVisible = !passwordVisible },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Campo Repetir Contraseña
+                CampoEntradaTexto(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    placeholder = "Repetir contraseña",
+                    icono = Icons.Outlined.Lock,
+                    keyboardType = KeyboardType.Password,
+                    isPassword = true,
+                    passwordVisible = confirmPasswordVisible,
+                    onPasswordToggle = { confirmPasswordVisible = !confirmPasswordVisible },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -248,21 +268,54 @@ fun RegistroNuevoUsuario(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Botón Crear mi cuenta con validaciones de campos y contraseñas
             Button(
                 onClick = {
-                    if (aceptoNormas && nombre.isNotBlank() && vivienda.isNotBlank() && email.isNotBlank() && password.isNotBlank()) {
-                        onRegisterClick(nombre, apellidos, vivienda, email, password, photoUri)
+                    val nombreLimpio = nombre.trim()
+                    val apellidosLimpios = apellidos.trim()
+                    val viviendaLimpia = vivienda.trim()
+                    val emailLimpio = email.trim()
+                    val passLimpia = password.trim()
+                    val confirmPassLimpia = confirmPassword.trim()
+
+                    // 1. Validar campos obligatorios vacíos
+                    if (nombreLimpio.isEmpty() || viviendaLimpia.isEmpty() || emailLimpio.isEmpty() || passLimpia.isEmpty() || confirmPassLimpia.isEmpty()) {
+                        Toast.makeText(context, "Por favor, rellena todos los campos obligatorios", Toast.LENGTH_SHORT).show()
+                        return@Button
                     }
+
+                    // 2. Validar aceptación de las normas
+                    if (!aceptoNormas) {
+                        Toast.makeText(context, "Debes aceptar las normas de la comunidad", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // 3. Validar formato de correo electrónico
+                    if (!emailLimpio.contains("@")) {
+                        Toast.makeText(context, "Por favor, introduce un correo electrónico válido", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // 4. Validar longitud de la contraseña
+                    if (passLimpia.length < 6) {
+                        Toast.makeText(context, "La contraseña debe tener al menos 6 caracteres", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // 5. Validar que ambas contraseñas coincidan exactamente
+                    if (passLimpia != confirmPassLimpia) {
+                        Toast.makeText(context, "Las contraseñas no coinciden", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // Si todo es correcto, enviamos el registro
+                    onRegisterClick(nombreLimpio, apellidosLimpios, viviendaLimpia, emailLimpio, passLimpia, photoUri)
                 },
-                enabled = aceptoNormas && nombre.isNotBlank() && vivienda.isNotBlank() && email.isNotBlank() && password.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(25.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = verdeBoton,
-                    disabledContainerColor = verdeBoton.copy(alpha = 0.5f)
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = verdeBoton)
             ) {
                 Text(
                     text = "Crear mi cuenta",

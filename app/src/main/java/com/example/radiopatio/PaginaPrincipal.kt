@@ -27,7 +27,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.publicacion.Publicacion
+import com.example.radiopatio.publicacion.PublicacionDetalleDialog
 import com.example.radiopatio.publicacion.TarjetaPublicacion
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 import com.google.firebase.auth.FirebaseAuth
@@ -50,6 +52,9 @@ fun PaginaPrincipal(
     // Identidad del usuario con sesión activa en Firebase
     var nombreUsuarioActual by remember { mutableStateOf("") }
     var emailUsuarioActual by remember { mutableStateOf("") }
+
+    // Estado para controlar la publicación seleccionada para ver a pantalla completa
+    var publicacionSeleccionada by remember { mutableStateOf<PublicacionEntidad?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.insertarDatosIniciales()
@@ -133,10 +138,24 @@ fun PaginaPrincipal(
                         esMiPublicacion = esMiPublicacion,
                         onEliminarClick = {
                             viewModel.eliminarPublicacion(entidad)
+                        },
+                        modifier = Modifier.clickable {
+                            // Al hacer clic sobre la tarjeta, la seleccionamos para ampliarla
+                            publicacionSeleccionada = entidad
                         }
                     )
                 }
             }
+        }
+
+        // Si se ha seleccionado una publicación, mostramos el diálogo a pantalla entera
+        publicacionSeleccionada?.let { entidad ->
+            PublicacionDetalleDialog(
+                publicacion = entidad,
+                onDismiss = {
+                    publicacionSeleccionada = null
+                }
+            )
         }
     }
 }

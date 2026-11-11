@@ -33,18 +33,20 @@ import com.example.radiopatio.R
 
 @Composable
 fun RegistroUsuario(
-    onLoginClick: (email: String, pass: String) -> Unit = { _, _ -> },
+    onLoginClick: (email: String, pass: String, onError: () -> Unit) -> Unit = { _, _, _ -> },
     onIrANuevoRegistroClick: () -> Unit = {}
 ) {
     val azulPrincipal = Color(0xFF133E54)
     val verdeBoton = Color(0xFF0F8A5F)
     val fondoGrisClaro = Color(0xFFF4F6F8)
-    val bordeGris = Color(0xFFE2E8F0)
     val textoSecundario = Color(0xFF64748B)
+
+    val context = LocalContext.current
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var cargando by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -95,6 +97,7 @@ fun RegistroUsuario(
                 placeholder = { Text("Correo electrónico", fontSize = 14.sp, color = textoSecundario) },
                 leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null, tint = textoSecundario) },
                 singleLine = true,
+                enabled = !cargando,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = fondoGrisClaro,
@@ -117,7 +120,10 @@ fun RegistroUsuario(
                 placeholder = { Text("Contraseña", fontSize = 14.sp, color = textoSecundario) },
                 leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null, tint = textoSecundario) },
                 trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    IconButton(
+                        onClick = { passwordVisible = !passwordVisible },
+                        enabled = !cargando
+                    ) {
                         Icon(
                             imageVector = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
                             contentDescription = null,
@@ -127,6 +133,7 @@ fun RegistroUsuario(
                 },
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 singleLine = true,
+                enabled = !cargando,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = fondoGrisClaro,
@@ -142,23 +149,57 @@ fun RegistroUsuario(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Botón Iniciar Sesión (Sin bloqueo de habilitado para permitir la pulsación siempre)
+            // Botón Iniciar Sesión con Validaciones y Estado de Carga
             Button(
                 onClick = {
-                    onLoginClick(email.trim(), password.trim())
+                    val emailLimpio = email.trim()
+                    val passLimpia = password.trim()
+
+                    if (emailLimpio.isEmpty() || passLimpia.isEmpty()) {
+                        Toast.makeText(context, "Por favor, introduce tu correo y contraseña", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    if (!emailLimpio.contains("@")) {
+                        Toast.makeText(context, "Por favor, introduce un correo electrónico válido", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    if (passLimpia.length < 6) {
+                        Toast.makeText(context, "La contraseña debe tener al menos 6 caracteres", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    cargando = true
+                    onLoginClick(emailLimpio, passLimpia) {
+                        // Callback onError: Restablece el botón si hay un error en Firebase
+                        cargando = false
+                    }
                 },
+                enabled = !cargando,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(25.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal)
-            ) {
-                Text(
-                    text = "Iniciar Sesión",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = azulPrincipal,
+                    disabledContainerColor = azulPrincipal.copy(alpha = 0.6f)
                 )
+            ) {
+                if (cargando) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Text(
+                        text = "Iniciar Sesión",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -170,7 +211,7 @@ fun RegistroUsuario(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = verdeBoton,
-                    modifier = Modifier.clickable { onIrANuevoRegistroClick() }
+                    modifier = Modifier.clickable(enabled = !cargando) { onIrANuevoRegistroClick() }
                 )
             }
         }
