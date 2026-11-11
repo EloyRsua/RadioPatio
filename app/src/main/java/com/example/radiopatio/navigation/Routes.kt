@@ -33,3 +33,6 @@ object RegistroNuevo
 
 @Serializable
 object MisProductos
+
+@Serializable
+object CrearProducto

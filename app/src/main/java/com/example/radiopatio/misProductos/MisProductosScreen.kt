@@ -1,4 +1,4 @@
-package com.example.radiopatio.marketplace.misProductos
+package com.example.radiopatio.misProductos
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,13 +13,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.radiopatio.ui.theme.RadioPatioTheme
+import coil.compose.AsyncImage
+import com.example.radiopatio.marketplace.EstadoProducto
+import com.example.radiopatio.marketplace.Producto
+
+// Paleta de colores de RadioPatio
+private val AzulPrincipal = Color(0xFF133E54)
+private val VerdeBoton = Color(0xFF0F8A5F)
+private val TextoPrincipal = Color(0xFF0F172A)
+private val TextoSecundario = Color(0xFF64748B)
+private val FondoApp = Color(0xFFF8FAFC)
 
 /**
  * Screen de mis productos
@@ -28,25 +39,24 @@ import com.example.radiopatio.ui.theme.RadioPatioTheme
 fun MisProductosScreen(
     onVolver: () -> Unit,
     viewModel: MisProductosViewModel = viewModel()
-){
+) {
     val uiState = viewModel.uiState
-
     MisProductosContent(
         productos = uiState.productosFiltrados,
         cargando = uiState.cargando,
         pestanaSeleccionada = uiState.pestanaSeleccionada,
         onCambiarPestana = { viewModel.onPestanaSeleccionada(it) },
         onVolver = onVolver,
-        onMarcarVendido = { id -> viewModel.onActualizarEstado(id, EstadoProducto.VENDIDO)},
-        onMarcarPrestado = { id, fecha -> viewModel.onActualizarEstado(id, EstadoProducto.PRESTADO, fecha)},
-        onMarcarDisponible = { id -> viewModel.onActualizarEstado(id, EstadoProducto.DISPONIBLE)}
+        onMarcarVendido = { id -> viewModel.onActualizarEstado(id, EstadoProducto.VENDIDO) },
+        onMarcarPrestado = { id, fecha -> viewModel.onActualizarEstado(id, EstadoProducto.PRESTADO, fecha) },
+        onMarcarDisponible = { id -> viewModel.onActualizarEstado(id, EstadoProducto.DISPONIBLE) }
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MisProductosContent(
-    productos: List<MiProducto>,
+    productos: List<Producto>,
     cargando: Boolean,
     pestanaSeleccionada: Int,
     onCambiarPestana: (Int) -> Unit,
@@ -58,15 +68,18 @@ fun MisProductosContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mis Artículos", fontWeight = FontWeight.Bold) },
+                title = { Text("Mis Artículos", fontWeight = FontWeight.Bold, color = AzulPrincipal) },
                 navigationIcon = {
                     IconButton(onClick = onVolver) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = AzulPrincipal
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = Color.White
                 )
             )
         }
@@ -75,35 +88,41 @@ fun MisProductosContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
+                .background(FondoApp)
         ) {
             // Pestañas (Ventas / Préstamos)
             PrimaryTabRow(
                 selectedTabIndex = pestanaSeleccionada,
-                containerColor = MaterialTheme.colorScheme.surface
+                containerColor = Color.White,
+                contentColor = AzulPrincipal
             ) {
                 Tab(
                     selected = pestanaSeleccionada == 0,
                     onClick = { onCambiarPestana(0) },
                     text = { Text("Mis Ventas") },
-                    icon = { Icon(Icons.Outlined.ShoppingBag, contentDescription = null) }
+                    icon = { Icon(Icons.Outlined.ShoppingBag, contentDescription = null) },
+                    selectedContentColor = AzulPrincipal,
+                    unselectedContentColor = TextoSecundario
                 )
                 Tab(
                     selected = pestanaSeleccionada == 1,
                     onClick = { onCambiarPestana(1) },
                     text = { Text("Mis Préstamos") },
-                    icon = { Icon(Icons.Outlined.Event, contentDescription = null) }
+                    icon = { Icon(Icons.Outlined.Event, contentDescription = null) },
+                    selectedContentColor = AzulPrincipal,
+                    unselectedContentColor = TextoSecundario
                 )
             }
+
             if (cargando) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary)
+                    CircularProgressIndicator(color = VerdeBoton)
                 }
             } else if (productos.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = if (pestanaSeleccionada == 0) "No has publicado artículos para venta" else "No tienes artículos en préstamo",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = TextoSecundario
                     )
                 }
             } else {
@@ -113,11 +132,11 @@ fun MisProductosContent(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(productos) { producto ->
-                        TarjetaMiArticulo (
+                        TarjetaMiArticulo(
                             producto = producto,
-                            onMarcarVendido = { onMarcarVendido(producto.id) },
-                            onMarcarPrestado = { fecha -> onMarcarPrestado(producto.id, fecha) },
-                            onMarcarDisponible = { onMarcarDisponible(producto.id) }
+                            onMarcarVendido = { onMarcarVendido(producto.firestoreId) },
+                            onMarcarPrestado = { fecha -> onMarcarPrestado(producto.firestoreId, fecha) },
+                            onMarcarDisponible = { onMarcarDisponible(producto.firestoreId) }
                         )
                     }
                 }
@@ -128,38 +147,57 @@ fun MisProductosContent(
 
 @Composable
 fun TarjetaMiArticulo(
-    producto: MiProducto,
+    producto: Producto,
     onMarcarVendido: () -> Unit,
     onMarcarPrestado: (String) -> Unit,
     onMarcarDisponible: () -> Unit
 ) {
     var mostrarDialogoPrestar by remember { mutableStateOf(false) }
     var fechaDevolucionTexto by remember { mutableStateOf("") }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = producto.titulo,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = if (producto.esParaComprar) producto.precio else "Préstamo",
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                // Miniatura de la foto si existe
+                if (!producto.imagenUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = producto.imagenUrl,
+                        contentDescription = producto.titulo,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = producto.titulo,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = TextoPrincipal,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = if (producto.esParaComprar) producto.precio else "Préstamo",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = AzulPrincipal
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             // Etiquetas de estado
             when (producto.estado) {
                 EstadoProducto.DISPONIBLE -> {
@@ -184,26 +222,40 @@ fun TarjetaMiArticulo(
                     )
                 }
             }
+
             Spacer(modifier = Modifier.height(12.dp))
+
             // Botones de acción
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (producto.esParaComprar) {
                     if (producto.estado == EstadoProducto.DISPONIBLE) {
-                        OutlinedButton(onClick = onMarcarVendido) {
+                        OutlinedButton(
+                            onClick = onMarcarVendido,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AzulPrincipal)
+                        ) {
                             Text("Marcar como Vendido")
                         }
                     } else {
-                        TextButton(onClick = onMarcarDisponible) {
+                        TextButton(
+                            onClick = onMarcarDisponible,
+                            colors = ButtonDefaults.textButtonColors(contentColor = VerdeBoton)
+                        ) {
                             Text("Poner en Venta de nuevo")
                         }
                     }
                 } else {
                     if (producto.estado == EstadoProducto.DISPONIBLE) {
-                        OutlinedButton(onClick = { mostrarDialogoPrestar = true }) {
+                        OutlinedButton(
+                            onClick = { mostrarDialogoPrestar = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AzulPrincipal)
+                        ) {
                             Text("Registrar Préstamo")
                         }
                     } else {
-                        TextButton(onClick = onMarcarDisponible) {
+                        TextButton(
+                            onClick = onMarcarDisponible,
+                            colors = ButtonDefaults.textButtonColors(contentColor = VerdeBoton)
+                        ) {
                             Text("Marcar como Devuelto")
                         }
                     }
@@ -211,13 +263,14 @@ fun TarjetaMiArticulo(
             }
         }
     }
+
     if (mostrarDialogoPrestar) {
         AlertDialog(
             onDismissRequest = { mostrarDialogoPrestar = false },
-            title = { Text("Registrar Préstamo") },
+            title = { Text("Registrar Préstamo", color = AzulPrincipal, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    Text("¿Cuándo te devolverán este artículo?")
+                    Text("¿Cuándo te devolverán este artículo?", color = TextoPrincipal)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = fechaDevolucionTexto,
@@ -232,19 +285,25 @@ fun TarjetaMiArticulo(
                     onClick = {
                         onMarcarPrestado(fechaDevolucionTexto.ifBlank { "Sin fecha" })
                         mostrarDialogoPrestar = false
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = VerdeBoton)
                 ) {
-                    Text("Guardar")
+                    Text("Guardar", color = Color.White)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarDialogoPrestar = false }) {
+                TextButton(
+                    onClick = { mostrarDialogoPrestar = false },
+                    colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)
+                ) {
                     Text("Cancelar")
                 }
-            }
+            },
+            containerColor = Color.White
         )
     }
 }
+
 @Composable
 fun BadgeEstado(texto: String, colorFondo: Color, colorTexto: Color) {
     Surface(
@@ -260,27 +319,21 @@ fun BadgeEstado(texto: String, colorFondo: Color, colorTexto: Color) {
         )
     }
 }
-/**
- * PREVIEW (Slide 7): Podemos previsualizar directamente MisProductosContent
- * pasándole datos ficticios sin necesidad de ViewModel ni conexión a Firebase.
- */
+
 @Preview(showBackground = true)
 @Composable
 fun MisProductosContentPreview() {
-    RadioPatioTheme {
-        MisProductosContent(
-            productos = listOf(
-                MiProducto("1", "Mesa auxiliar", "15€", esParaComprar = true, estado = EstadoProducto.DISPONIBLE),
-                MiProducto("2", "Lámpara de pie", "20€", esParaComprar = true, estado = EstadoProducto.VENDIDO)
-            ),
-            cargando = false,
-            pestanaSeleccionada = 0,
-            onCambiarPestana = {},
-            onVolver = {},
-            onMarcarVendido = {},
-            onMarcarPrestado = { _, _ -> },
-            onMarcarDisponible = {}
-        )
-    }
+    MisProductosContent(
+        productos = listOf(
+            Producto(firestoreId = "1", titulo = "Mesa auxiliar", precio = "15€", esParaComprar = true, estado = EstadoProducto.DISPONIBLE),
+            Producto(firestoreId = "2", titulo = "Lámpara de pie", precio = "20€", esParaComprar = true, estado = EstadoProducto.VENDIDO)
+        ),
+        cargando = false,
+        pestanaSeleccionada = 0,
+        onCambiarPestana = {},
+        onVolver = {},
+        onMarcarVendido = {},
+        onMarcarPrestado = { _, _ -> },
+        onMarcarDisponible = {}
+    )
 }
-

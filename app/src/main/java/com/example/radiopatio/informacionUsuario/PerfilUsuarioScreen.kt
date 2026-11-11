@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material3.*
@@ -23,7 +22,6 @@ import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun PerfilUsuarioScreen(
-    onVolver: () -> Unit = {},
     onIrAMisProductos: () -> Unit = {}
 ) {
     val userRepository = remember { UserRepository() }
@@ -69,7 +67,6 @@ fun PerfilUsuarioScreen(
     PerfilUsuarioContent(
         usuario = usuario,
         cargando = cargando,
-        onVolver = onVolver,
         onIrAMisProductos = onIrAMisProductos
     )
 }
@@ -79,7 +76,6 @@ fun PerfilUsuarioScreen(
 fun PerfilUsuarioContent(
     usuario: Usuario?,
     cargando: Boolean,
-    onVolver: () -> Unit,
     onIrAMisProductos: () -> Unit
 ) {
     val azulPrincipal = Color(0xFF133E54)
@@ -90,15 +86,6 @@ fun PerfilUsuarioContent(
         topBar = {
             TopAppBar(
                 title = { Text("Mi Perfil", fontWeight = FontWeight.Bold, color = azulPrincipal) },
-                navigationIcon = {
-                    IconButton(onClick = onVolver) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = azulPrincipal
-                        )
-                    }
-                }
             )
         }
     ) { paddingValues ->
@@ -278,7 +265,6 @@ fun PerfilUsuarioContentPreview() {
             telefono = "612345678"
         ),
         cargando = false,
-        onVolver = {},
         onIrAMisProductos = {}
     )
 }

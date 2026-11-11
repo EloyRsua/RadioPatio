@@ -9,11 +9,17 @@ data class ProductoEntidad (
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
 
+    @ColumnInfo(name = "firestore_id")
+    val firestoreId: String = "",
+
     @ColumnInfo(name = "autor_uid")
     val autorUid: String = "",
 
     @ColumnInfo(name = "titulo")
     val titulo: String,
+
+    @ColumnInfo(name = "descripcion")
+    val descripcion: String = "",
 
     @ColumnInfo(name = "precio")
     val precio: String,
@@ -30,6 +36,23 @@ data class ProductoEntidad (
     @ColumnInfo(name = "es_para_comprar")
     val esParaComprar: Boolean,
 
-    @ColumnInfo(name = "image_res")
-    val imagenRes: Int? = null
+    @ColumnInfo(name = "marca")
+    val marca: String = "",
+
+    @ColumnInfo(name = "color")
+    val color: String = "",
+
+    @ColumnInfo(name = "estado_uso")
+    val estadoUso: String = "",
+
+    @ColumnInfo(name = "estado")
+    val estado: String = "DISPONIBLE",
+
+//    @ColumnInfo(name = "image_res")
+//    val imagenRes: Int? = null,
+
+    @ColumnInfo(name = "imagen_url")
+    val imagenUrl: String? = null
+
+
 )

@@ -3,6 +3,7 @@ package com.example.radiopatio.navigation
 import android.widget.Toast
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -19,10 +20,14 @@ import com.example.radiopatio.RadioPatioViewModelFactory
 import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.informacionUsuario.PerfilUsuarioScreen
 import com.example.radiopatio.marketplace.MercadilloScreen
-import com.example.radiopatio.marketplace.misProductos.MisProductosScreen
+import com.example.radiopatio.marketplace.MercadilloViewModel
+import com.example.radiopatio.marketplace.MercadilloViewModelFactory
+import com.example.radiopatio.misProductos.MisProductosScreen
+import com.example.radiopatio.marketplace.CrearProductoScreen
 import com.example.radiopatio.publicacion.PantallaCrearPublicacion
 import com.example.radiopatio.registroInicio.RegistroNuevoUsuario
 import com.example.radiopatio.registroInicio.RegistroUsuario
+import com.example.radiopatio.usuarios.UserRepository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -159,7 +164,41 @@ fun AppNavHost(
         }
 
         composable<Mercadillo> {
-            MercadilloScreen()
+            MercadilloScreen(
+                onIrACrearProducto = {
+                    navController.navigate(CrearProducto)
+                }
+            )
+        }
+
+        // Pantalla para la creacion de productos
+        composable<CrearProducto> {
+            val userRepository = remember { UserRepository() }
+            val mercadilloViewModel: MercadilloViewModel = viewModel(
+                factory = MercadilloViewModelFactory(app.database.productoDao(), userRepository)
+            )
+
+            CrearProductoScreen(
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onPublicar = { titulo, descripcion, precio, esParaComprar, categoria, marca, color, estadoUso, fotosUris ->
+                    mercadilloViewModel.publicarNuevoProducto(
+                        titulo = titulo,
+                        descripcion = descripcion,
+                        precio = precio,
+                        esParaComprar = esParaComprar,
+                        categoria = categoria,
+                        marca = marca,
+                        color = color,
+                        estadoUso = estadoUso,
+                        fotosUris = fotosUris
+                    ) {
+                        Toast.makeText(context, "¡Artículo publicado con éxito!", Toast.LENGTH_SHORT).show()
+                        navController.popBackStack() // Vuelve automáticamente al mercadillo
+                    }
+                }
+            )
         }
 
         composable<Vecinos> {
@@ -194,9 +233,6 @@ fun AppNavHost(
 
         composable<Perfil> {
             PerfilUsuarioScreen(
-                onVolver = {
-                    navController.popBackStack()
-                },
                 onIrAMisProductos = {
                     navController.navigate(MisProductos)
                 }

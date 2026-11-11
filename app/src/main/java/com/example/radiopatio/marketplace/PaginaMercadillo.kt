@@ -1,17 +1,14 @@
 package com.example.radiopatio.marketplace
 
-import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,8 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.radiopatio.ui.theme.RadioPatioTheme
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.radiopatio.RadioPatioApplication
 import com.example.radiopatio.usuarios.UserRepository
@@ -34,7 +29,8 @@ import com.example.radiopatio.usuarios.UserRepository
  */
 @Composable
 fun MercadilloScreen(
-    onProductoClick: (Int) -> Unit = {},
+    onProductoClick: (String) -> Unit = {},
+    onIrACrearProducto: () -> Unit = {}
 ){
     val context = LocalContext.current
     val app = context.applicationContext as RadioPatioApplication
@@ -56,17 +52,8 @@ fun MercadilloScreen(
         categoriaSeleccionada = uiState.categoriaSeleccionada,
         onCategoriaChange = { viewModel.onCategoriaSeleccionada(it) },
         onProductoClick = onProductoClick,
-
-        mostrarDialogo = uiState.mostrarDialogoNuevoProducto,
-        onAbrirDialogo = { viewModel.onAbrirDialogoNuevoProducto() },
-        onCerrarDialogo = { viewModel.onCerrarDialogoNuevoProducto() },
-        onCrearProducto = { productoNuevo ->
-            viewModel.onCrearProducto(productoNuevo){
-                Toast.makeText(context, "Anuncio publicado correctamente", Toast.LENGTH_LONG).show()
-            }
-        }
+        onSubirProducto = onIrACrearProducto
     )
-
 }
 
 /**
@@ -83,16 +70,13 @@ fun MercadilloContent(
     onCambiarModo: (Boolean) -> Unit,
     categoriaSeleccionada: CategoriaProducto,
     onCategoriaChange: (CategoriaProducto) -> Unit,
-    onProductoClick: (Int) -> Unit,
-    mostrarDialogo: Boolean,
-    onAbrirDialogo: () -> Unit,
-    onCerrarDialogo: () -> Unit,
-    onCrearProducto: (Producto) -> Unit
+    onProductoClick: (String) -> Unit,
+    onSubirProducto: () -> Unit
 ) {
     Scaffold(
         topBar = {
             BarraSuperiorMercadillo(
-                onSubirProducto = onAbrirDialogo
+                onSubirProducto = onSubirProducto
             )
         }
     ) { rellenoInterior ->
@@ -139,7 +123,7 @@ fun MercadilloContent(
                     for (producto in fila) {
                         TarjetaProducto(
                             producto = producto,
-                            onClick = { onProductoClick(producto.id) }, // Conectamos el clic de la tarjeta con el id
+                            onClick = { onProductoClick(producto.firestoreId) }, // Conectamos el clic de la tarjeta con el id
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -151,126 +135,6 @@ fun MercadilloContent(
             }
         }
     }
-
-    if(mostrarDialogo){
-        DialogoNuevoProducto(
-            onDismiss = onCerrarDialogo,
-            onCrearProducto = onCrearProducto
-        )
-    }
-}
-
-@Composable
-fun DialogoNuevoProducto(
-    onDismiss: () -> Unit,
-    onCrearProducto: (Producto) -> Unit
-) {
-    var titulo by remember { mutableStateOf("") }
-    var precio by remember { mutableStateOf("") }
-    var categoria by remember { mutableStateOf(CategoriaProducto.MUEBLES) }
-    var esParaComprar by remember { mutableStateOf(true) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Outlined.AddCircleOutline,
-                    contentDescription = null,
-                    tint = Color(0xFF389F82),
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Subir Artículo",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF133E54)
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Tipo de transacción
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = esParaComprar,
-                        onClick = { esParaComprar = true },
-                        label = { Text("Para Vender", fontSize = 11.sp) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilterChip(
-                        selected = !esParaComprar,
-                        onClick = { esParaComprar = false },
-                        label = { Text("Para Prestar", fontSize = 11.sp) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                OutlinedTextField(
-                    value = titulo,
-                    onValueChange = { titulo = it },
-                    label = { Text("Nombre del artículo *", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = precio,
-                    onValueChange = { precio = it },
-                    label = { Text(if (esParaComprar) "Precio (€) *" else "Fianza / Condiciones", fontSize = 12.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text("Categoría:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
-                // Usamos FlowRow o un LazyRow para las categorías
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(CategoriaProducto.entries.filter { it != CategoriaProducto.TODOS }) { cat ->
-                        FilterChip(
-                            selected = categoria == cat,
-                            onClick = { categoria = cat },
-                            label = { Text(cat.nombre, fontSize = 11.sp) }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (titulo.isNotBlank() && precio.isNotBlank()) {
-                        val nuevoProducto = Producto(
-                            id = (100..999).random(), // Generamos ID aleatorio temporal
-                            titulo = titulo.trim(),
-                            precio = if (precio.contains("€")) precio.trim() else "${precio.trim()}€",
-                            ubicacionYTiempo = "Mi portal - Ahora mismo",
-                            categoriaProducto = categoria,
-                            esParaComprar = esParaComprar
-                        )
-                        onCrearProducto(nuevoProducto)
-                    }
-                },
-                enabled = titulo.isNotBlank() && precio.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF389F82))
-            ) {
-                Text("Publicar Artículo")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar", color = Color.Gray)
-            }
-        }
-    )
 }
 
 @Composable
@@ -327,10 +191,7 @@ fun MercadilloPreview() {
             categoriaSeleccionada = CategoriaProducto.TODOS,
             onCategoriaChange = {},
             onProductoClick = {},
-            mostrarDialogo = false,
-            onAbrirDialogo = {},
-            onCerrarDialogo = {},
-            onCrearProducto = {}
+            onSubirProducto = {}
         )
     }
 }

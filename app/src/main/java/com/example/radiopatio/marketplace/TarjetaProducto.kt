@@ -1,6 +1,5 @@
 package com.example.radiopatio.marketplace
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,11 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
 /**
@@ -58,17 +57,17 @@ fun TarjetaProducto(
                 .background(Color(0xFFF0F4F7)),
             contentAlignment = Alignment.Center
         ){
-            if(producto.imagenRes!=null){
-                Image(painter = painterResource(id = producto.imagenRes),
+            if (!producto.imagenUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = producto.imagenUrl,
                     contentDescription = producto.titulo,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize())
-            }
-            else{
-                // Icono por defecto mientras no tengamos imagen real
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
                 Icon(
                     imageVector = Icons.Outlined.ShoppingBag,
-                    contentDescription =  null,
+                    contentDescription = null,
                     tint = Color(0xFF90A4AE),
                     modifier = Modifier.size(36.dp)
                 )
