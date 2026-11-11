@@ -1,6 +1,8 @@
 package com.example.radiopatio.eventos
 
+import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 import java.time.LocalDate
 import java.time.YearMonth
@@ -38,99 +40,39 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 /**
- * UiState inmutable para la pantalla del Calendario de Eventos.
- * Agrupa todos los datos observables que definen el estado de la UI (Patrón UiState).
- */
-data class CalendarioUiState(
-    val mesActual: YearMonth = YearMonth.of(2026, 10),
-    val diaSeleccionado: LocalDate? = null,
-    val categoriaSeleccionada: CategoriaEvento = CategoriaEvento.TODOS,
-    val listaEventos: List<Evento> = DatosEjemploEventos.obtenerEventos(),
-    val mostrarDialogoNuevoEvento: Boolean = false
-) {
-    val eventosFiltrados: List<Evento>
-        get() = listaEventos.filter { evento ->
-            val coincideMes = YearMonth.from(evento.fecha) == mesActual
-            val coincideDia = diaSeleccionado == null || evento.fecha == diaSeleccionado
-            val coincideCategoria = categoriaSeleccionada == CategoriaEvento.TODOS || evento.categoria == categoriaSeleccionada
-            coincideMes && coincideDia && coincideCategoria
-        }.sortedBy { it.fecha }
-
-    val diasConEventos: Map<Int, List<Evento>>
-        get() = listaEventos
-            .filter { YearMonth.from(it.fecha) == mesActual }
-            .groupBy { it.fecha.dayOfMonth }
-}
-
-/**
- * Screen (Stateful): Responsable de mantener y gestionar el estado (State Hoisting).
- * Conecta los eventos de la UI con las mutaciones de estado y delega la renderización en [CalendarioEventosContent].
+ * Screen (Stateful): Conecta la interfaz del Calendario con [CalendarioViewModel]
+ * sincronizado en tiempo real con Cloud Firestore y filtrado por comunidad.
  */
 @Composable
 fun CalendarioEventosScreen(
-    onVolverAInicio: () -> Unit = {},
-    barraInferior: @Composable () -> Unit = {}
+    onIrAComunidad: () -> Unit = {},
+    barraInferior: @Composable () -> Unit = {},
+    viewModel: CalendarioViewModel = viewModel(factory = CalendarioViewModelFactory())
 ) {
-    var uiState by remember { mutableStateOf(CalendarioUiState()) }
+    val uiState = viewModel.uiState
+    val context = LocalContext.current
+
+    LaunchedEffect(uiState.errorMensaje) {
+        uiState.errorMensaje?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            viewModel.onLimpiarError()
+        }
+    }
 
     CalendarioEventosContent(
         uiState = uiState,
-        onMesAnterior = {
-            uiState = uiState.copy(mesActual = uiState.mesActual.minusMonths(1))
-        },
-        onMesSiguiente = {
-            uiState = uiState.copy(mesActual = uiState.mesActual.plusMonths(1))
-        },
-        onIrAHoy = {
-            uiState = uiState.copy(
-                mesActual = YearMonth.of(2026, 10),
-                diaSeleccionado = LocalDate.of(2026, 10, 15)
-            )
-        },
-        onSeleccionarDia = { dia ->
-            val nuevoDia = if (uiState.diaSeleccionado == dia) null else dia
-            uiState = uiState.copy(diaSeleccionado = nuevoDia)
-        },
-        onLimpiarFiltroDia = {
-            uiState = uiState.copy(diaSeleccionado = null)
-        },
-        onSeleccionarCategoria = { cat ->
-            uiState = uiState.copy(categoriaSeleccionada = cat)
-        },
-        onToggleAsistencia = { eventoId ->
-            val nuevaLista = uiState.listaEventos.map { evento ->
-                if (evento.id == eventoId) {
-                    val nuevoEstado = !evento.asistiendoUsuario
-                    val totalAsistentes = if (nuevoEstado) evento.asistentes + 1 else maxOf(0, evento.asistentes - 1)
-                    evento.copy(asistiendoUsuario = nuevoEstado, asistentes = totalAsistentes)
-                } else evento
-            }
-            uiState = uiState.copy(listaEventos = nuevaLista)
-        },
-        onToggleRecordatorio = { eventoId ->
-            val nuevaLista = uiState.listaEventos.map { evento ->
-                if (evento.id == eventoId) {
-                    evento.copy(recordatorioActivado = !evento.recordatorioActivado)
-                } else evento
-            }
-            uiState = uiState.copy(listaEventos = nuevaLista)
-        },
-        onAbrirDialogoNuevoEvento = {
-            uiState = uiState.copy(mostrarDialogoNuevoEvento = true)
-        },
-        onCerrarDialogoNuevoEvento = {
-            uiState = uiState.copy(mostrarDialogoNuevoEvento = false)
-        },
-        onCrearEvento = { nuevoEvento ->
-            val nuevaLista = listOf(nuevoEvento) + uiState.listaEventos
-            val enfocarDia = if (YearMonth.from(nuevoEvento.fecha) == uiState.mesActual) nuevoEvento.fecha else uiState.diaSeleccionado
-            uiState = uiState.copy(
-                listaEventos = nuevaLista,
-                mostrarDialogoNuevoEvento = false,
-                diaSeleccionado = enfocarDia
-            )
-        },
-        onVolverAInicio = onVolverAInicio,
+        onMesAnterior = viewModel::onMesAnterior,
+        onMesSiguiente = viewModel::onMesSiguiente,
+        onIrAHoy = viewModel::onIrAHoy,
+        onSeleccionarDia = viewModel::onSeleccionarDia,
+        onLimpiarFiltroDia = viewModel::onLimpiarFiltroDia,
+        onSeleccionarCategoria = viewModel::onSeleccionarCategoria,
+        onToggleAsistencia = viewModel::onToggleAsistencia,
+        onToggleRecordatorio = viewModel::onToggleRecordatorio,
+        onAbrirDialogoNuevoEvento = viewModel::onAbrirDialogoNuevoEvento,
+        onCerrarDialogoNuevoEvento = viewModel::onCerrarDialogoNuevoEvento,
+        onCrearEvento = viewModel::onCrearEvento,
+        onIrAComunidad = onIrAComunidad,
         barraInferior = barraInferior
     )
 }
@@ -153,135 +95,163 @@ fun CalendarioEventosContent(
     onAbrirDialogoNuevoEvento: () -> Unit,
     onCerrarDialogoNuevoEvento: () -> Unit,
     onCrearEvento: (Evento) -> Unit,
-    onVolverAInicio: () -> Unit,
+    onIrAComunidad: () -> Unit = {},
     barraInferior: @Composable () -> Unit = {}
 ) {
     val eventosFiltrados = uiState.eventosFiltrados
     val diasConEventos = uiState.diasConEventos
+    val tieneComunidad = uiState.comunidadActualId.isNotBlank()
 
     Scaffold(
         topBar = {
             BarraSuperiorEventos(
-                onVolver = onVolverAInicio
+                nombreComunidad = uiState.comunidadNombre
             )
         },
         bottomBar = barraInferior,
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAbrirDialogoNuevoEvento,
-                containerColor = Color(0xFF389F82),
-                contentColor = Color.White,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(4.dp)
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Proponer Evento")
+            if (tieneComunidad) {
+                FloatingActionButton(
+                    onClick = onAbrirDialogoNuevoEvento,
+                    containerColor = Color(0xFF389F82),
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Proponer Evento")
+                }
             }
         }
     ) { relleno ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF9FAFB))
-                .padding(relleno),
-            contentPadding = PaddingValues(bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(relleno)
         ) {
-            // 1. Selector de Mes y Navegación
-            item {
-                SelectorMesHeader(
-                    mesActual = uiState.mesActual,
-                    onMesAnterior = onMesAnterior,
-                    onMesSiguiente = onMesSiguiente,
-                    onIrAHoy = onIrAHoy
-                )
-            }
-
-            // 2. Cuadrícula del Calendario
-            item {
-                TarjetaCalendarioMensual(
-                    mesActual = uiState.mesActual,
-                    diaSeleccionado = uiState.diaSeleccionado,
-                    diasConEventos = diasConEventos,
-                    onSeleccionarDia = onSeleccionarDia
-                )
-            }
-
-            // 3. Filtro por Categorías
-            item {
-                FiltroCategoriasEventos(
-                    categoriaSeleccionada = uiState.categoriaSeleccionada,
-                    onCategoriaSeleccionada = onSeleccionarCategoria
-                )
-            }
-
-            // 4. Encabezado de la lista con conteo y botón para limpiar filtro de día
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = if (uiState.diaSeleccionado != null) {
-                                "Eventos del ${uiState.diaSeleccionado.dayOfMonth} de ${
-                                    uiState.mesActual.month.getDisplayName(TextStyle.FULL, Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-                                }"
-                            } else {
-                                "Todos los eventos de ${
-                                    uiState.mesActual.month.getDisplayName(TextStyle.FULL, Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-                                }"
-                            },
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = Color(0xFF133E54)
-                        )
-                        Text(
-                            text = "${eventosFiltrados.size} actividad${if (eventosFiltrados.size == 1) "" else "es"} disponible${if (eventosFiltrados.size == 1) "" else "s"}",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
-
-                    if (uiState.diaSeleccionado != null) {
-                        TextButton(
-                            onClick = onLimpiarFiltroDia,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "Ver todo el mes",
-                                fontSize = 12.sp,
-                                color = Color(0xFF389F82),
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 5. Lista de Eventos o Estado Vacío
-            if (eventosFiltrados.isEmpty()) {
-                item {
-                    EstadoEventosVacio(
-                        diaSeleccionado = uiState.diaSeleccionado,
-                        onProponerEvento = onAbrirDialogoNuevoEvento,
-                        onVerTodos = onLimpiarFiltroDia
+            when {
+                uiState.cargando -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Color(0xFF389F82)
                     )
                 }
-            } else {
-                items(eventosFiltrados, key = { it.id }) { evento ->
-                    Box(
+
+                !tieneComunidad -> {
+                    SinComunidadEventosCard(
+                        onIrAComunidad = onIrAComunidad,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
+                            .align(Alignment.Center)
+                            .padding(24.dp)
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        TarjetaEvento(
-                            evento = evento,
-                            onToggleAsistencia = { onToggleAsistencia(evento.id) },
-                            onToggleRecordatorio = { onToggleRecordatorio(evento.id) }
-                        )
+                        // 1. Selector de Mes y Navegación
+                        item {
+                            SelectorMesHeader(
+                                mesActual = uiState.mesActual,
+                                onMesAnterior = onMesAnterior,
+                                onMesSiguiente = onMesSiguiente,
+                                onIrAHoy = onIrAHoy
+                            )
+                        }
+
+                        // 2. Cuadrícula del Calendario
+                        item {
+                            TarjetaCalendarioMensual(
+                                mesActual = uiState.mesActual,
+                                hoy = uiState.fechaHoy,
+                                diaSeleccionado = uiState.diaSeleccionado,
+                                diasConEventos = diasConEventos,
+                                onSeleccionarDia = onSeleccionarDia
+                            )
+                        }
+
+                        // 3. Filtro por Categorías
+                        item {
+                            FiltroCategoriasEventos(
+                                categoriaSeleccionada = uiState.categoriaSeleccionada,
+                                onCategoriaSeleccionada = onSeleccionarCategoria
+                            )
+                        }
+
+                        // 4. Encabezado de la lista con conteo y botón para limpiar filtro de día
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = if (uiState.diaSeleccionado != null) {
+                                            "Eventos del ${uiState.diaSeleccionado.dayOfMonth} de ${
+                                                uiState.mesActual.month.getDisplayName(TextStyle.FULL, Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+                                            }"
+                                        } else {
+                                            "Todos los eventos de ${
+                                                uiState.mesActual.month.getDisplayName(TextStyle.FULL, Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+                                            }"
+                                        },
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Color(0xFF133E54)
+                                    )
+                                    Text(
+                                        text = "${eventosFiltrados.size} actividad${if (eventosFiltrados.size == 1) "" else "es"} disponible${if (eventosFiltrados.size == 1) "" else "s"}",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+
+                                if (uiState.diaSeleccionado != null) {
+                                    TextButton(
+                                        onClick = onLimpiarFiltroDia,
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "Ver todo el mes",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF389F82),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 5. Lista de Eventos o Estado Vacío
+                        if (eventosFiltrados.isEmpty()) {
+                            item {
+                                EstadoEventosVacio(
+                                    diaSeleccionado = uiState.diaSeleccionado,
+                                    onProponerEvento = onAbrirDialogoNuevoEvento,
+                                    onVerTodos = onLimpiarFiltroDia
+                                )
+                            }
+                        } else {
+                            items(eventosFiltrados, key = { it.id }) { evento ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                ) {
+                                    TarjetaEvento(
+                                        evento = evento,
+                                        onToggleAsistencia = { onToggleAsistencia(evento.id) },
+                                        onToggleRecordatorio = { onToggleRecordatorio(evento.id) }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -290,11 +260,69 @@ fun CalendarioEventosContent(
 
     // Diálogo para Proponer / Crear un Nuevo Evento
     if (uiState.mostrarDialogoNuevoEvento) {
+        val diaPorDefecto = uiState.diaSeleccionado ?: if (YearMonth.from(uiState.fechaHoy) == uiState.mesActual) {
+            uiState.fechaHoy
+        } else {
+            uiState.mesActual.atDay(1)
+        }
         DialogoNuevoEvento(
-            diaInicial = uiState.diaSeleccionado ?: LocalDate.of(2026, uiState.mesActual.monthValue, 15),
+            diaInicial = diaPorDefecto,
+            organizadorInicial = uiState.usuarioActual?.nombre?.takeIf { it.isNotBlank() } ?: "Vecino RadioPatio",
+            creandoEvento = uiState.creandoEvento,
             onDismiss = onCerrarDialogoNuevoEvento,
             onCrearEvento = onCrearEvento
         )
+    }
+}
+
+/**
+ * Tarjeta mostrada cuando el usuario todavía no pertenece a una comunidad.
+ */
+@Composable
+private fun SinComunidadEventosCard(
+    onIrAComunidad: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.EventAvailable,
+                contentDescription = null,
+                tint = Color(0xFF0F8A5F),
+                modifier = Modifier.size(44.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Calendario exclusivo de tu comunidad",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF133E54),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Selecciona o crea tu comunidad en la pestaña Vecinos para consultar y proponer actividades vecinales.",
+                fontSize = 13.sp,
+                color = Color(0xFF64748B),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onIrAComunidad,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F8A5F)),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Text("Ir a Vecinos y Comunidad", fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -303,7 +331,7 @@ fun CalendarioEventosContent(
  */
 @Composable
 private fun BarraSuperiorEventos(
-    onVolver: () -> Unit
+    nombreComunidad: String = ""
 ) {
     Surface(shadowElevation = 2.dp) {
         Row(
@@ -311,19 +339,9 @@ private fun BarraSuperiorEventos(
                 .fillMaxWidth()
                 .background(Color.White)
                 .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onVolver) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Volver",
-                    tint = Color(0xFF133E54)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Calendario de Eventos",
@@ -332,9 +350,15 @@ private fun BarraSuperiorEventos(
                     color = Color(0xFF133E54)
                 )
                 Text(
-                    text = "Actividades y avisos de la comunidad",
+                    text = if (nombreComunidad.isNotBlank()) {
+                        "Actividades en $nombreComunidad"
+                    } else {
+                        "Actividades y avisos de la comunidad"
+                    },
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = Color.Gray,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -416,6 +440,7 @@ private fun SelectorMesHeader(
 @Composable
 private fun TarjetaCalendarioMensual(
     mesActual: YearMonth,
+    hoy: LocalDate,
     diaSeleccionado: LocalDate?,
     diasConEventos: Map<Int, List<Evento>>,
     onSeleccionarDia: (LocalDate) -> Unit
@@ -424,7 +449,6 @@ private fun TarjetaCalendarioMensual(
     val primerDiaMes = mesActual.atDay(1)
     val totalDiasMes = mesActual.lengthOfMonth()
     val offsetPrimerDia = primerDiaMes.dayOfWeek.value - 1
-    val hoy = LocalDate.of(2026, 10, 15)
 
     Card(
         modifier = Modifier
@@ -920,6 +944,8 @@ private fun EstadoEventosVacio(
 @Composable
 fun DialogoNuevoEvento(
     diaInicial: LocalDate,
+    organizadorInicial: String = "Vecino RadioPatio",
+    creandoEvento: Boolean = false,
     onDismiss: () -> Unit,
     onCrearEvento: (Evento) -> Unit
 ) {
@@ -927,12 +953,12 @@ fun DialogoNuevoEvento(
     var categoria by remember { mutableStateOf(CategoriaEvento.FIESTAS) }
     var hora by remember { mutableStateOf("18:00 - 20:00") }
     var ubicacion by remember { mutableStateOf("") }
-    var organizador by remember { mutableStateOf("Vecino RadioPatio") }
+    var organizador by remember(organizadorInicial) { mutableStateOf(organizadorInicial) }
     var descripcion by remember { mutableStateOf("") }
     var diaSeleccionado by remember { mutableStateOf(diaInicial) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!creandoEvento) onDismiss() },
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -988,8 +1014,15 @@ fun DialogoNuevoEvento(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    IconButton(
+                        onClick = { diaSeleccionado = diaSeleccionado.minusDays(1) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Filled.ChevronLeft, contentDescription = "Día anterior", tint = Color(0xFF133E54))
+                    }
                     OutlinedTextField(
                         value = "${diaSeleccionado.dayOfMonth}/${diaSeleccionado.monthValue}/${diaSeleccionado.year}",
                         onValueChange = {},
@@ -997,15 +1030,21 @@ fun DialogoNuevoEvento(
                         label = { Text("Fecha", fontSize = 12.sp) },
                         modifier = Modifier.weight(1f)
                     )
-
-                    OutlinedTextField(
-                        value = hora,
-                        onValueChange = { hora = it },
-                        label = { Text("Horario", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
+                    IconButton(
+                        onClick = { diaSeleccionado = diaSeleccionado.plusDays(1) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Filled.ChevronRight, contentDescription = "Día siguiente", tint = Color(0xFF133E54))
+                    }
                 }
+
+                OutlinedTextField(
+                    value = hora,
+                    onValueChange = { hora = it },
+                    label = { Text("Horario", fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 OutlinedTextField(
                     value = descripcion,
@@ -1020,7 +1059,7 @@ fun DialogoNuevoEvento(
         confirmButton = {
             Button(
                 onClick = {
-                    if (titulo.isNotBlank() && ubicacion.isNotBlank()) {
+                    if (!creandoEvento && titulo.isNotBlank() && ubicacion.isNotBlank()) {
                         val nuevoEvento = Evento(
                             id = "evt-${System.currentTimeMillis()}",
                             titulo = titulo.trim(),
@@ -1038,14 +1077,25 @@ fun DialogoNuevoEvento(
                         onCrearEvento(nuevoEvento)
                     }
                 },
-                enabled = titulo.isNotBlank() && ubicacion.isNotBlank(),
+                enabled = !creandoEvento && titulo.isNotBlank() && ubicacion.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF389F82))
             ) {
-                Text("Publicar Evento")
+                if (creandoEvento) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Publicar Evento")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !creandoEvento
+            ) {
                 Text("Cancelar", color = Color.Gray)
             }
         }
@@ -1061,31 +1111,11 @@ fun DialogoNuevoEvento(
 fun CalendarioEventosContentPreview() {
     RadioPatioTheme {
         CalendarioEventosContent(
-            uiState = CalendarioUiState(),
-            onMesAnterior = {},
-            onMesSiguiente = {},
-            onIrAHoy = {},
-            onSeleccionarDia = {},
-            onLimpiarFiltroDia = {},
-            onSeleccionarCategoria = {},
-            onToggleAsistencia = {},
-            onToggleRecordatorio = {},
-            onAbrirDialogoNuevoEvento = {},
-            onCerrarDialogoNuevoEvento = {},
-            onCrearEvento = {},
-            onVolverAInicio = {}
-        )
-    }
-}
-
-@Preview(name = "Calendario Sin Eventos", showBackground = true)
-@Composable
-fun CalendarioEventosVacioPreview() {
-    RadioPatioTheme {
-        CalendarioEventosContent(
             uiState = CalendarioUiState(
-                listaEventos = emptyList(),
-                diaSeleccionado = LocalDate.of(2026, 10, 1)
+                comunidadActualId = "com_preview",
+                comunidadNombre = "Residencial Montecerrao",
+                listaEventos = DatosEjemploEventos.obtenerEventos("com_preview"),
+                cargando = false
             ),
             onMesAnterior = {},
             onMesSiguiente = {},
@@ -1097,8 +1127,34 @@ fun CalendarioEventosVacioPreview() {
             onToggleRecordatorio = {},
             onAbrirDialogoNuevoEvento = {},
             onCerrarDialogoNuevoEvento = {},
-            onCrearEvento = {},
-            onVolverAInicio = {}
+            onCrearEvento = {}
+        )
+    }
+}
+
+@Preview(name = "Calendario Sin Eventos", showBackground = true)
+@Composable
+fun CalendarioEventosVacioPreview() {
+    RadioPatioTheme {
+        CalendarioEventosContent(
+            uiState = CalendarioUiState(
+                comunidadActualId = "com_preview",
+                comunidadNombre = "Residencial Montecerrao",
+                listaEventos = emptyList(),
+                diaSeleccionado = LocalDate.now(),
+                cargando = false
+            ),
+            onMesAnterior = {},
+            onMesSiguiente = {},
+            onIrAHoy = {},
+            onSeleccionarDia = {},
+            onLimpiarFiltroDia = {},
+            onSeleccionarCategoria = {},
+            onToggleAsistencia = {},
+            onToggleRecordatorio = {},
+            onAbrirDialogoNuevoEvento = {},
+            onCerrarDialogoNuevoEvento = {},
+            onCrearEvento = {}
         )
     }
 }

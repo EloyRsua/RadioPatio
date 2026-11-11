@@ -4,8 +4,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,8 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,14 +42,15 @@ import com.example.radiopatio.ui.theme.RadioPatioTheme
 fun TarjetaProducto(
     producto: Producto,
     onClick: () -> Unit,
-    modifier: Modifier
-){
+    modifier: Modifier = Modifier,
+    esMiProducto: Boolean = false,
+    onEliminarClick: () -> Unit = {}
+) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(Color.White)
-            .border(1.dp, Color(0xFFD6DDE1),
-                RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0xFFD6DDE1), RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(10.dp)
     ) {
@@ -57,33 +62,54 @@ fun TarjetaProducto(
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFFF0F4F7)),
             contentAlignment = Alignment.Center
-        ){
-            if(producto.imagenRes!=null){
-                Image(painter = painterResource(id = producto.imagenRes),
+        ) {
+            if (producto.imagenRes != null) {
+                Image(
+                    painter = painterResource(id = producto.imagenRes),
                     contentDescription = producto.titulo,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize())
-            }
-            else{
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
                 // Icono por defecto mientras no tengamos imagen real
                 Icon(
                     imageVector = Icons.Outlined.ShoppingBag,
-                    contentDescription =  null,
+                    contentDescription = null,
                     tint = Color(0xFF90A4AE),
                     modifier = Modifier.size(36.dp)
                 )
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        
-        // Titulo
-        Text(
-            text = producto.titulo,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            color = Color(0xFF133E54),
-            maxLines = 1
-        )
+
+        // Título y acción eliminar si es del usuario
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = producto.titulo,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = Color(0xFF133E54),
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
+            )
+            if (esMiProducto) {
+                IconButton(
+                    onClick = onEliminarClick,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Eliminar artículo",
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
 
         // Precio en verde
         Text(
@@ -93,11 +119,12 @@ fun TarjetaProducto(
             color = Color(0xFF2E9473)
         )
 
-        // Ubicacion y antiguedad
+        // Ubicación y antigüedad
         Text(
             text = producto.ubicacionYTiempo,
             fontSize = 11.sp,
-            color = Color.Gray
+            color = Color.Gray,
+            maxLines = 1
         )
     }
 }

@@ -21,10 +21,14 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.radiopatio.navigation.AppNavHost
+import com.example.radiopatio.navigation.BuscarComunidad
 import com.example.radiopatio.navigation.Eventos
 import com.example.radiopatio.navigation.Inicio
+import com.example.radiopatio.navigation.InicioSesion
 import com.example.radiopatio.navigation.Mercadillo
 import com.example.radiopatio.navigation.Perfil
+import com.example.radiopatio.navigation.Publicar
+import com.example.radiopatio.navigation.RegistroNuevo
 import com.example.radiopatio.navigation.Vecinos
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
@@ -36,77 +40,94 @@ class MainActivity : ComponentActivity() {
             val navController = rememberNavController()
 
             val entradaPilaNavegacion = navController.currentBackStackEntryAsState()
-            val destinoActual = entradaPilaNavegacion?.value?.destination
+            val destinoActual = entradaPilaNavegacion.value?.destination
+            val mostrarBarraInferior = destinoActual != null &&
+                !destinoActual.hasRoute<InicioSesion>() &&
+                !destinoActual.hasRoute<RegistroNuevo>() &&
+                !destinoActual.hasRoute<Publicar>() &&
+                !destinoActual.hasRoute<BuscarComunidad>()
 
             RadioPatioTheme {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
-                        NavigationBar {
-                            // 1. Item Inicio
-                            NavigationBarItem(
-                                selected = destinoActual?.hasRoute<Inicio>() == true,
-                                onClick = {
-                                    navController.navigate(Inicio)
-                                },
-                                icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") }
-                            )
+                        if (mostrarBarraInferior) {
+                            NavigationBar {
+                                // 1. Item Inicio
+                                NavigationBarItem(
+                                    selected = destinoActual?.hasRoute<Inicio>() == true,
+                                    onClick = {
+                                        navController.navigate(Inicio) {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                    icon = { Icon(Icons.Default.Home, contentDescription = "Inicio") }
+                                )
 
-                            // 2. Item Mercadillo
-                            NavigationBarItem(
-                                selected = destinoActual?.hasRoute<Mercadillo>() == true,
-                                onClick = {
-                                    navController.navigate(Mercadillo)
-                                },
-                                icon = {
-                                    Icon(
-                                        Icons.Outlined.ShoppingBag,
-                                        contentDescription = "Mercadillo"
-                                    )
-                                }
-                            )
+                                // 2. Item Mercadillo
+                                NavigationBarItem(
+                                    selected = destinoActual?.hasRoute<Mercadillo>() == true,
+                                    onClick = {
+                                        navController.navigate(Mercadillo) {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            Icons.Outlined.ShoppingBag,
+                                            contentDescription = "Mercadillo"
+                                        )
+                                    }
+                                )
 
-                            // 3. Item Vecinos
-                            NavigationBarItem(
-                                selected = destinoActual?.hasRoute<Vecinos>() == true,
-                                onClick = {
-                                    navController.navigate(Vecinos)
-                                },
-                                icon = {
-                                    Icon(
-                                        Icons.Outlined.Groups,
-                                        contentDescription = "Vecinos"
-                                    )
-                                }
-                            )
+                                // 3. Item Vecinos
+                                NavigationBarItem(
+                                    selected = destinoActual?.hasRoute<Vecinos>() == true,
+                                    onClick = {
+                                        navController.navigate(Vecinos) {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            Icons.Outlined.Groups,
+                                            contentDescription = "Vecinos"
+                                        )
+                                    }
+                                )
 
-                            // 4. Item Eventos
-                            NavigationBarItem(
-                                selected = destinoActual?.hasRoute<Eventos>() == true,
-                                onClick = {
-                                    navController.navigate(Eventos)
-                                },
-                                icon = {
-                                    Icon(
-                                        Icons.Outlined.CalendarMonth,
-                                        contentDescription = "Eventos"
-                                    )
-                                }
-                            )
+                                // 4. Item Eventos
+                                NavigationBarItem(
+                                    selected = destinoActual?.hasRoute<Eventos>() == true,
+                                    onClick = {
+                                        navController.navigate(Eventos) {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            Icons.Outlined.CalendarMonth,
+                                            contentDescription = "Eventos"
+                                        )
+                                    }
+                                )
 
-                            // 5. Item Perfil
-                            NavigationBarItem(
-                                selected = destinoActual?.hasRoute<Perfil>() == true,
-                                onClick = {
-                                    navController.navigate(Perfil)
-                                },
-                                icon = {
-                                    Icon(
-                                        Icons.Outlined.Person,
-                                        contentDescription = "Perfil"
-                                    )
-                                }
-                            )
+                                // 5. Item Perfil
+                                NavigationBarItem(
+                                    selected = destinoActual?.hasRoute<Perfil>() == true,
+                                    onClick = {
+                                        navController.navigate(Perfil) {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                    icon = {
+                                        Icon(
+                                            Icons.Outlined.Person,
+                                            contentDescription = "Perfil"
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 ) { innerPadding ->

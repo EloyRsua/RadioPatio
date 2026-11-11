@@ -29,18 +29,22 @@ data class Evento(
     val asistentes: Int,
     val asistiendoUsuario: Boolean = false,
     val recordatorioActivado: Boolean = false,
-    val esDestacado: Boolean = false
+    val esDestacado: Boolean = false,
+    val comunidadId: String = "",
+    val creadorUid: String = "",
+    val asistentesUids: List<String> = emptyList(),
+    val recordatoriosUids: List<String> = emptyList()
 )
 
 object DatosEjemploEventos {
-    fun obtenerEventos(): List<Evento> {
-        val hoy = LocalDate.of(2026, 10, 15)
+    fun obtenerEventos(comunidadId: String = "com_preview"): List<Evento> {
+        val hoy = LocalDate.now()
         return listOf(
             Evento(
                 id = "evt-1",
                 titulo = "Fiestas del Barrio 2026 🎉",
                 descripcion = "¡Gran celebración para todos los vecinos! Habrá música en directo, barbacoa vecinal en el parque, castillos hinchables para los peques y concurso de tortillas con premios.",
-                fecha = LocalDate.of(2026, 10, 17),
+                fecha = hoy.withDayOfMonth(minOf(17, hoy.lengthOfMonth())),
                 hora = "18:00 - 23:30",
                 ubicacion = "Parque del Oeste",
                 categoria = CategoriaEvento.FIESTAS,
@@ -48,13 +52,14 @@ object DatosEjemploEventos {
                 asistentes = 38,
                 asistiendoUsuario = true,
                 recordatorioActivado = true,
-                esDestacado = true
+                esDestacado = true,
+                comunidadId = comunidadId
             ),
             Evento(
                 id = "evt-2",
                 titulo = "Reunión Ordinaria de Comunidad 📋",
                 descripcion = "Convocatoria para tratar la aprobación de cuentas, reforma del ascensor del portal 2 y nuevas normas para zonas comunes.",
-                fecha = LocalDate.of(2026, 10, 20),
+                fecha = hoy.withDayOfMonth(minOf(20, hoy.lengthOfMonth())),
                 hora = "19:30 - 21:00",
                 ubicacion = "Sala de Juntas · Portal 4",
                 categoria = CategoriaEvento.REUNION,
@@ -62,63 +67,8 @@ object DatosEjemploEventos {
                 asistentes = 14,
                 asistiendoUsuario = false,
                 recordatorioActivado = false,
-                esDestacado = false
-            ),
-            Evento(
-                id = "evt-3",
-                titulo = "Corte Programado de Agua (Caldera) ⚠️",
-                descripcion = "Corte de suministro de agua caliente por revisión anual reglamentaria y purga del circuito general.",
-                fecha = LocalDate.of(2026, 10, 22),
-                hora = "09:00 - 13:00",
-                ubicacion = "Portales 1 al 6 (General)",
-                categoria = CategoriaEvento.AVISOS,
-                organizador = "Mantenimiento Técnico HidroCal",
-                asistentes = 29,
-                asistiendoUsuario = false,
-                recordatorioActivado = true,
-                esDestacado = false
-            ),
-            Evento(
-                id = "evt-4",
-                titulo = "Torneo de Pádel Vecinal 🎾",
-                descripcion = "Torneo express por parejas para todos los niveles de vecinos del barrio. Al terminar compartiremos un aperitivo en el bar del club.",
-                fecha = LocalDate.of(2026, 10, 24),
-                hora = "10:30 - 14:00",
-                ubicacion = "Pistas Municipales La Florida",
-                categoria = CategoriaEvento.DEPORTES,
-                organizador = "Carlos Ruiz (Portal 4)",
-                asistentes = 16,
-                asistiendoUsuario = false,
-                recordatorioActivado = false,
-                esDestacado = false
-            ),
-            Evento(
-                id = "evt-5",
-                titulo = "Quedada Solidaria: Limpieza del Parque 🌿",
-                descripcion = "Jornada de voluntariado para recoger residuos y plantar flores en las zonas verdes del parque infantil. ¡Traed guantes y ganas de colaborar!",
-                fecha = LocalDate.of(2026, 10, 25),
-                hora = "11:00 - 13:00",
-                ubicacion = "Entrada Principal · Parque del Oeste",
-                categoria = CategoriaEvento.SOLIDARIO,
-                organizador = "Asociación Vecinal Sostenible",
-                asistentes = 22,
-                asistiendoUsuario = true,
-                recordatorioActivado = false,
-                esDestacado = false
-            ),
-            Evento(
-                id = "evt-6",
-                titulo = "Taller de Intercambio y Reparación 🔧",
-                descripcion = "Banco de herramientas comunitarias y reparación guiada de pequeños aparatos y bicicletas. Trae lo que necesite arreglo.",
-                fecha = LocalDate.of(2026, 10, 28),
-                hora = "17:00 - 19:30",
-                ubicacion = "Local Comunitario (Bajo C)",
-                categoria = CategoriaEvento.SOLIDARIO,
-                organizador = "Red Prestes RadioPatio",
-                asistentes = 11,
-                asistiendoUsuario = false,
-                recordatorioActivado = false,
-                esDestacado = false
+                esDestacado = false,
+                comunidadId = comunidadId
             )
         )
     }
