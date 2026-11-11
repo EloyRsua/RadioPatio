@@ -11,8 +11,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 
-import com.example.radiopatio.CalendarioEventosScreen
-import com.example.radiopatio.PaginaPrincipal
+import com.example.radiopatio.eventos.CalendarioEventosScreen
+import com.example.radiopatio.publicacion.PaginaPrincipal
 import com.example.radiopatio.RadioPatioApplication
 import com.example.radiopatio.RadioPatioViewModel
 import com.example.radiopatio.RadioPatioViewModelFactory
@@ -25,10 +25,8 @@ import com.example.radiopatio.registroInicio.RegistroUsuario
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
 
 @Composable
 fun AppNavHost(
