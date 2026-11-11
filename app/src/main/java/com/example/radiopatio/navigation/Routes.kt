@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 object Inicio
 
-// Segun se vayan haciendo descomentarlas
 // Pantalla del mercadillo
 @Serializable
 object Mercadillo
@@ -31,3 +30,6 @@ object InicioSesion
 
 @Serializable
 object RegistroNuevo
+
+@Serializable
+object MisProductos

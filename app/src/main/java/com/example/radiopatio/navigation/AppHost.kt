@@ -19,16 +19,15 @@ import com.example.radiopatio.RadioPatioViewModelFactory
 import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.informacionUsuario.PerfilUsuarioScreen
 import com.example.radiopatio.marketplace.MercadilloScreen
+import com.example.radiopatio.marketplace.misProductos.MisProductosScreen
 import com.example.radiopatio.publicacion.PantallaCrearPublicacion
 import com.example.radiopatio.registroInicio.RegistroNuevoUsuario
 import com.example.radiopatio.registroInicio.RegistroUsuario
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
 
 @Composable
 fun AppNavHost(
@@ -195,6 +194,17 @@ fun AppNavHost(
 
         composable<Perfil> {
             PerfilUsuarioScreen(
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onIrAMisProductos = {
+                    navController.navigate(MisProductos)
+                }
+            )
+        }
+
+        composable<MisProductos>{
+            MisProductosScreen(
                 onVolver = {
                     navController.popBackStack()
                 }
