@@ -1,4 +1,4 @@
-package com.example.radiopatio
+package com.example.radiopatio.eventos
 
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -456,7 +457,7 @@ private fun TarjetaCalendarioMensual(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFECEFF1)))
+        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Color(0xFFECEFF1)))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -610,7 +611,7 @@ private fun FiltroCategoriasEventos(
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = if (esActivo) Color(0xFF133E54) else Color.White,
-                border = if (esActivo) null else CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFECEFF1))),
+                border = if (esActivo) null else CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Color(0xFFECEFF1))),
                 shadowElevation = if (esActivo) 2.dp else 0.dp,
                 modifier = Modifier.clickable { onCategoriaSeleccionada(categoria) }
             ) {
@@ -652,7 +653,7 @@ fun TarjetaEvento(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = CardDefaults.outlinedCardBorder().copy(
-            brush = androidx.compose.ui.graphics.SolidColor(
+            brush = SolidColor(
                 if (evento.esDestacado) Color(0xFF389F82).copy(alpha = 0.5f) else Color(0xFFECEFF1)
             )
         )

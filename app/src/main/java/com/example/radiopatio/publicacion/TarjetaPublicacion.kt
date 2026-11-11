@@ -21,17 +21,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
-/**
- * Tarjeta de publicación utilizando el componente Card de Material 3.
- */
 @Composable
 fun TarjetaPublicacion(
     publicacion: Publicacion,
     esMiPublicacion: Boolean = false,
-    onEliminarClick: () -> Unit = {}
+    onEliminarClick: () -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

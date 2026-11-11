@@ -17,8 +17,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
-import com.example.radiopatio.CalendarioEventosScreen
-import com.example.radiopatio.PaginaPrincipal
+import com.example.radiopatio.eventos.CalendarioEventosScreen
+import com.example.radiopatio.publicacion.PaginaPrincipal
 import com.example.radiopatio.RadioPatioApplication
 import com.example.radiopatio.RadioPatioViewModel
 import com.example.radiopatio.RadioPatioViewModelFactory
@@ -138,9 +138,10 @@ fun AppNavHost(
 
         composable<InicioSesion> {
             RegistroUsuario(
-                onLoginClick = { email, password ->
+                onLoginClick = { email, password, onError ->
                     if (email.isBlank() || password.isBlank()) {
                         Toast.makeText(context, "Por favor, introduce email y contraseña", Toast.LENGTH_SHORT).show()
+                        onError()
                         return@RegistroUsuario
                     }
 
@@ -156,9 +157,10 @@ fun AppNavHost(
                         } catch (e: Exception) {
                             Toast.makeText(
                                 context,
-                                "Error al iniciar sesión: ${e.localizedMessage ?: "Credenciales incorrectas"}",
+                                "Error al iniciar sesión: Correo o contraseña incorrectos.",
                                 Toast.LENGTH_LONG
                             ).show()
+                            onError()
                         }
                     }
                 },

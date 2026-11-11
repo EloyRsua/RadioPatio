@@ -1,4 +1,4 @@
-package com.example.radiopatio
+package com.example.radiopatio.publicacion
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -35,10 +35,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.radiopatio.R
+import com.example.radiopatio.RadioPatioApplication
+import com.example.radiopatio.RadioPatioViewModel
+import com.example.radiopatio.RadioPatioViewModelFactory
+import com.example.radiopatio.TablonUiState
 import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.informacionUsuario.Usuario
-import com.example.radiopatio.publicacion.Publicacion
-import com.example.radiopatio.publicacion.TarjetaPublicacion
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
 @Composable
@@ -83,6 +86,7 @@ fun PaginaPrincipalContent(
     onEliminarPublicacion: (PublicacionEntidad) -> Unit = {}
 ) {
     var mostrarBuscador by remember { mutableStateOf(false) }
+    var publicacionSeleccionada by remember { mutableStateOf<PublicacionEntidad?>(null) }
 
     val publicacionesVisibles = uiState.publicacionesFiltradas
     val uidActual = uiState.usuarioActual?.uid.orEmpty()
@@ -241,6 +245,9 @@ fun PaginaPrincipalContent(
                                         esMiPublicacion = esMiPublicacion,
                                         onEliminarClick = {
                                             onEliminarPublicacion(entidad)
+                                        },
+                                        modifier = Modifier.clickable {
+                                            publicacionSeleccionada = entidad
                                         }
                                     )
                                 }
@@ -249,6 +256,16 @@ fun PaginaPrincipalContent(
                     }
                 }
             }
+        }
+
+        // Diálogo a pantalla completa con el detalle de la publicación seleccionada
+        publicacionSeleccionada?.let { entidad ->
+            PublicacionDetalleDialog(
+                publicacion = entidad,
+                onDismiss = {
+                    publicacionSeleccionada = null
+                }
+            )
         }
     }
 }

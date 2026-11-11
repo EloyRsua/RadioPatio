@@ -1,4 +1,4 @@
-package com.example.radiopatio
+package com.example.radiopatio.eventos
 
 import androidx.compose.ui.graphics.Color
 import java.time.LocalDate

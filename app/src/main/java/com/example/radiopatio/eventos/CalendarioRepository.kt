@@ -1,4 +1,4 @@
-package com.example.radiopatio
+package com.example.radiopatio.eventos
 
 import android.util.Log
 import com.example.radiopatio.comunidad.migrarDocumentosRaizAComunidad

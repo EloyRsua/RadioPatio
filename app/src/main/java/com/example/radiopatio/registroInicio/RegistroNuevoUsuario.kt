@@ -1,6 +1,7 @@
 package com.example.radiopatio.registroInicio
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -81,7 +83,7 @@ data class DatosRegistroComunidad(
 
 /**
  * Pantalla para el registro de nuevos usuarios (Vecino/a o Administrador de fincas)
- * con selector unificado de comunidad.
+ * con selector unificado de comunidad, repetición de contraseña y validaciones completas.
  */
 @Composable
 fun RegistroNuevoUsuario(
@@ -108,6 +110,8 @@ fun RegistroNuevoUsuario(
     val bordeGris = Color(0xFFE2E8F0)
     val textoSecundario = Color(0xFF64748B)
 
+    val context = LocalContext.current
+
     var nombre by rememberSaveable { mutableStateOf("") }
     var apellidos by rememberSaveable { mutableStateOf("") }
     var vivienda by rememberSaveable { mutableStateOf("") }
@@ -123,7 +127,9 @@ fun RegistroNuevoUsuario(
     var puertaEdificio by rememberSaveable(comExistenteEdificio?.id) { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    var confirmPassword by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    var confirmPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var aceptoNormas by rememberSaveable { mutableStateOf(true) }
     var photoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     val photoUri = photoUriString?.let { Uri.parse(it) }
@@ -133,13 +139,6 @@ fun RegistroNuevoUsuario(
         edificioConPisos -> pisoSeleccionado in 1..maxPisosEdificio
         else -> vivienda.isNotBlank()
     }
-    val formularioValido = !cargando &&
-        aceptoNormas &&
-        nombre.isNotBlank() &&
-        viviendaValida &&
-        email.isNotBlank() &&
-        password.length >= 6 &&
-        datosComunidad.estaConfigurada(esAdministrador)
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -312,6 +311,7 @@ fun RegistroNuevoUsuario(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Campo Contraseña
                 CampoEntradaTexto(
                     value = password,
                     onValueChange = { password = it },
@@ -321,6 +321,19 @@ fun RegistroNuevoUsuario(
                     isPassword = true,
                     passwordVisible = passwordVisible,
                     onPasswordToggle = { passwordVisible = !passwordVisible },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Campo Repetir Contraseña
+                CampoEntradaTexto(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    placeholder = "Repetir contraseña",
+                    icono = Icons.Outlined.Lock,
+                    keyboardType = KeyboardType.Password,
+                    isPassword = true,
+                    passwordVisible = confirmPasswordVisible,
+                    onPasswordToggle = { confirmPasswordVisible = !confirmPasswordVisible },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -359,39 +372,78 @@ fun RegistroNuevoUsuario(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Botón Crear mi cuenta con validaciones de campos y contraseñas
             Button(
                 onClick = {
-                    if (formularioValido) {
-                        val viviendaFinal = when {
-                            edificioConPisos -> {
-                                val puertaLimpia = puertaEdificio.trim()
-                                if (puertaLimpia.isNotBlank()) "${pisoSeleccionado}º $puertaLimpia" else "${pisoSeleccionado}º"
-                            }
-                            vivienda.trim().isNotBlank() -> vivienda.trim()
-                            esAdministrador -> "Administración"
-                            else -> ""
-                        }
-                        onRegisterClick(
-                            nombre.trim(),
-                            apellidos.trim(),
-                            viviendaFinal,
-                            email.trim(),
-                            password,
-                            photoUri,
-                            esAdministrador,
-                            datosComunidad
-                        )
+                    val nombreLimpio = nombre.trim()
+                    val apellidosLimpios = apellidos.trim()
+                    val emailLimpio = email.trim()
+                    val passLimpia = password.trim()
+                    val confirmPassLimpia = confirmPassword.trim()
+
+                    // 1. Validar campos obligatorios vacíos
+                    if (nombreLimpio.isEmpty() || !viviendaValida || emailLimpio.isEmpty() || passLimpia.isEmpty() || confirmPassLimpia.isEmpty()) {
+                        Toast.makeText(context, "Por favor, rellena todos los campos obligatorios", Toast.LENGTH_SHORT).show()
+                        return@Button
                     }
+
+                    // 2. Validar comunidad seleccionada o configurada según tipo de cuenta
+                    if (!datosComunidad.estaConfigurada(esAdministrador)) {
+                        Toast.makeText(context, "Por favor, selecciona o configura tu comunidad", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // 3. Validar aceptación de las normas
+                    if (!aceptoNormas) {
+                        Toast.makeText(context, "Debes aceptar las normas de la comunidad", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // 4. Validar formato de correo electrónico
+                    if (!emailLimpio.contains("@")) {
+                        Toast.makeText(context, "Por favor, introduce un correo electrónico válido", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // 5. Validar longitud de la contraseña
+                    if (passLimpia.length < 6) {
+                        Toast.makeText(context, "La contraseña debe tener al menos 6 caracteres", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    // 6. Validar que ambas contraseñas coincidan exactamente
+                    if (passLimpia != confirmPassLimpia) {
+                        Toast.makeText(context, "Las contraseñas no coinciden", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    val viviendaFinal = when {
+                        edificioConPisos -> {
+                            val puertaLimpia = puertaEdificio.trim()
+                            if (puertaLimpia.isNotBlank()) "${pisoSeleccionado}º $puertaLimpia" else "${pisoSeleccionado}º"
+                        }
+                        vivienda.trim().isNotBlank() -> vivienda.trim()
+                        esAdministrador -> "Administración"
+                        else -> ""
+                    }
+
+                    onRegisterClick(
+                        nombreLimpio,
+                        apellidosLimpios,
+                        viviendaFinal,
+                        emailLimpio,
+                        passLimpia,
+                        photoUri,
+                        esAdministrador,
+                        datosComunidad
+                    )
                 },
-                enabled = formularioValido,
+                enabled = !cargando,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(25.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = verdeBoton,
-                    disabledContainerColor = verdeBoton.copy(alpha = 0.5f)
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = verdeBoton)
             ) {
                 if (cargando) {
                     CircularProgressIndicator(
