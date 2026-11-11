@@ -360,6 +360,7 @@ class BuscadorComunidadesViewModel(
         ciudad: String,
         codigoPostal: String,
         tipo: String,
+        numeroPisos: Int = 0,
         descripcion: String,
         onExito: () -> Unit
     ) {
@@ -381,6 +382,7 @@ class BuscadorComunidadesViewModel(
                 codigoPostal = codigoPostal,
                 descripcion = descripcion,
                 tipo = tipo,
+                numeroPisos = numeroPisos,
                 createdByUid = uid,
                 creadorEsAdministrador = true
             )

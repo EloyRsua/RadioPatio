@@ -35,6 +35,8 @@ data class VecinosUiState(
     val cargando: Boolean = true,
     val mostrarDialogoTransferirPresidencia: Boolean = false,
     val procesandoTransferencia: Boolean = false,
+    val mostrarDialogoEditarPisos: Boolean = false,
+    val procesandoPisos: Boolean = false,
     val procesandoCambioComunidad: Boolean = false,
     val procesandoSolicitudAdmin: Boolean = false,
     val mensajeExito: String? = null,
@@ -254,6 +256,55 @@ class VecinosViewModel(
 
     fun onCerrarDialogoTransferirPresidencia() {
         uiState = uiState.copy(mostrarDialogoTransferirPresidencia = false)
+    }
+
+    fun onAbrirDialogoEditarPisos() {
+        if (!uiState.esAdministradorActual || uiState.comunidad?.esEdificio != true) {
+            uiState = uiState.copy(
+                errorMensaje = "Solo el administrador de fincas de un edificio puede editar los pisos."
+            )
+            return
+        }
+        uiState = uiState.copy(mostrarDialogoEditarPisos = true, errorMensaje = null)
+    }
+
+    fun onCerrarDialogoEditarPisos() {
+        if (!uiState.procesandoPisos) {
+            uiState = uiState.copy(mostrarDialogoEditarPisos = false)
+        }
+    }
+
+    fun onActualizarNumeroPisos(nuevoNumeroPisos: Int) {
+        val comId = uiState.comunidadIdActual
+        val uidActual = uiState.usuarioActual?.uid.orEmpty()
+        if (!uiState.esAdministradorActual || comId.isBlank() || uiState.procesandoPisos) {
+            uiState = uiState.copy(
+                errorMensaje = "Solo el administrador de fincas de este edificio puede dictaminar los pisos."
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            uiState = uiState.copy(procesandoPisos = true, errorMensaje = null)
+            val resultado = comunidadRepository.actualizarNumeroPisos(
+                comunidadId = comId,
+                administradorUid = uidActual,
+                numeroPisos = nuevoNumeroPisos
+            )
+            uiState = if (resultado.isSuccess) {
+                uiState.copy(
+                    procesandoPisos = false,
+                    mostrarDialogoEditarPisos = false,
+                    mensajeExito = "Número de pisos actualizado a $nuevoNumeroPisos."
+                )
+            } else {
+                uiState.copy(
+                    procesandoPisos = false,
+                    errorMensaje = resultado.exceptionOrNull()?.localizedMessage
+                        ?: "No se pudo actualizar el número de pisos."
+                )
+            }
+        }
     }
 
     fun onLimpiarError() {

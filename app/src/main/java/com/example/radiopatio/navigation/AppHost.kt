@@ -51,12 +51,14 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
             datos.comunidadExistente?.ciudad ?: "",
             datos.comunidadExistente?.codigoPostal ?: "",
             datos.comunidadExistente?.tipo ?: "Residencial",
+            datos.comunidadExistente?.numeroPisos ?: 0,
             datos.comunidadExistente?.administradorUid ?: "",
             datos.nuevaComunidadNombre,
             datos.nuevaComunidadDireccion,
             datos.nuevaComunidadCiudad,
             datos.nuevaComunidadCp,
             datos.nuevaComunidadTipo,
+            datos.nuevaComunidadPisos,
             datos.nuevaComunidadDescripcion
         )
     },
@@ -70,7 +72,8 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
                 ciudad = lista[5] as String,
                 codigoPostal = lista[6] as String,
                 tipo = lista[7] as String,
-                administradorUid = lista[8] as String
+                numeroPisos = lista[8] as Int,
+                administradorUid = lista[9] as String
             )
         } else null
 
@@ -78,12 +81,13 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
             crearNueva = lista[0] as Boolean,
             solicitarTraspaso = lista[1] as Boolean,
             comunidadExistente = comExistente,
-            nuevaComunidadNombre = lista[9] as String,
-            nuevaComunidadDireccion = lista[10] as String,
-            nuevaComunidadCiudad = lista[11] as String,
-            nuevaComunidadCp = lista[12] as String,
-            nuevaComunidadTipo = lista[13] as String,
-            nuevaComunidadDescripcion = lista[14] as String
+            nuevaComunidadNombre = lista[10] as String,
+            nuevaComunidadDireccion = lista[11] as String,
+            nuevaComunidadCiudad = lista[12] as String,
+            nuevaComunidadCp = lista[13] as String,
+            nuevaComunidadTipo = lista[14] as String,
+            nuevaComunidadPisos = lista[15] as Int,
+            nuevaComunidadDescripcion = lista[16] as String
         )
     }
 )
@@ -210,6 +214,7 @@ fun AppNavHost(
                                                 codigoPostal = datosComunidad.nuevaComunidadCp,
                                                 descripcion = datosComunidad.nuevaComunidadDescripcion,
                                                 tipo = datosComunidad.nuevaComunidadTipo,
+                                                numeroPisos = datosComunidad.nuevaComunidadPisos,
                                                 createdByUid = uid,
                                                 creadorEsAdministrador = true
                                             ).getOrThrow()
@@ -362,6 +367,7 @@ fun AppNavHost(
                             nuevaComunidadCiudad = formulario.ciudad,
                             nuevaComunidadCp = formulario.codigoPostal,
                             nuevaComunidadTipo = formulario.tipo,
+                            nuevaComunidadPisos = formulario.numeroPisos,
                             nuevaComunidadDescripcion = formulario.descripcion
                         )
                         navController.popBackStack()

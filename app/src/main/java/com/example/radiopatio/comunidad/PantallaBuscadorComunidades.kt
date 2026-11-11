@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -78,6 +79,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -103,6 +105,7 @@ data class NuevaComunidadFormulario(
     val ciudad: String,
     val codigoPostal: String,
     val tipo: String,
+    val numeroPisos: Int = 0,
     val descripcion: String
 )
 
@@ -219,6 +222,7 @@ fun BuscadorComunidadesScreen(
                     ciudad = formulario.ciudad,
                     codigoPostal = formulario.codigoPostal,
                     tipo = formulario.tipo,
+                    numeroPisos = formulario.numeroPisos,
                     descripcion = formulario.descripcion
                 ) {
                     onComunidadCambiada()
@@ -1011,6 +1015,12 @@ private fun TarjetaComunidadBuscador(
                     icono = Icons.Outlined.Apartment,
                     texto = comunidad.tipo.ifBlank { "Residencial" }
                 )
+                if (comunidad.esEdificio && comunidad.numeroPisos > 0) {
+                    EtiquetaComunidad(
+                        icono = Icons.Outlined.Apartment,
+                        texto = "${comunidad.numeroPisos} piso${if (comunidad.numeroPisos == 1) "" else "s"}"
+                    )
+                }
                 EtiquetaComunidad(
                     icono = Icons.Outlined.Groups,
                     texto = "${comunidad.totalVecinos} vecino${if (comunidad.totalVecinos == 1) "" else "s"}"
@@ -1135,9 +1145,12 @@ private fun DialogoCrearComunidad(
     var ciudad by remember { mutableStateOf("") }
     var codigoPostal by remember { mutableStateOf("") }
     var tipo by remember { mutableStateOf("Residencial") }
+    var numeroPisosTexto by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
 
-    val tipos = listOf("Residencial", "Urbanización", "Edificio", "Mancomunidad")
+    val tipos = listOf("Residencial", "Urbanización", Comunidad.TIPO_EDIFICIO, "Mancomunidad")
+    val esEdificio = tipo.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true)
+    val numeroPisosValido = numeroPisosTexto.toIntOrNull()?.takeIf { it > 0 }
 
     AlertDialog(
         onDismissRequest = { if (!procesando) onDismiss() },
@@ -1205,10 +1218,29 @@ private fun DialogoCrearComunidad(
                     items(tipos) { itemTipo ->
                         FilterChip(
                             selected = tipo == itemTipo,
-                            onClick = { tipo = itemTipo },
+                            onClick = {
+                                tipo = itemTipo
+                                if (!itemTipo.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true)) {
+                                    numeroPisosTexto = ""
+                                }
+                            },
                             label = { Text(itemTipo, fontSize = 11.sp) }
                         )
                     }
+                }
+
+                if (esEdificio) {
+                    OutlinedTextField(
+                        value = numeroPisosTexto,
+                        onValueChange = { nuevo ->
+                            numeroPisosTexto = nuevo.filter { it.isDigit() }.take(3)
+                        },
+                        label = { Text("Número de pisos del edificio *", fontSize = 12.sp) },
+                        placeholder = { Text("Ej: 5") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 OutlinedTextField(
@@ -1230,11 +1262,15 @@ private fun DialogoCrearComunidad(
                             ciudad = ciudad.trim(),
                             codigoPostal = codigoPostal.trim(),
                             tipo = tipo,
+                            numeroPisos = if (esEdificio) (numeroPisosValido ?: 0) else 0,
                             descripcion = descripcion.trim()
                         )
                     )
                 },
-                enabled = !procesando && nombre.isNotBlank() && direccion.isNotBlank(),
+                enabled = !procesando &&
+                    nombre.isNotBlank() &&
+                    direccion.isNotBlank() &&
+                    (!esEdificio || numeroPisosValido != null),
                 colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro)
             ) {
                 if (procesando) {

@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,13 +62,17 @@ data class DatosRegistroComunidad(
     val nuevaComunidadCiudad: String = "",
     val nuevaComunidadCp: String = "",
     val nuevaComunidadTipo: String = "Residencial",
+    val nuevaComunidadPisos: Int = 0,
     val nuevaComunidadDescripcion: String = ""
 ) {
     fun estaConfigurada(esAdministrador: Boolean = false): Boolean {
+        val pisosValidos = !nuevaComunidadTipo.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true) ||
+            nuevaComunidadPisos > 0
         return when {
             crearNueva -> esAdministrador &&
                 nuevaComunidadNombre.isNotBlank() &&
-                nuevaComunidadDireccion.isNotBlank()
+                nuevaComunidadDireccion.isNotBlank() &&
+                pisosValidos
             esAdministrador -> true
             else -> comunidadExistente != null && !solicitarTraspaso
         }
@@ -105,6 +111,16 @@ fun RegistroNuevoUsuario(
     var nombre by rememberSaveable { mutableStateOf("") }
     var apellidos by rememberSaveable { mutableStateOf("") }
     var vivienda by rememberSaveable { mutableStateOf("") }
+    val comExistenteEdificio = datosComunidad.comunidadExistente
+    val edificioConPisos = !esAdministrador &&
+        !datosComunidad.crearNueva &&
+        comExistenteEdificio?.esEdificio == true &&
+        comExistenteEdificio.numeroPisos > 0
+    val maxPisosEdificio = if (edificioConPisos) comExistenteEdificio?.numeroPisos ?: 0 else 0
+    var pisoSeleccionado by rememberSaveable(comExistenteEdificio?.id, maxPisosEdificio) {
+        mutableStateOf(if (maxPisosEdificio > 0) 1 else 0)
+    }
+    var puertaEdificio by rememberSaveable(comExistenteEdificio?.id) { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
@@ -112,7 +128,11 @@ fun RegistroNuevoUsuario(
     var photoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     val photoUri = photoUriString?.let { Uri.parse(it) }
 
-    val viviendaValida = esAdministrador || vivienda.isNotBlank()
+    val viviendaValida = when {
+        esAdministrador -> true
+        edificioConPisos -> pisoSeleccionado in 1..maxPisosEdificio
+        else -> vivienda.isNotBlank()
+    }
     val formularioValido = !cargando &&
         aceptoNormas &&
         nombre.isNotBlank() &&
@@ -253,25 +273,35 @@ fun RegistroNuevoUsuario(
                     )
                 }
 
-                // Campo Vivienda / Despacho
-                CampoEntradaTexto(
-                    value = vivienda,
-                    onValueChange = { vivienda = it },
-                    placeholder = if (esAdministrador) {
-                        "Despacho o vivienda (opcional)"
-                    } else {
-                        "Piso / Vivienda (ej. Portal 1, 2ºA)"
-                    },
-                    icono = Icons.Outlined.Home,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
                 // Selector unificado que abre la ventana de búsqueda avanzada de comunidades
                 SelectorComunidadRegistro(
                     datosComunidad = datosComunidad,
                     esAdministrador = esAdministrador,
                     onClick = onAbrirBuscadorComunidades
                 )
+
+                // Campo Vivienda / Despacho o selector de pisos si el administrador fijó pisos del edificio
+                if (edificioConPisos) {
+                    SelectorPisoEdificioRegistro(
+                        numeroPisos = maxPisosEdificio,
+                        pisoSeleccionado = pisoSeleccionado,
+                        puerta = puertaEdificio,
+                        onPisoChange = { pisoSeleccionado = it },
+                        onPuertaChange = { puertaEdificio = it }
+                    )
+                } else {
+                    CampoEntradaTexto(
+                        value = vivienda,
+                        onValueChange = { vivienda = it },
+                        placeholder = if (esAdministrador) {
+                            "Despacho o vivienda (opcional)"
+                        } else {
+                            "Piso / Vivienda (ej. Portal 1, 2ºA)"
+                        },
+                        icono = Icons.Outlined.Home,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
                 CampoEntradaTexto(
                     value = email,
@@ -332,8 +362,14 @@ fun RegistroNuevoUsuario(
             Button(
                 onClick = {
                     if (formularioValido) {
-                        val viviendaFinal = vivienda.trim().ifBlank {
-                            if (esAdministrador) "Administración" else ""
+                        val viviendaFinal = when {
+                            edificioConPisos -> {
+                                val puertaLimpia = puertaEdificio.trim()
+                                if (puertaLimpia.isNotBlank()) "${pisoSeleccionado}º $puertaLimpia" else "${pisoSeleccionado}º"
+                            }
+                            vivienda.trim().isNotBlank() -> vivienda.trim()
+                            esAdministrador -> "Administración"
+                            else -> ""
                         }
                         onRegisterClick(
                             nombre.trim(),
@@ -455,6 +491,68 @@ private fun SelectorTipoCuentaRegistro(
 }
 
 @Composable
+private fun SelectorPisoEdificioRegistro(
+    numeroPisos: Int,
+    pisoSeleccionado: Int,
+    puerta: String,
+    onPisoChange: (Int) -> Unit,
+    onPuertaChange: (String) -> Unit
+) {
+    val azulPrincipal = Color(0xFF133E54)
+    val verdeBoton = Color(0xFF0F8A5F)
+    val fondoGrisClaro = Color(0xFFF4F6F8)
+    val bordeGris = Color(0xFFE2E8F0)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(fondoGrisClaro)
+            .border(1.dp, bordeGris, RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "Selecciona tu piso (1º - ${numeroPisos}º) *",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = azulPrincipal
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items((1..numeroPisos).toList()) { piso ->
+                val seleccionado = piso == pisoSeleccionado
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (seleccionado) verdeBoton else Color.White,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (seleccionado) verdeBoton else bordeGris
+                    ),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onPisoChange(piso) }
+                ) {
+                    Text(
+                        text = "${piso}º",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (seleccionado) Color.White else azulPrincipal,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+        CampoEntradaTexto(
+            value = puerta,
+            onValueChange = onPuertaChange,
+            placeholder = "Puerta / Letra (opcional, ej. A o Izq)",
+            icono = Icons.Outlined.Home,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
 private fun SelectorComunidadRegistro(
     datosComunidad: DatosRegistroComunidad,
     esAdministrador: Boolean,
@@ -481,12 +579,23 @@ private fun SelectorComunidadRegistro(
         datosComunidad.crearNueva && datosComunidad.nuevaComunidadDireccion.isNotBlank() ->
             listOf(
                 datosComunidad.nuevaComunidadDireccion,
-                datosComunidad.nuevaComunidadCiudad
+                datosComunidad.nuevaComunidadCiudad,
+                if (datosComunidad.nuevaComunidadTipo.equals(Comunidad.TIPO_EDIFICIO, true) &&
+                    datosComunidad.nuevaComunidadPisos > 0
+                ) {
+                    "${datosComunidad.nuevaComunidadPisos} pisos"
+                } else ""
             ).filter { it.isNotBlank() }.joinToString(" · ")
         datosComunidad.solicitarTraspaso && datosComunidad.comunidadExistente != null ->
             "Se enviará solicitud al administrador actual"
-        datosComunidad.comunidadExistente != null ->
-            datosComunidad.comunidadExistente.direccionCompleta()
+        datosComunidad.comunidadExistente != null -> {
+            val base = datosComunidad.comunidadExistente.direccionCompleta()
+            if (datosComunidad.comunidadExistente.esEdificio && datosComunidad.comunidadExistente.numeroPisos > 0) {
+                "$base · ${datosComunidad.comunidadExistente.numeroPisos} pisos"
+            } else {
+                base
+            }
+        }
         esAdministrador -> "Puedes crear tu 1ª comunidad, solicitar una o entrar sin ella"
         else -> "Pulsa para buscar con filtros y elegir tu comunidad"
     }

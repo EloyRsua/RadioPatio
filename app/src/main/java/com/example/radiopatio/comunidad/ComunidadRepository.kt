@@ -55,6 +55,7 @@ class ComunidadRepository {
             codigoPostal = doc.getString("codigoPostal") ?: "",
             descripcion = doc.getString("descripcion") ?: "",
             tipo = doc.getString("tipo") ?: "Residencial",
+            numeroPisos = (doc.getLong("numeroPisos") ?: 0L).toInt().coerceAtLeast(0),
             totalVecinos = (doc.getLong("totalVecinos") ?: 0L).toInt().coerceAtLeast(0),
             photoUrl = doc.getString("photoUrl") ?: "",
             verificada = doc.getBoolean("verificada") ?: false,
@@ -68,6 +69,7 @@ class ComunidadRepository {
      * Convierte una instancia de [Comunidad] en un mapa serializable para Firestore.
      */
     fun comunidadToMap(comunidad: Comunidad): Map<String, Any?> {
+        val pisosFinales = if (comunidad.esEdificio) comunidad.numeroPisos.coerceAtLeast(0) else 0
         return mapOf(
             "id" to comunidad.id,
             "nombre" to comunidad.nombre,
@@ -76,6 +78,7 @@ class ComunidadRepository {
             "codigoPostal" to comunidad.codigoPostal,
             "descripcion" to comunidad.descripcion,
             "tipo" to comunidad.tipo,
+            "numeroPisos" to pisosFinales,
             "totalVecinos" to comunidad.totalVecinos,
             "photoUrl" to comunidad.photoUrl,
             "verificada" to comunidad.verificada,
@@ -175,6 +178,7 @@ class ComunidadRepository {
         codigoPostal: String = "",
         descripcion: String = "",
         tipo: String = "Residencial",
+        numeroPisos: Int = 0,
         createdByUid: String = "",
         creadorEsAdministrador: Boolean = false
     ): Result<Comunidad> {
@@ -182,6 +186,11 @@ class ComunidadRepository {
         val direccionLimpia = direccion.trim()
         if (nombreLimpio.isBlank() || direccionLimpia.isBlank()) {
             return Result.failure(IllegalArgumentException("El nombre y la dirección de la comunidad son obligatorios."))
+        }
+        val esEdificio = tipo.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true)
+        val pisosFinales = if (esEdificio) numeroPisos else 0
+        if (esEdificio && pisosFinales <= 0) {
+            return Result.failure(IllegalArgumentException("Indica un número de pisos válido para el edificio."))
         }
         if (createdByUid.isBlank()) {
             return Result.failure(SecurityException("Solo los administradores de fincas pueden crear comunidades."))
@@ -209,6 +218,7 @@ class ComunidadRepository {
                 codigoPostal = codigoPostal.trim(),
                 descripcion = descripcion.trim().ifBlank { "Comunidad de vecinos de $nombreLimpio" },
                 tipo = tipo.ifBlank { "Residencial" },
+                numeroPisos = pisosFinales,
                 totalVecinos = 0,
                 photoUrl = "",
                 verificada = false,
@@ -218,6 +228,46 @@ class ComunidadRepository {
             )
             docRef.set(comunidadToMap(nuevaComunidad)).await()
             Result.success(nuevaComunidad)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Permite al administrador de fincas de una comunidad de tipo Edificio dictaminar
+     * o actualizar su número total de pisos.
+     */
+    suspend fun actualizarNumeroPisos(
+        comunidadId: String,
+        administradorUid: String,
+        numeroPisos: Int
+    ): Result<Unit> {
+        if (comunidadId.isBlank() || administradorUid.isBlank()) {
+            return Result.failure(IllegalArgumentException("Datos de comunidad inválidos."))
+        }
+        if (numeroPisos <= 0) {
+            return Result.failure(IllegalArgumentException("El edificio debe tener al menos 1 piso."))
+        }
+
+        return try {
+            val comRef = db.collection(COLECCION_COMUNIDADES).document(comunidadId)
+            db.runTransaction { transaction ->
+                val comSnap = transaction.get(comRef)
+                if (!comSnap.exists()) {
+                    throw IllegalStateException("La comunidad no existe en Firestore.")
+                }
+                val adminEnDoc = comSnap.getString("administradorUid")?.trim().orEmpty()
+                if (adminEnDoc != administradorUid) {
+                    throw SecurityException("Solo el administrador de fincas de este edificio puede fijar los pisos.")
+                }
+                val tipoDoc = comSnap.getString("tipo").orEmpty()
+                if (!tipoDoc.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true)) {
+                    throw IllegalStateException("Solo las comunidades de tipo Edificio definen número de pisos.")
+                }
+                transaction.update(comRef, "numeroPisos", numeroPisos)
+                null
+            }.await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

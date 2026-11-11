@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -68,6 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -123,6 +125,9 @@ fun VecinosScreen(
         onAbrirDialogoTransferirPresidencia = viewModel::onAbrirDialogoTransferirPresidencia,
         onCerrarDialogoTransferirPresidencia = viewModel::onCerrarDialogoTransferirPresidencia,
         onConfirmarTransferenciaPresidencia = viewModel::onTransferirPresidencia,
+        onAbrirDialogoEditarPisos = viewModel::onAbrirDialogoEditarPisos,
+        onCerrarDialogoEditarPisos = viewModel::onCerrarDialogoEditarPisos,
+        onActualizarNumeroPisos = viewModel::onActualizarNumeroPisos,
         onCambiarComunidadAdministrada = viewModel::onCambiarComunidadAdministrada,
         onAceptarSolicitudAdmin = viewModel::onAceptarSolicitudAdmin,
         onRechazarSolicitudAdmin = viewModel::onRechazarSolicitudAdmin,
@@ -142,6 +147,9 @@ fun VecinosContent(
     onAbrirDialogoTransferirPresidencia: () -> Unit = {},
     onCerrarDialogoTransferirPresidencia: () -> Unit = {},
     onConfirmarTransferenciaPresidencia: (Usuario) -> Unit = {},
+    onAbrirDialogoEditarPisos: () -> Unit = {},
+    onCerrarDialogoEditarPisos: () -> Unit = {},
+    onActualizarNumeroPisos: (Int) -> Unit = {},
     onCambiarComunidadAdministrada: (Comunidad) -> Unit = {},
     onAceptarSolicitudAdmin: (SolicitudTraspasoAdmin) -> Unit = {},
     onRechazarSolicitudAdmin: (SolicitudTraspasoAdmin) -> Unit = {},
@@ -236,9 +244,11 @@ fun VecinosContent(
                                     totalMiembrosReales = uiState.vecinos.size,
                                     esPresidenteActual = uiState.esPresidenteActual,
                                     esAdministradorCuenta = esAdministrador,
+                                    esAdministradorDeEstaComunidad = uiState.esAdministradorActual,
                                     hayOtrosMiembros = candidatosPresidencia.isNotEmpty(),
                                     onCambiarComunidad = onIrABuscarComunidad,
-                                    onTransferirPresidencia = onAbrirDialogoTransferirPresidencia
+                                    onTransferirPresidencia = onAbrirDialogoTransferirPresidencia,
+                                    onEditarPisos = onAbrirDialogoEditarPisos
                                 )
                             }
                         }
@@ -332,6 +342,16 @@ fun VecinosContent(
             onConfirmar = onConfirmarTransferenciaPresidencia
         )
     }
+
+    if (uiState.mostrarDialogoEditarPisos && uiState.esAdministradorActual && uiState.comunidad?.esEdificio == true) {
+        DialogoEditarNumeroPisos(
+            nombreEdificio = uiState.comunidad.nombre,
+            pisosActuales = uiState.comunidad.numeroPisos,
+            procesando = uiState.procesandoPisos,
+            onDismiss = onCerrarDialogoEditarPisos,
+            onConfirmar = onActualizarNumeroPisos
+        )
+    }
 }
 
 @Composable
@@ -377,9 +397,11 @@ private fun TarjetaInfoComunidad(
     totalMiembrosReales: Int,
     esPresidenteActual: Boolean,
     esAdministradorCuenta: Boolean = false,
+    esAdministradorDeEstaComunidad: Boolean = false,
     hayOtrosMiembros: Boolean,
     onCambiarComunidad: () -> Unit,
-    onTransferirPresidencia: () -> Unit
+    onTransferirPresidencia: () -> Unit,
+    onEditarPisos: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -508,6 +530,46 @@ private fun TarjetaInfoComunidad(
                     texto = comunidad.tipo.ifBlank { "Residencial" },
                     modifier = Modifier.weight(1f)
                 )
+            }
+
+            if (comunidad.esEdificio) {
+                Spacer(modifier = Modifier.height(8.dp))
+                DatoComunidadPill(
+                    icono = Icons.Outlined.Apartment,
+                    texto = if (comunidad.numeroPisos > 0) {
+                        "${comunidad.numeroPisos} piso${if (comunidad.numeroPisos == 1) "" else "s"}"
+                    } else {
+                        "Pisos sin definir"
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (esAdministradorDeEstaComunidad && comunidad.esEdificio) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onEditarPisos,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AdminPanelSettings,
+                        contentDescription = null,
+                        tint = AzulPrincipal,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (comunidad.numeroPisos > 0) {
+                            "Editar pisos del edificio (${comunidad.numeroPisos})"
+                        } else {
+                            "Dictaminar pisos del edificio"
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AzulPrincipal
+                    )
+                }
             }
 
             if (esPresidenteActual) {
@@ -1251,6 +1313,81 @@ private fun DialogoTransferirPresidencia(
                     )
                 } else {
                     Text("Confirmar transferencia")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !procesando) {
+                Text("Cancelar", color = Color.Gray)
+            }
+        }
+    )
+}
+
+@Composable
+private fun DialogoEditarNumeroPisos(
+    nombreEdificio: String,
+    pisosActuales: Int,
+    procesando: Boolean,
+    onDismiss: () -> Unit,
+    onConfirmar: (Int) -> Unit
+) {
+    var pisosTexto by remember(pisosActuales) {
+        mutableStateOf(if (pisosActuales > 0) pisosActuales.toString() else "")
+    }
+    val pisosValido = pisosTexto.toIntOrNull()?.takeIf { it > 0 }
+
+    AlertDialog(
+        onDismissRequest = { if (!procesando) onDismiss() },
+        containerColor = Color.White,
+        title = {
+            Text(
+                text = "Pisos del edificio",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = AzulPrincipal
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Como administrador de \"$nombreEdificio\", dictamina el número de pisos disponibles para los vecinos del edificio.",
+                    fontSize = 13.sp,
+                    color = Color(0xFF546E7A)
+                )
+                OutlinedTextField(
+                    value = pisosTexto,
+                    onValueChange = { nuevo ->
+                        pisosTexto = nuevo.filter { it.isDigit() }.take(3)
+                    },
+                    label = { Text("Número de pisos *") },
+                    placeholder = { Text("Ej. 6") },
+                    singleLine = true,
+                    enabled = !procesando,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = VerdeOscuro,
+                        unfocusedBorderColor = Color(0xFFD0D7DE)
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { pisosValido?.let(onConfirmar) },
+                enabled = !procesando && pisosValido != null,
+                colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro)
+            ) {
+                if (procesando) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Guardar")
                 }
             }
         },

@@ -28,6 +28,9 @@ data class ComunidadEntidad(
     @ColumnInfo(name = "tipo")
     val tipo: String = "Residencial",
 
+    @ColumnInfo(name = "numero_pisos")
+    val numeroPisos: Int = 0,
+
     @ColumnInfo(name = "total_vecinos")
     val totalVecinos: Int = 0,
 
@@ -49,6 +52,7 @@ fun Comunidad.toEntidad(): ComunidadEntidad = ComunidadEntidad(
     codigoPostal = codigoPostal,
     descripcion = descripcion,
     tipo = tipo,
+    numeroPisos = numeroPisos,
     totalVecinos = totalVecinos,
     presidenteUid = presidenteUid,
     administradorUid = administradorUid,
@@ -63,6 +67,7 @@ fun ComunidadEntidad.toModelo(): Comunidad = Comunidad(
     codigoPostal = codigoPostal,
     descripcion = descripcion,
     tipo = tipo,
+    numeroPisos = numeroPisos,
     totalVecinos = totalVecinos,
     presidenteUid = presidenteUid,
     administradorUid = administradorUid,

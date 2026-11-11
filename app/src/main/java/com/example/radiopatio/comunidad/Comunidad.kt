@@ -11,6 +11,7 @@ data class Comunidad(
     val codigoPostal: String = "",
     val descripcion: String = "",
     val tipo: String = "Residencial",
+    val numeroPisos: Int = 0,
     val totalVecinos: Int = 0,
     val photoUrl: String = "",
     val verificada: Boolean = false,
@@ -18,6 +19,9 @@ data class Comunidad(
     val administradorUid: String = "",
     val createdByUid: String = ""
 ) {
+    val esEdificio: Boolean
+        get() = tipo.equals(TIPO_EDIFICIO, ignoreCase = true)
+
     /**
      * Devuelve la dirección formateada para mostrar en tarjetas de comunidad.
      */
@@ -25,6 +29,10 @@ data class Comunidad(
         val partes = listOf(direccion.trim(), codigoPostal.trim(), ciudad.trim())
             .filter { it.isNotBlank() }
         return if (partes.isEmpty()) "Dirección no especificada" else partes.joinToString(" · ")
+    }
+
+    companion object {
+        const val TIPO_EDIFICIO = "Edificio"
     }
 }
 
