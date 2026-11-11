@@ -6,111 +6,215 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.radiopatio.comunidad.ComunidadRepository
 import com.example.radiopatio.data.PublicacionDao
 import com.example.radiopatio.data.PublicacionEntidad
+import com.example.radiopatio.informacionUsuario.Usuario
+import com.example.radiopatio.publicacion.PublicacionRepository
+import com.example.radiopatio.usuarios.UserRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Estado inmutable del Tablón principal con aislamiento multi-inquilino por `comunidadIdActual`.
+ */
+data class TablonUiState(
+    val comunidadIdActual: String = "",
+    val comunidadNombre: String = "",
+    val usuarioActual: Usuario? = null,
+    val publicacionesTotales: List<PublicacionEntidad> = emptyList(),
+    val textoBusqueda: String = "",
+    val cargando: Boolean = true,
+    val errorMensaje: String? = null
+) {
+    val publicacionesFiltradas: List<PublicacionEntidad>
+        get() = publicacionesTotales.filter { pub ->
+            val coincideComunidad = comunidadIdActual.isNotBlank() && pub.comunidadId == comunidadIdActual
+            val consulta = textoBusqueda.trim()
+            val coincideTexto = consulta.isBlank() ||
+                pub.contenido.contains(consulta, ignoreCase = true) ||
+                pub.autor.contains(consulta, ignoreCase = true) ||
+                pub.tiempoYUbica.contains(consulta, ignoreCase = true)
+            coincideComunidad && coincideTexto
+        }
+}
+
 class RadioPatioViewModelFactory(
-    private val publicacionDao: PublicacionDao
+    private val publicacionDao: PublicacionDao,
+    private val userRepository: UserRepository = UserRepository(),
+    private val publicacionRepository: PublicacionRepository = PublicacionRepository(),
+    private val comunidadRepository: ComunidadRepository = ComunidadRepository()
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(RadioPatioViewModel::class.java)) {
-            return RadioPatioViewModel(publicacionDao) as T
+            return RadioPatioViewModel(
+                publicacionDao = publicacionDao,
+                userRepository = userRepository,
+                publicacionRepository = publicacionRepository,
+                comunidadRepository = comunidadRepository
+            ) as T
         }
         throw IllegalArgumentException("Clase ViewModel desconocida")
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RadioPatioViewModel(
-    private val publicacionDao: PublicacionDao
+    private val publicacionDao: PublicacionDao,
+    private val userRepository: UserRepository = UserRepository(),
+    private val publicacionRepository: PublicacionRepository = PublicacionRepository(),
+    private val comunidadRepository: ComunidadRepository = ComunidadRepository()
 ) : ViewModel() {
 
-    var publicaciones by mutableStateOf<List<PublicacionEntidad>>(emptyList())
+    var uiState by mutableStateOf(TablonUiState())
         private set
 
-    fun cargarPublicaciones() {
-        viewModelScope.launch { // Inicia corrutina en el ámbito del ViewModel[cite: 12]
-            val lista = withContext(Dispatchers.IO) { // Cambia el contexto al hilo de E/S[cite: 15]
-                publicacionDao.obtenerPublicaciones()
-            }
-            publicaciones = lista
+    val publicaciones: List<PublicacionEntidad>
+        get() = uiState.publicacionesFiltradas
+
+    private var syncFirestoreJob: Job? = null
+    private var comunidadSincronizada: String? = null
+
+    init {
+        observarTablonEnTiempoReal()
+    }
+
+    private fun observarTablonEnTiempoReal() {
+        viewModelScope.launch {
+            userRepository.observarUsuarioActual()
+                .flatMapLatest { usuario ->
+                    val comId = usuario?.comunidadId.orEmpty()
+                    sincronizarFirestoreConRoom(comId)
+
+                    if (comId.isBlank()) {
+                        flowOf(Triple<Usuario?, String, List<PublicacionEntidad>>(usuario, "", emptyList()))
+                    } else {
+                        combine(
+                            comunidadRepository.observarComunidadPorId(comId),
+                            publicacionDao.observarPublicacionesPorComunidad(comId)
+                        ) { comunidad, listaRoom ->
+                            val nombreCom = comunidad?.nombre?.takeIf { it.isNotBlank() }
+                                ?: usuario?.comunidadNombre
+                                ?: ""
+                            Triple(usuario, nombreCom, listaRoom)
+                        }
+                    }
+                }
+                .collect { (usuario, nombreCom, lista) ->
+                    val comId = usuario?.comunidadId.orEmpty()
+                    uiState = uiState.copy(
+                        comunidadIdActual = comId,
+                        comunidadNombre = nombreCom,
+                        usuarioActual = usuario,
+                        publicacionesTotales = lista.filter { comId.isNotBlank() && it.comunidadId == comId },
+                        cargando = false
+                    )
+                }
         }
     }
 
-    fun crearPublicacion(publicacion: PublicacionEntidad) {
+    private fun sincronizarFirestoreConRoom(comunidadId: String) {
+        if (comunidadSincronizada == comunidadId) return
+        comunidadSincronizada = comunidadId
+        syncFirestoreJob?.cancel()
+        if (comunidadId.isBlank()) return
+
+        syncFirestoreJob = viewModelScope.launch {
+            publicacionRepository.observarPublicacionesDeComunidad(comunidadId)
+                .collect { remotas ->
+                    val filtradas = remotas.filter { it.comunidadId == comunidadId }
+                    withContext(Dispatchers.IO) {
+                        publicacionDao.reemplazarPublicacionesComunidad(comunidadId, filtradas)
+                    }
+                }
+        }
+    }
+
+    fun onTextoBusquedaChange(nuevoTexto: String) {
+        uiState = uiState.copy(textoBusqueda = nuevoTexto)
+    }
+
+    fun onLimpiarError() {
+        uiState = uiState.copy(errorMensaje = null)
+    }
+
+    fun crearPublicacion(
+        autor: String,
+        ubicacion: String,
+        contenido: String,
+        onResultado: (Boolean) -> Unit = {}
+    ) {
+        val comId = uiState.comunidadIdActual
+        if (comId.isBlank()) {
+            uiState = uiState.copy(errorMensaje = "Únete primero a una comunidad para publicar.")
+            onResultado(false)
+            return
+        }
+
+        val autorLimpio = autor.trim().ifBlank {
+            uiState.usuarioActual?.nombre?.ifBlank { "Vecino Anónimo" } ?: "Vecino Anónimo"
+        }
+        val ubicacionLimpia = ubicacion.trim().ifBlank {
+            uiState.usuarioActual?.vivienda?.ifBlank { "Comunidad" } ?: "Comunidad"
+        }
+        val inicial = autorLimpio.firstOrNull()?.uppercase() ?: "V"
+        val uid = uiState.usuarioActual?.uid.orEmpty()
+
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                publicacionDao.insertar(publicacion)
+            val resultado = publicacionRepository.crearPublicacion(
+                comunidadId = comId,
+                autorUid = uid,
+                autor = autorLimpio,
+                inicial = inicial,
+                tiempoYUbica = "Ahora mismo · $ubicacionLimpia",
+                contenido = contenido.trim()
+            )
+            resultado.onSuccess { entidad ->
+                withContext(Dispatchers.IO) {
+                    publicacionDao.insertar(entidad)
+                }
+                onResultado(true)
+            }.onFailure { error ->
+                uiState = uiState.copy(
+                    errorMensaje = error.localizedMessage ?: "Error al crear la publicación."
+                )
+                onResultado(false)
             }
-            cargarPublicaciones() // Recarga la lista tras insertar
         }
     }
 
     /**
-     * Elimina una publicación de la base de datos Room y recarga la lista[cite: 22, 35].
+     * Elimina una publicación de Firestore y Room validando el aislamiento por comunidad.
      */
     fun eliminarPublicacion(publicacion: PublicacionEntidad) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                publicacionDao.eliminar(publicacion)
-            }
-            cargarPublicaciones() // Recarga la lista tras eliminar
+        val comId = uiState.comunidadIdActual
+        if (comId.isBlank() || publicacion.comunidadId != comId) {
+            uiState = uiState.copy(errorMensaje = "No puedes eliminar publicaciones de otra comunidad.")
+            return
         }
-    }
 
-    fun insertarDatosIniciales() {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                if (publicacionDao.obtenerPublicaciones().isEmpty()) {
-                    val datosEjemplo = listOf(
-                        PublicacionEntidad(
-                            autor = "Lucía Fernández",
-                            inicial = "L",
-                            tiempoYUbica = "Hace 2 h · Calle Mayor",
-                            contenido = "¡Buenas vecin@s! ☀️ Este sábado organizamos una quedada en el parque para tomar algo. ¡Os esperamos!",
-                            meGusta = 24,
-                            comentarios = 6
-                        ),
-                        PublicacionEntidad(
-                            autor = "María García",
-                            inicial = "M",
-                            tiempoYUbica = "Hace 3 h · Calle Mayor",
-                            contenido = "Se ha encontrado un peluche en el portal, se ha dejado en la garita del conserje.",
-                            meGusta = 0,
-                            comentarios = 0
-                        ),
-                        PublicacionEntidad(
-                            autor = "Carlos Ruiz",
-                            inicial = "C",
-                            tiempoYUbica = "Hace 5 h · Portal 4",
-                            contenido = "¿Alguien sabe si mañana cortan el agua por obras en la caldera?",
-                            meGusta = 4,
-                            comentarios = 8
-                        ),
-                        PublicacionEntidad(
-                            autor = "Ana Belén",
-                            inicial = "A",
-                            tiempoYUbica = "Hace 6 h · 2º B",
-                            contenido = "Tengo cajas de cartón limpias para mudanza por si a alguien le hacen falta antes de tirarlas al contenedor azul.",
-                            meGusta = 9,
-                            comentarios = 3
-                        ),
-                        PublicacionEntidad(
-                            autor = "Javier Gómez",
-                            inicial = "J",
-                            tiempoYUbica = "Ayer · Garaje",
-                            contenido = "Recordad aparcar dentro de las líneas en la planta -1 para no dificultar la maniobra de salida.",
-                            meGusta = 15,
-                            comentarios = 2
-                        )
-                    )
-                    datosEjemplo.forEach { publicacionDao.insertar(it) }
+            val resultado = publicacionRepository.eliminarPublicacion(publicacion, comId)
+            resultado.onSuccess {
+                withContext(Dispatchers.IO) {
+                    if (publicacion.firestoreId.isNotBlank()) {
+                        publicacionDao.eliminarPorFirestoreId(publicacion.firestoreId, comId)
+                    } else {
+                        publicacionDao.eliminar(publicacion)
+                    }
                 }
+            }.onFailure { error ->
+                uiState = uiState.copy(
+                    errorMensaje = error.localizedMessage ?: "No se pudo eliminar la publicación."
+                )
             }
-            cargarPublicaciones()
         }
     }
 }

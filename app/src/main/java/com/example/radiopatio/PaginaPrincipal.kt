@@ -1,5 +1,7 @@
 package com.example.radiopatio
 
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -12,7 +14,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Apartment
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
@@ -24,129 +29,216 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.radiopatio.data.PublicacionEntidad
+import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.publicacion.Publicacion
 import com.example.radiopatio.publicacion.TarjetaPublicacion
 import com.example.radiopatio.ui.theme.RadioPatioTheme
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PaginaPrincipal(
     modifier: Modifier = Modifier,
-    onIrACrearPublicacion: () -> Unit = {}
+    onIrACrearPublicacion: () -> Unit = {},
+    onIrAComunidad: () -> Unit = {},
+    viewModel: RadioPatioViewModel = viewModel(
+        factory = RadioPatioViewModelFactory(
+            (LocalContext.current.applicationContext as RadioPatioApplication).database.publicacionDao()
+        )
+    )
 ) {
     val context = LocalContext.current
-    val app = context.applicationContext as RadioPatioApplication
-
-    val viewModel: RadioPatioViewModel = viewModel(
-        factory = RadioPatioViewModelFactory(app.database.publicacionDao())
-    )
-
-    // Identidad del usuario con sesión activa en Firebase
-    var nombreUsuarioActual by remember { mutableStateOf("") }
-    var emailUsuarioActual by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        viewModel.insertarDatosIniciales()
-
-        // Obtener usuario actual de Firebase Auth y Firestore
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        if (currentUser != null) {
-            emailUsuarioActual = currentUser.email ?: ""
-            try {
-                val snapshot = FirebaseFirestore.getInstance()
-                    .collection("users")
-                    .document(currentUser.uid)
-                    .get()
-                    .await()
-
-                if (snapshot.exists()) {
-                    val nombre = snapshot.getString("nombre") ?: ""
-                    val apellidos = snapshot.getString("apellidos") ?: ""
-                    nombreUsuarioActual = "$nombre $apellidos".trim()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+    val errorMsg = viewModel.uiState.errorMensaje
+    LaunchedEffect(errorMsg) {
+        errorMsg?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            viewModel.onLimpiarError()
         }
     }
 
+    PaginaPrincipalContent(
+        uiState = viewModel.uiState,
+        modifier = modifier,
+        onTextoBusquedaChange = viewModel::onTextoBusquedaChange,
+        onIrACrearPublicacion = onIrACrearPublicacion,
+        onIrAComunidad = onIrAComunidad,
+        onEliminarPublicacion = viewModel::eliminarPublicacion
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun PaginaPrincipalContent(
+    uiState: TablonUiState,
+    modifier: Modifier = Modifier,
+    onTextoBusquedaChange: (String) -> Unit = {},
+    onIrACrearPublicacion: () -> Unit = {},
+    onIrAComunidad: () -> Unit = {},
+    onEliminarPublicacion: (PublicacionEntidad) -> Unit = {}
+) {
+    var mostrarBuscador by remember { mutableStateOf(false) }
+
+    val publicacionesVisibles = uiState.publicacionesFiltradas
+    val uidActual = uiState.usuarioActual?.uid.orEmpty()
+    val nombreUsuarioActual = uiState.usuarioActual?.nombre.orEmpty()
+    val emailUsuarioActual = uiState.usuarioActual?.email.orEmpty()
+
     Scaffold(
         modifier = modifier,
-        topBar = { BarraSuperior() },
+        topBar = {
+            BarraSuperior(
+                nombreComunidad = uiState.comunidadNombre,
+                buscadorActivo = mostrarBuscador,
+                onToggleBuscador = {
+                    mostrarBuscador = !mostrarBuscador
+                    if (!mostrarBuscador) onTextoBusquedaChange("")
+                }
+            )
+        },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onIrACrearPublicacion,
-                containerColor = Color(0xFF389F82),
-                contentColor = Color.White,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(4.dp)
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Nueva publicación")
+            if (uiState.comunidadIdActual.isNotBlank()) {
+                FloatingActionButton(
+                    onClick = onIrACrearPublicacion,
+                    containerColor = Color(0xFF389F82),
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Nueva publicación")
+                }
             }
         }
     ) { rellenoInterior ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF9FAFB))
-                .padding(rellenoInterior),
-            contentPadding = PaddingValues(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(rellenoInterior)
         ) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp)
-                ) {
-                    CampoCrearPublicacion(
-                        onCrearClick = onIrACrearPublicacion
+            when {
+                uiState.cargando -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Color(0xFF389F82)
                     )
                 }
-            }
 
-            stickyHeader {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFF9FAFB))
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    NoticiaFijada()
+                uiState.comunidadIdActual.isBlank() -> {
+                    SinComunidadTablonCard(
+                        onIrAComunidad = onIrAComunidad,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(24.dp)
+                    )
                 }
-            }
 
-            items(viewModel.publicaciones) { entidad ->
-                // Comprobamos si el autor del post coincide con el usuario autenticado
-                val esMiPublicacion = (nombreUsuarioActual.isNotBlank() && entidad.autor.contains(nombreUsuarioActual, ignoreCase = true)) ||
-                        (emailUsuarioActual.isNotBlank() && entidad.autor.contains(emailUsuarioActual.substringBefore("@"), ignoreCase = true))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    TarjetaPublicacion(
-                        publicacion = Publicacion(
-                            autor = entidad.autor,
-                            inicial = entidad.inicial,
-                            tiempoYUbica = entidad.tiempoYUbica,
-                            contenido = entidad.contenido,
-                            meGusta = entidad.meGusta,
-                            comentarios = entidad.comentarios
-                        ),
-                        esMiPublicacion = esMiPublicacion,
-                        onEliminarClick = {
-                            viewModel.eliminarPublicacion(entidad)
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 84.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        item {
+                            AnimatedVisibility(visible = mostrarBuscador) {
+                                OutlinedTextField(
+                                    value = uiState.textoBusqueda,
+                                    onValueChange = onTextoBusquedaChange,
+                                    placeholder = { Text("Buscar avisos en el tablón...", fontSize = 13.sp) },
+                                    singleLine = true,
+                                    trailingIcon = {
+                                        if (uiState.textoBusqueda.isNotBlank()) {
+                                            IconButton(onClick = { onTextoBusquedaChange("") }) {
+                                                Icon(Icons.Outlined.Close, contentDescription = "Limpiar")
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = Color.White,
+                                        unfocusedContainerColor = Color.White
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                            }
                         }
-                    )
+
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                            ) {
+                                CampoCrearPublicacion(
+                                    onCrearClick = onIrACrearPublicacion
+                                )
+                            }
+                        }
+
+                        stickyHeader {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFF9FAFB))
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                            ) {
+                                NoticiaFijada(nombreComunidad = uiState.comunidadNombre)
+                            }
+                        }
+
+                        if (publicacionesVisibles.isEmpty()) {
+                            item {
+                                EstadoTablonVacio(
+                                    hayBusqueda = uiState.textoBusqueda.isNotBlank(),
+                                    onCrearClick = onIrACrearPublicacion
+                                )
+                            }
+                        } else {
+                            items(
+                                items = publicacionesVisibles,
+                                key = { it.firestoreId.ifBlank { "local-${it.id}" } }
+                            ) { entidad ->
+                                val esMiPublicacion =
+                                    (uidActual.isNotBlank() && entidad.autorUid == uidActual) ||
+                                        (entidad.autorUid.isBlank() && (
+                                            (nombreUsuarioActual.isNotBlank() &&
+                                                entidad.autor.contains(nombreUsuarioActual, ignoreCase = true)) ||
+                                                (emailUsuarioActual.isNotBlank() &&
+                                                    entidad.autor.contains(
+                                                        emailUsuarioActual.substringBefore("@"),
+                                                        ignoreCase = true
+                                                    ))
+                                            ))
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                ) {
+                                    TarjetaPublicacion(
+                                        publicacion = Publicacion(
+                                            autor = entidad.autor,
+                                            inicial = entidad.inicial,
+                                            tiempoYUbica = entidad.tiempoYUbica,
+                                            contenido = entidad.contenido,
+                                            meGusta = entidad.meGusta,
+                                            comentarios = entidad.comentarios
+                                        ),
+                                        esMiPublicacion = esMiPublicacion,
+                                        onEliminarClick = {
+                                            onEliminarPublicacion(entidad)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -154,7 +246,11 @@ fun PaginaPrincipal(
 }
 
 @Composable
-private fun BarraSuperior() {
+private fun BarraSuperior(
+    nombreComunidad: String,
+    buscadorActivo: Boolean,
+    onToggleBuscador: () -> Unit
+) {
     Surface(shadowElevation = 2.dp) {
         Row(
             modifier = Modifier
@@ -174,15 +270,31 @@ private fun BarraSuperior() {
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Text(
-                text = "RadioPatio",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF133E54),
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Search, contentDescription = "Buscar", tint = Color(0xFF133E54))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "RadioPatio",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF133E54)
+                )
+                if (nombreComunidad.isNotBlank()) {
+                    Text(
+                        text = nombreComunidad,
+                        fontSize = 11.sp,
+                        color = Color(0xFF0F8A5F),
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            IconButton(onClick = onToggleBuscador) {
+                Icon(
+                    imageVector = if (buscadorActivo) Icons.Outlined.Close else Icons.Outlined.Search,
+                    contentDescription = "Buscar",
+                    tint = Color(0xFF133E54)
+                )
             }
             IconButton(onClick = {}) {
                 Icon(Icons.Outlined.Notifications, contentDescription = "Avisos", tint = Color(0xFF133E54))
@@ -192,7 +304,7 @@ private fun BarraSuperior() {
 }
 
 @Composable
-private fun NoticiaFijada() {
+private fun NoticiaFijada(nombreComunidad: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -206,22 +318,28 @@ private fun NoticiaFijada() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "📌 NOTICIA FIJADA",
+                text = "📌 TABLÓN COMUNITARIO",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0F8A5F)
             )
-            Text(text = "Hasta el 12 de octubre.", fontSize = 11.sp, color = Color(0xFF0F8A5F))
+            Text(
+                text = nombreComunidad.ifBlank { "En directo" },
+                fontSize = 11.sp,
+                color = Color(0xFF0F8A5F),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Fiestas del Barrio 2026 🎉",
+            text = "Espacio exclusivo de tu comunidad",
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
             color = Color(0xFF1A1A1A)
         )
         Text(
-            text = "Este sábado celebramos las fiestas en el parque del Oeste. Música, comida y actividades.",
+            text = "Comparte avisos, consultas y noticias en tiempo real únicamente con tus vecinos.",
             fontSize = 12.sp,
             color = Color(0xFF455A64)
         )
@@ -243,7 +361,7 @@ private fun CampoCrearPublicacion(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "¿Qué quieres compartir hoy?",
+            text = "¿Qué quieres compartir hoy con tu comunidad?",
             fontSize = 13.sp,
             color = Color.Gray,
             modifier = Modifier.weight(1f)
@@ -257,10 +375,152 @@ private fun CampoCrearPublicacion(
     }
 }
 
+@Composable
+private fun SinComunidadTablonCard(
+    onIrAComunidad: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Apartment,
+                contentDescription = null,
+                tint = Color(0xFF0F8A5F),
+                modifier = Modifier.size(44.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Sin comunidad asignada",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF133E54)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Para ver y publicar avisos en el tablón, selecciona o crea tu comunidad en la pestaña Vecinos.",
+                fontSize = 13.sp,
+                color = Color(0xFF64748B),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onIrAComunidad,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F8A5F)),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Text("Ir a Vecinos y Comunidad", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EstadoTablonVacio(
+    hayBusqueda: Boolean,
+    onCrearClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Forum,
+            contentDescription = null,
+            tint = Color(0xFF90A4AE),
+            modifier = Modifier.size(44.dp)
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = if (hayBusqueda) "Sin resultados" else "Aún no hay publicaciones en tu comunidad",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF133E54),
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = if (hayBusqueda) {
+                "Prueba con otro término de búsqueda."
+            } else {
+                "Sé el primero en compartir un aviso con tus vecinos."
+            },
+            fontSize = 12.sp,
+            color = Color.Gray,
+            textAlign = TextAlign.Center
+        )
+        if (!hayBusqueda) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Button(
+                onClick = onCrearClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF389F82)),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Text("Crear publicación", fontSize = 12.sp)
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun PaginaPrincipalPreview() {
+    val usuarioEjemplo = Usuario(
+        nombre = "Lucía Fernández",
+        inicial = "L",
+        vivienda = "Portal 1, 4ºC",
+        email = "lucia@radiopatio.com",
+        telefono = "",
+        uid = "u_lucia",
+        comunidadId = "com_1",
+        comunidadNombre = "Residencial Montecerrao"
+    )
+    val publicacionesEjemplo = listOf(
+        PublicacionEntidad(
+            id = 1,
+            firestoreId = "p1",
+            comunidadId = "com_1",
+            autorUid = "u_lucia",
+            autor = "Lucía Fernández",
+            inicial = "L",
+            tiempoYUbica = "Hace 2 h · Portal 1, 4ºC",
+            contenido = "¡Buenas vecin@s! Este sábado organizamos una quedada en el parque.",
+            meGusta = 24,
+            comentarios = 6,
+            timestamp = 2L
+        ),
+        PublicacionEntidad(
+            id = 2,
+            firestoreId = "p2",
+            comunidadId = "com_1",
+            autorUid = "u_carlos",
+            autor = "Carlos Ruiz",
+            inicial = "C",
+            tiempoYUbica = "Hace 5 h · Portal 3, 2ºA",
+            contenido = "¿Alguien sabe a qué hora vienen a revisar la caldera?",
+            meGusta = 4,
+            comentarios = 8,
+            timestamp = 1L
+        )
+    )
     RadioPatioTheme {
-        PaginaPrincipal()
+        PaginaPrincipalContent(
+            uiState = TablonUiState(
+                comunidadIdActual = "com_1",
+                comunidadNombre = "Residencial Montecerrao",
+                usuarioActual = usuarioEjemplo,
+                publicacionesTotales = publicacionesEjemplo,
+                cargando = false
+            )
+        )
     }
 }

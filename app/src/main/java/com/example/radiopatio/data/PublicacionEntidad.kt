@@ -9,6 +9,15 @@ data class PublicacionEntidad(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
 
+    @ColumnInfo(name = "firestore_id", defaultValue = "")
+    val firestoreId: String = "",
+
+    @ColumnInfo(name = "comunidad_id", defaultValue = "")
+    val comunidadId: String = "",
+
+    @ColumnInfo(name = "autor_uid", defaultValue = "")
+    val autorUid: String = "",
+
     @ColumnInfo(name = "autor")
     val autor: String,
 
@@ -25,5 +34,8 @@ data class PublicacionEntidad(
     val meGusta: Int,
 
     @ColumnInfo(name = "comentarios")
-    val comentarios: Int
+    val comentarios: Int,
+
+    @ColumnInfo(name = "timestamp", defaultValue = "0")
+    val timestamp: Long = 0L
 )

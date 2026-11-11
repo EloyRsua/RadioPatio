@@ -18,15 +18,17 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaCrearPublicacion(
+    autorInicial: String = "",
+    ubicacionInicial: String = "",
     onVolver: () -> Unit = {},
     onPublicarClick: (autor: String, ubicacion: String, contenido: String) -> Unit = { _, _, _ -> }
 ) {
     val azulPrincipal = Color(0xFF133E54)
     val verdeBoton = Color(0xFF0F8A5F)
 
-    // Estados manuales editables (iniciados con valores de ejemplo o vacíos)
-    var autor by remember { mutableStateOf("") }
-    var ubicacion by remember { mutableStateOf("") }
+    // Estados manuales editables (pre-rellenados con la sesión del usuario si está disponible)
+    var autor by remember(autorInicial) { mutableStateOf(autorInicial) }
+    var ubicacion by remember(ubicacionInicial) { mutableStateOf(ubicacionInicial) }
     var contenido by remember { mutableStateOf("") }
 
     Scaffold(

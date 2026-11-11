@@ -8,5 +8,9 @@ data class Usuario(
     val telefono: String,
     val rol: String = "Vecino/a",
     val fechaAlta: String = "Enero 2026",
-    val totalPublicaciones: Int = 0
+    val totalPublicaciones: Int = 0,
+    val uid: String = "",
+    val comunidadId: String = "",
+    val comunidadNombre: String = "",
+    val photoUrl: String = ""
 )
