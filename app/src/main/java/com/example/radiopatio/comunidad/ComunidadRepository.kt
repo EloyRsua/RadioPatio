@@ -372,7 +372,58 @@ class ComunidadRepository {
      * Escucha en tiempo real las solicitudes pendientes de traspaso de administración
      * dirigidas a la comunidad [comunidadId].
      */
-    fun observarSolicitudesPendientesAdmin(comunidadId: String): Flow<List<SolicitudTraspasoAdmin>> = callbackFlow {
+    fun observarSolicitudesPendientesAdmin(comunidadId: String): Flow<List<SolicitudTraspasoAdmin>> =
+        observarSubcoleccionSolicitudesPendientes(
+            comunidadId = comunidadId,
+            subcoleccion = COLECCION_SOLICITUDES_ADMIN,
+            mapper = { doc ->
+                SolicitudTraspasoAdmin(
+                    id = doc.getString("id")?.takeIf { it.isNotBlank() } ?: doc.id,
+                    comunidadId = doc.getString("comunidadId") ?: comunidadId,
+                    comunidadNombre = doc.getString("comunidadNombre") ?: "",
+                    solicitanteUid = doc.getString("solicitanteUid") ?: doc.id,
+                    solicitanteNombre = doc.getString("solicitanteNombre") ?: "Administrador",
+                    solicitanteEmail = doc.getString("solicitanteEmail") ?: "",
+                    solicitantePhotoUrl = doc.getString("solicitantePhotoUrl") ?: "",
+                    administradorActualUid = doc.getString("administradorActualUid") ?: "",
+                    estado = doc.getString("estado") ?: SolicitudTraspasoAdmin.ESTADO_PENDIENTE,
+                    timestamp = doc.getLong("timestamp") ?: 0L
+                )
+            },
+            timestampSelector = { it.timestamp }
+        )
+
+    /**
+     * Escucha en tiempo real las solicitudes de ingreso de vecinos pendientes de
+     * verificación por el administrador de [comunidadId].
+     */
+    fun observarSolicitudesIngresoPendientes(comunidadId: String): Flow<List<SolicitudIngresoVecino>> =
+        observarSubcoleccionSolicitudesPendientes(
+            comunidadId = comunidadId,
+            subcoleccion = COLECCION_SOLICITUDES_MIEMBROS,
+            mapper = { doc ->
+                SolicitudIngresoVecino(
+                    id = doc.getString("id")?.takeIf { it.isNotBlank() } ?: doc.id,
+                    comunidadId = doc.getString("comunidadId") ?: comunidadId,
+                    comunidadNombre = doc.getString("comunidadNombre") ?: "",
+                    solicitanteUid = doc.getString("solicitanteUid") ?: doc.id,
+                    solicitanteNombre = doc.getString("solicitanteNombre") ?: "Vecino",
+                    solicitanteEmail = doc.getString("solicitanteEmail") ?: "",
+                    solicitanteVivienda = doc.getString("solicitanteVivienda") ?: "",
+                    solicitantePhotoUrl = doc.getString("solicitantePhotoUrl") ?: "",
+                    estado = doc.getString("estado") ?: SolicitudTraspasoAdmin.ESTADO_PENDIENTE,
+                    timestamp = doc.getLong("timestamp") ?: 0L
+                )
+            },
+            timestampSelector = { it.timestamp }
+        )
+
+    private fun <T> observarSubcoleccionSolicitudesPendientes(
+        comunidadId: String,
+        subcoleccion: String,
+        mapper: (DocumentSnapshot) -> T,
+        timestampSelector: (T) -> Long
+    ): Flow<List<T>> = callbackFlow {
         if (comunidadId.isBlank()) {
             trySend(emptyList())
             awaitClose { }
@@ -383,7 +434,7 @@ class ComunidadRepository {
         try {
             listener = db.collection(COLECCION_COMUNIDADES)
                 .document(comunidadId)
-                .collection(COLECCION_SOLICITUDES_ADMIN)
+                .collection(subcoleccion)
                 .whereEqualTo("estado", SolicitudTraspasoAdmin.ESTADO_PENDIENTE)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -392,21 +443,8 @@ class ComunidadRepository {
                     }
 
                     val lista = snapshot?.documents
-                        ?.map { doc ->
-                            SolicitudTraspasoAdmin(
-                                id = doc.getString("id")?.takeIf { it.isNotBlank() } ?: doc.id,
-                                comunidadId = doc.getString("comunidadId") ?: comunidadId,
-                                comunidadNombre = doc.getString("comunidadNombre") ?: "",
-                                solicitanteUid = doc.getString("solicitanteUid") ?: doc.id,
-                                solicitanteNombre = doc.getString("solicitanteNombre") ?: "Administrador",
-                                solicitanteEmail = doc.getString("solicitanteEmail") ?: "",
-                                solicitantePhotoUrl = doc.getString("solicitantePhotoUrl") ?: "",
-                                administradorActualUid = doc.getString("administradorActualUid") ?: "",
-                                estado = doc.getString("estado") ?: SolicitudTraspasoAdmin.ESTADO_PENDIENTE,
-                                timestamp = doc.getLong("timestamp") ?: 0L
-                            )
-                        }
-                        ?.sortedByDescending { it.timestamp }
+                        ?.map(mapper)
+                        ?.sortedByDescending(timestampSelector)
                         ?: emptyList()
 
                     trySend(lista)
@@ -621,8 +659,9 @@ class ComunidadRepository {
         administradorActualUid: String,
         solicitanteUid: String
     ): Result<Unit> {
-        return resolverSolicitudSinTraspaso(
+        return resolverSolicitudPendienteSinIngreso(
             comunidadId = comunidadId,
+            subcoleccion = COLECCION_SOLICITUDES_ADMIN,
             solicitanteUid = solicitanteUid,
             nuevoEstado = SolicitudTraspasoAdmin.ESTADO_RECHAZADA,
             administradorEsperadoUid = administradorActualUid
@@ -630,22 +669,237 @@ class ComunidadRepository {
     }
 
     /**
-     * Cancela una solicitud pendiente enviada por el propio solicitante.
+     * Cancela una solicitud pendiente enviada por el propio administrador solicitante.
      */
     suspend fun cancelarSolicitudTraspasoAdmin(
         comunidadId: String,
         solicitanteUid: String
     ): Result<Unit> {
-        return resolverSolicitudSinTraspaso(
+        return resolverSolicitudPendienteSinIngreso(
             comunidadId = comunidadId,
+            subcoleccion = COLECCION_SOLICITUDES_ADMIN,
             solicitanteUid = solicitanteUid,
             nuevoEstado = SolicitudTraspasoAdmin.ESTADO_CANCELADA,
             administradorEsperadoUid = null
         )
     }
 
-    private suspend fun resolverSolicitudSinTraspaso(
+    /**
+     * Registra una solicitud de ingreso de un vecino en [comunidadId].
+     * La unión no es efectiva hasta que el administrador de fincas la aprueba.
+     */
+    suspend fun solicitarIngresoVecino(
         comunidadId: String,
+        solicitante: Usuario,
+        viviendaIndicada: String = solicitante.vivienda
+    ): Result<Unit> {
+        if (comunidadId.isBlank() || solicitante.uid.isBlank()) {
+            return Result.failure(IllegalArgumentException("Datos de solicitud incompletos."))
+        }
+        if (solicitante.esAdministradorFincas) {
+            return Result.failure(
+                SecurityException("Los administradores de fincas usan solicitudes de administración.")
+            )
+        }
+
+        val viviendaLimpia = viviendaIndicada.trim().ifBlank { solicitante.vivienda.trim() }
+
+        return try {
+            val comRef = db.collection(COLECCION_COMUNIDADES).document(comunidadId)
+            val solicitanteUserRef = db.collection("users").document(solicitante.uid)
+            val solicitudRef = comRef.collection(COLECCION_SOLICITUDES_MIEMBROS).document(solicitante.uid)
+
+            db.runTransaction { transaction ->
+                val comSnap = transaction.get(comRef)
+                val solicitanteSnap = transaction.get(solicitanteUserRef)
+                val solicitudSnap = transaction.get(solicitudRef)
+
+                if (!comSnap.exists()) {
+                    throw IllegalStateException("La comunidad seleccionada no existe.")
+                }
+                if (!solicitanteSnap.exists()) {
+                    throw IllegalStateException("Perfil de usuario no encontrado.")
+                }
+                if (esUsuarioDocAdministrador(solicitanteSnap)) {
+                    throw SecurityException("Un administrador de fincas no puede solicitar acceso como vecino.")
+                }
+
+                val yaEsMiembro = solicitanteSnap.getString("comunidadId") == comunidadId ||
+                    comunidadId in leerListaStrings(solicitanteSnap, "comunidadesIds")
+                if (yaEsMiembro) {
+                    throw IllegalStateException("Ya perteneces a esta comunidad.")
+                }
+
+                if (solicitudSnap.exists() &&
+                    solicitudSnap.getString("estado") == SolicitudTraspasoAdmin.ESTADO_PENDIENTE
+                ) {
+                    throw IllegalStateException("Ya tienes una solicitud pendiente de verificación en esta comunidad.")
+                }
+
+                val pendientes = leerListaStrings(solicitanteSnap, "solicitudesPendientesComunidades")
+                if (comunidadId !in pendientes) {
+                    pendientes.add(comunidadId)
+                }
+
+                val payload = mapOf(
+                    "id" to solicitante.uid,
+                    "comunidadId" to comunidadId,
+                    "comunidadNombre" to (comSnap.getString("nombre") ?: ""),
+                    "solicitanteUid" to solicitante.uid,
+                    "solicitanteNombre" to solicitante.nombre,
+                    "solicitanteEmail" to solicitante.email,
+                    "solicitanteVivienda" to viviendaLimpia,
+                    "solicitantePhotoUrl" to solicitante.photoUrl,
+                    "estado" to SolicitudTraspasoAdmin.ESTADO_PENDIENTE,
+                    "timestamp" to System.currentTimeMillis()
+                )
+
+                transaction.set(solicitudRef, payload)
+                transaction.update(solicitanteUserRef, "solicitudesPendientesComunidades", pendientes)
+                null
+            }.await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Verifica y admite de forma atómica a [solicitanteUid] como miembro de [comunidadId].
+     * Únicamente el administrador de fincas actual de [comunidadId] puede aprobar el ingreso.
+     */
+    suspend fun aceptarSolicitudIngresoVecino(
+        comunidadId: String,
+        administradorUid: String,
+        solicitanteUid: String
+    ): Result<Unit> {
+        if (comunidadId.isBlank() || administradorUid.isBlank() || solicitanteUid.isBlank()) {
+            return Result.failure(IllegalArgumentException("Datos de verificación incompletos."))
+        }
+
+        return try {
+            val comRef = db.collection(COLECCION_COMUNIDADES).document(comunidadId)
+            val adminRef = db.collection("users").document(administradorUid)
+            val solicitanteRef = db.collection("users").document(solicitanteUid)
+            val solicitudRef = comRef.collection(COLECCION_SOLICITUDES_MIEMBROS).document(solicitanteUid)
+
+            db.runTransaction { transaction ->
+                val comSnap = transaction.get(comRef)
+                val adminSnap = transaction.get(adminRef)
+                val solicitanteSnap = transaction.get(solicitanteRef)
+                val solicitudSnap = transaction.get(solicitudRef)
+
+                if (!comSnap.exists() || !adminSnap.exists() || !solicitanteSnap.exists() || !solicitudSnap.exists()) {
+                    throw IllegalStateException("La solicitud o alguno de los usuarios ya no existe.")
+                }
+
+                val adminEnComunidad = comSnap.getString("administradorUid")?.trim().orEmpty()
+                if (adminEnComunidad != administradorUid || !esUsuarioDocAdministrador(adminSnap)) {
+                    throw SecurityException("Solo el administrador de fincas de esta comunidad puede verificar nuevos miembros.")
+                }
+                if (solicitudSnap.getString("estado") != SolicitudTraspasoAdmin.ESTADO_PENDIENTE) {
+                    throw IllegalStateException("La solicitud ya fue resuelta anteriormente.")
+                }
+                if (esUsuarioDocAdministrador(solicitanteSnap)) {
+                    throw IllegalStateException("Esta solicitud pertenece a una cuenta de administrador.")
+                }
+
+                val comAnteriorId = solicitanteSnap.getString("comunidadId").orEmpty()
+                val comAnteriorRef = if (comAnteriorId.isNotBlank() && comAnteriorId != comunidadId) {
+                    db.collection(COLECCION_COMUNIDADES).document(comAnteriorId)
+                } else {
+                    null
+                }
+                val comAnteriorSnap = comAnteriorRef?.let { transaction.get(it) }
+
+                val estabaYaEnComunidad = (comAnteriorId == comunidadId) ||
+                    (comunidadId in leerListaStrings(solicitanteSnap, "comunidadesIds"))
+
+                val comNombre = comSnap.getString("nombre") ?: ""
+                val pendientes = leerListaStrings(solicitanteSnap, "solicitudesPendientesComunidades")
+                    .filter { it != comunidadId }
+                val viviendaSolicitada = solicitudSnap.getString("solicitanteVivienda")?.trim().orEmpty()
+
+                if (comAnteriorRef != null && comAnteriorSnap?.exists() == true) {
+                    val totalAnterior = comAnteriorSnap.getLong("totalVecinos") ?: 0L
+                    if (totalAnterior > 0L) {
+                        transaction.update(comAnteriorRef, "totalVecinos", FieldValue.increment(-1L))
+                    }
+                    if (comAnteriorSnap.getString("presidenteUid") == solicitanteUid) {
+                        transaction.update(comAnteriorRef, "presidenteUid", "")
+                    }
+                }
+
+                if (!estabaYaEnComunidad) {
+                    transaction.update(comRef, "totalVecinos", FieldValue.increment(1L))
+                }
+
+                val cambiosUsuario = mutableMapOf<String, Any>(
+                    "comunidadId" to comunidadId,
+                    "comunidadNombre" to comNombre,
+                    "comunidadesIds" to listOf(comunidadId),
+                    "solicitudesPendientesComunidades" to pendientes,
+                    "role" to ROL_VECINO,
+                    "tipoCuenta" to ROL_VECINO
+                )
+                if (viviendaSolicitada.isNotBlank()) {
+                    cambiosUsuario["piso"] = viviendaSolicitada
+                }
+                transaction.update(solicitanteRef, cambiosUsuario)
+
+                transaction.update(
+                    solicitudRef,
+                    mapOf(
+                        "estado" to SolicitudTraspasoAdmin.ESTADO_ACEPTADA,
+                        "fechaResolucion" to System.currentTimeMillis()
+                    )
+                )
+                null
+            }.await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Rechaza la solicitud de ingreso de [solicitanteUid] a [comunidadId].
+     */
+    suspend fun rechazarSolicitudIngresoVecino(
+        comunidadId: String,
+        administradorUid: String,
+        solicitanteUid: String
+    ): Result<Unit> {
+        return resolverSolicitudPendienteSinIngreso(
+            comunidadId = comunidadId,
+            subcoleccion = COLECCION_SOLICITUDES_MIEMBROS,
+            solicitanteUid = solicitanteUid,
+            nuevoEstado = SolicitudTraspasoAdmin.ESTADO_RECHAZADA,
+            administradorEsperadoUid = administradorUid
+        )
+    }
+
+    /**
+     * Cancela una solicitud de ingreso enviada por el propio vecino solicitante.
+     */
+    suspend fun cancelarSolicitudIngresoVecino(
+        comunidadId: String,
+        solicitanteUid: String
+    ): Result<Unit> {
+        return resolverSolicitudPendienteSinIngreso(
+            comunidadId = comunidadId,
+            subcoleccion = COLECCION_SOLICITUDES_MIEMBROS,
+            solicitanteUid = solicitanteUid,
+            nuevoEstado = SolicitudTraspasoAdmin.ESTADO_CANCELADA,
+            administradorEsperadoUid = null
+        )
+    }
+
+    private suspend fun resolverSolicitudPendienteSinIngreso(
+        comunidadId: String,
+        subcoleccion: String,
         solicitanteUid: String,
         nuevoEstado: String,
         administradorEsperadoUid: String?
@@ -657,7 +911,7 @@ class ComunidadRepository {
         return try {
             val comRef = db.collection(COLECCION_COMUNIDADES).document(comunidadId)
             val solicitanteRef = db.collection("users").document(solicitanteUid)
-            val solicitudRef = comRef.collection(COLECCION_SOLICITUDES_ADMIN).document(solicitanteUid)
+            val solicitudRef = comRef.collection(subcoleccion).document(solicitanteUid)
 
             db.runTransaction { transaction ->
                 val comSnap = transaction.get(comRef)
@@ -712,5 +966,6 @@ class ComunidadRepository {
     companion object {
         const val COLECCION_COMUNIDADES = "comunidades"
         const val COLECCION_SOLICITUDES_ADMIN = "solicitudes_admin"
+        const val COLECCION_SOLICITUDES_MIEMBROS = "solicitudes_miembros"
     }
 }

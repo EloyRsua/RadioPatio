@@ -314,21 +314,68 @@ class BuscadorComunidadesViewModel(
                 return@launch
             }
 
-            val resultado = userRepository.asignarComunidadUsuario(
-                comunidadId = comunidad.id,
-                comunidadNombre = comunidad.nombre,
-                nuevoRol = ROL_VECINO
-            )
-            if (resultado.isSuccess) {
+            if (usuario != null && usuario.perteneceAComunidad(comunidad.id)) {
                 uiState = uiState.copy(procesando = false)
                 onExito()
-            } else {
-                uiState = uiState.copy(
-                    procesando = false,
-                    errorMensaje = resultado.exceptionOrNull()?.localizedMessage
-                        ?: "No se pudo cambiar de comunidad."
-                )
+                return@launch
             }
+
+            onSolicitarIngresoVecinoInternal(comunidad, viviendaIndicada = usuario?.vivienda.orEmpty())
+        }
+    }
+
+    fun onSolicitarIngresoVecino(
+        comunidad: Comunidad,
+        viviendaIndicada: String,
+        onEnviada: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            uiState = uiState.copy(procesando = true, errorMensaje = null, mensajeExito = null)
+            val exito = onSolicitarIngresoVecinoInternal(comunidad, viviendaIndicada)
+            if (exito) {
+                onEnviada()
+            }
+        }
+    }
+
+    private suspend fun onSolicitarIngresoVecinoInternal(
+        comunidad: Comunidad,
+        viviendaIndicada: String
+    ): Boolean {
+        val usuario = uiState.usuarioActual
+        if (usuario == null || usuario.uid.isBlank()) {
+            uiState = uiState.copy(
+                procesando = false,
+                errorMensaje = "Debes iniciar sesión para solicitar el ingreso."
+            )
+            return false
+        }
+        if (usuario.esAdministradorFincas) {
+            uiState = uiState.copy(
+                procesando = false,
+                errorMensaje = "Las cuentas de administrador usan solicitudes de traspaso."
+            )
+            return false
+        }
+
+        val solicitud = comunidadRepository.solicitarIngresoVecino(
+            comunidadId = comunidad.id,
+            solicitante = usuario,
+            viviendaIndicada = viviendaIndicada
+        )
+        return if (solicitud.isSuccess) {
+            uiState = uiState.copy(
+                procesando = false,
+                mensajeExito = "Solicitud enviada al administrador de ${comunidad.nombre}. No formarás parte hasta que la apruebe."
+            )
+            true
+        } else {
+            uiState = uiState.copy(
+                procesando = false,
+                errorMensaje = solicitud.exceptionOrNull()?.localizedMessage
+                    ?: "No se pudo enviar la solicitud de ingreso."
+            )
+            false
         }
     }
 

@@ -590,11 +590,14 @@ private fun SelectorComunidadRegistro(
             "Se enviará solicitud al administrador actual"
         datosComunidad.comunidadExistente != null -> {
             val base = datosComunidad.comunidadExistente.direccionCompleta()
-            if (datosComunidad.comunidadExistente.esEdificio && datosComunidad.comunidadExistente.numeroPisos > 0) {
+            val detallePisos = if (datosComunidad.comunidadExistente.esEdificio &&
+                datosComunidad.comunidadExistente.numeroPisos > 0
+            ) {
                 "$base · ${datosComunidad.comunidadExistente.numeroPisos} pisos"
             } else {
                 base
             }
+            if (esAdministrador) detallePisos else "$detallePisos · Solicitud al administrador"
         }
         esAdministrador -> "Puedes crear tu 1ª comunidad, solicitar una o entrar sin ella"
         else -> "Pulsa para buscar con filtros y elegir tu comunidad"

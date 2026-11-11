@@ -120,7 +120,9 @@ fun BuscadorComunidadesScreen(
 ) {
     val uiState = viewModel.uiState
     val context = LocalContext.current
-    var comunidadParaSolicitar by remember { mutableStateOf<Comunidad?>(null) }
+    var comunidadParaSolicitarAdmin by remember { mutableStateOf<Comunidad?>(null) }
+    var comunidadParaSolicitarIngreso by remember { mutableStateOf<Comunidad?>(null) }
+    var viviendaSolicitada by remember { mutableStateOf("") }
 
     LaunchedEffect(uiState.errorMensaje) {
         uiState.errorMensaje?.let { msg ->
@@ -196,21 +198,38 @@ fun BuscadorComunidadesScreen(
                         ).show()
                     }
                     esAdminFlujo && !yaPertenece && comunidad.administradorUid.isNotBlank() -> {
-                        comunidadParaSolicitar = comunidad
+                        comunidadParaSolicitarAdmin = comunidad
                     }
-                    else -> {
+                    esAdminFlujo -> {
                         viewModel.onUnirseAComunidad(comunidad) {
                             onComunidadCambiada()
                         }
+                    }
+                    yaPertenece -> {
+                        onComunidadCambiada()
+                    }
+                    yaSolicitada -> {
+                        Toast.makeText(
+                            context,
+                            "Ya tienes una solicitud pendiente de verificación en ${comunidad.nombre}.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    else -> {
+                        val viviendaActual = usuario?.vivienda
+                            ?.takeIf { it.isNotBlank() && it != "Sin vivienda asignada" }
+                            .orEmpty()
+                        viviendaSolicitada = viviendaActual
+                        comunidadParaSolicitarIngreso = comunidad
                     }
                 }
             }
         }
     )
 
-    comunidadParaSolicitar?.let { comunidadObjetivo ->
+    comunidadParaSolicitarAdmin?.let { comunidadObjetivo ->
         AlertDialog(
-            onDismissRequest = { if (!uiState.procesando) comunidadParaSolicitar = null },
+            onDismissRequest = { if (!uiState.procesando) comunidadParaSolicitarAdmin = null },
             title = {
                 Text(
                     text = "Solicitar administración",
@@ -229,7 +248,7 @@ fun BuscadorComunidadesScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        comunidadParaSolicitar = null
+                        comunidadParaSolicitarAdmin = null
                         viewModel.onUnirseAComunidad(comunidadObjetivo) {}
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro)
@@ -238,7 +257,66 @@ fun BuscadorComunidadesScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { comunidadParaSolicitar = null }) {
+                TextButton(onClick = { comunidadParaSolicitarAdmin = null }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    comunidadParaSolicitarIngreso?.let { comunidadObjetivo ->
+        AlertDialog(
+            onDismissRequest = { if (!uiState.procesando) comunidadParaSolicitarIngreso = null },
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Solicitar acceso",
+                    fontWeight = FontWeight.Bold,
+                    color = AzulPrincipal
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Para unirte a \"${comunidadObjetivo.nombre}\", su administrador de fincas debe verificar que eres miembro. Tu unión no será efectiva hasta que apruebe tu solicitud.",
+                        fontSize = 13.sp,
+                        color = Color(0xFF455A64)
+                    )
+                    OutlinedTextField(
+                        value = viviendaSolicitada,
+                        onValueChange = { viviendaSolicitada = it },
+                        label = { Text("Tu vivienda / piso *") },
+                        placeholder = {
+                            Text(
+                                if (comunidadObjetivo.esEdificio) "Ej: 3º B" else "Ej: Casa 12"
+                            )
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val viviendaFinal = viviendaSolicitada.trim()
+                        comunidadParaSolicitarIngreso = null
+                        viewModel.onSolicitarIngresoVecino(
+                            comunidad = comunidadObjetivo,
+                            viviendaIndicada = viviendaFinal
+                        ) {
+                            onComunidadCambiada()
+                        }
+                    },
+                    enabled = !uiState.procesando && viviendaSolicitada.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro)
+                ) {
+                    Text("Enviar solicitud")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { comunidadParaSolicitarIngreso = null }) {
                     Text("Cancelar", color = Color.Gray)
                 }
             }
@@ -479,8 +557,11 @@ fun BuscadorComunidadesContent(
                                     esAdminFlujo &&
                                     usuario != null &&
                                     (usuario.perteneceAComunidad(comunidad.id) || comunidad.administradorUid == usuario.uid)
+                                val yaPerteneceVecino = !modoRegistro &&
+                                    !esAdminFlujo &&
+                                    usuario != null &&
+                                    usuario.perteneceAComunidad(comunidad.id)
                                 val yaSolicitada = !modoRegistro &&
-                                    esAdminFlujo &&
                                     usuario != null &&
                                     comunidad.id in usuario.solicitudesPendientesComunidades
                                 val etiquetaAccion = when {
@@ -489,7 +570,9 @@ fun BuscadorComunidadesContent(
                                     esAdminFlujo && comunidad.administradorUid.isNotBlank() -> "Solicitar"
                                     esAdminFlujo -> "Administrar"
                                     modoRegistro -> "Elegir"
-                                    else -> "Unirme"
+                                    yaPerteneceVecino -> "Actual"
+                                    yaSolicitada -> "Solicitada"
+                                    else -> "Solicitar"
                                 }
 
                                 TarjetaComunidadBuscador(
@@ -497,7 +580,7 @@ fun BuscadorComunidadesContent(
                                     esSeleccionada = esActiva,
                                     esCoincidenciaCodigo = comunidad.coincideConCodigoDirecto(uiState.textoBusqueda),
                                     etiquetaAccion = etiquetaAccion,
-                                    esSecundaria = esAdminFlujo && (yaSolicitada || (comunidad.administradorUid.isNotBlank() && !yaAdministrada)),
+                                    esSecundaria = yaSolicitada || (esAdminFlujo && comunidad.administradorUid.isNotBlank() && !yaAdministrada),
                                     habilitado = !uiState.procesando,
                                     onClick = { onSeleccionarComunidad(comunidad) }
                                 )

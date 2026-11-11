@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.comunidad.ComunidadRepository
+import com.example.radiopatio.comunidad.SolicitudIngresoVecino
 import com.example.radiopatio.comunidad.SolicitudTraspasoAdmin
 import com.example.radiopatio.informacionUsuario.ROL_PRESIDENTE
 import com.example.radiopatio.informacionUsuario.Usuario
@@ -30,6 +31,7 @@ data class VecinosUiState(
     val comunidadesAdministradas: List<Comunidad> = emptyList(),
     val comunidadesSolicitadasPendientes: List<Comunidad> = emptyList(),
     val solicitudesTraspasoPendientes: List<SolicitudTraspasoAdmin> = emptyList(),
+    val solicitudesIngresoPendientes: List<SolicitudIngresoVecino> = emptyList(),
     val textoBusqueda: String = "",
     val filtroRol: String = "Todos",
     val cargando: Boolean = true,
@@ -39,6 +41,7 @@ data class VecinosUiState(
     val procesandoPisos: Boolean = false,
     val procesandoCambioComunidad: Boolean = false,
     val procesandoSolicitudAdmin: Boolean = false,
+    val procesandoSolicitudIngreso: Boolean = false,
     val mensajeExito: String? = null,
     val errorMensaje: String? = null
 ) {
@@ -136,7 +139,8 @@ private data class VecinosSnapshot(
     val comunidad: Comunidad?,
     val vecinos: List<Usuario>,
     val todasComunidades: List<Comunidad>,
-    val solicitudesAdmin: List<SolicitudTraspasoAdmin>
+    val solicitudesAdmin: List<SolicitudTraspasoAdmin>,
+    val solicitudesIngreso: List<SolicitudIngresoVecino>
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -164,15 +168,17 @@ class VecinosViewModel(
                                 comunidad = null,
                                 vecinos = emptyList(),
                                 todasComunidades = todas,
-                                solicitudesAdmin = emptyList()
+                                solicitudesAdmin = emptyList(),
+                                solicitudesIngreso = emptyList()
                             )
                         }
                     } else {
                         combine(
                             comunidadRepository.observarComunidades(),
                             userRepository.observarVecinosPorComunidad(comId),
-                            comunidadRepository.observarSolicitudesPendientesAdmin(comId)
-                        ) { todas, vecinosComunidad, solicitudes ->
+                            comunidadRepository.observarSolicitudesPendientesAdmin(comId),
+                            comunidadRepository.observarSolicitudesIngresoPendientes(comId)
+                        ) { todas, vecinosComunidad, solicitudesAdmin, solicitudesIngreso ->
                             val comunidadDoc = todas.find { it.id == comId }
                             val comunidadEfectiva = comunidadDoc ?: Comunidad(
                                 id = comId,
@@ -185,7 +191,8 @@ class VecinosViewModel(
                                 comunidad = comunidadEfectiva,
                                 vecinos = vecinosComunidad,
                                 todasComunidades = todas,
-                                solicitudesAdmin = solicitudes
+                                solicitudesAdmin = solicitudesAdmin,
+                                solicitudesIngreso = solicitudesIngreso
                             )
                         }
                     }
@@ -204,7 +211,7 @@ class VecinosViewModel(
                         emptyList()
                     }
 
-                    val pendientesEnviadas = if (esAdmin) {
+                    val pendientesEnviadas = if (usuario != null) {
                         snap.todasComunidades
                             .filter { com -> com.id in usuario.solicitudesPendientesComunidades }
                             .sortedBy { it.nombre.lowercase() }
@@ -212,8 +219,14 @@ class VecinosViewModel(
                         emptyList()
                     }
 
-                    val solicitudesVisibles = if (esAdmin && snap.comunidad?.administradorUid == uid && uid.isNotBlank()) {
+                    val esAdminDeComunidadActual = esAdmin && snap.comunidad?.administradorUid == uid && uid.isNotBlank()
+                    val solicitudesVisibles = if (esAdminDeComunidadActual) {
                         snap.solicitudesAdmin
+                    } else {
+                        emptyList()
+                    }
+                    val solicitudesIngresoVisibles = if (esAdminDeComunidadActual) {
+                        snap.solicitudesIngreso
                     } else {
                         emptyList()
                     }
@@ -235,6 +248,7 @@ class VecinosViewModel(
                         comunidadesAdministradas = administradas,
                         comunidadesSolicitadasPendientes = pendientesEnviadas,
                         solicitudesTraspasoPendientes = solicitudesVisibles,
+                        solicitudesIngresoPendientes = solicitudesIngresoVisibles,
                         filtroRol = filtroRolActual,
                         cargando = false
                     )
@@ -398,21 +412,89 @@ class VecinosViewModel(
         }
     }
 
-    fun onCancelarSolicitudEnviada(comunidad: Comunidad) {
+    fun onAceptarSolicitudIngreso(solicitud: SolicitudIngresoVecino) {
+        val comId = uiState.comunidadIdActual
         val uidActual = uiState.usuarioActual?.uid.orEmpty()
-        if (uidActual.isBlank() || uiState.procesandoSolicitudAdmin) return
+        if (!uiState.esAdministradorActual || comId.isBlank() || uiState.procesandoSolicitudIngreso) {
+            uiState = uiState.copy(errorMensaje = "Solo el administrador actual puede verificar nuevos miembros.")
+            return
+        }
 
         viewModelScope.launch {
-            uiState = uiState.copy(procesandoSolicitudAdmin = true, errorMensaje = null)
-            val resultado = comunidadRepository.cancelarSolicitudTraspasoAdmin(comunidad.id, uidActual)
+            uiState = uiState.copy(procesandoSolicitudIngreso = true, errorMensaje = null)
+            val resultado = comunidadRepository.aceptarSolicitudIngresoVecino(
+                comunidadId = comId,
+                administradorUid = uidActual,
+                solicitanteUid = solicitud.solicitanteUid
+            )
+            uiState = if (resultado.isSuccess) {
+                uiState.copy(
+                    procesandoSolicitudIngreso = false,
+                    mensajeExito = "${solicitud.solicitanteNombre} verificado y admitido en la comunidad."
+                )
+            } else {
+                uiState.copy(
+                    procesandoSolicitudIngreso = false,
+                    errorMensaje = resultado.exceptionOrNull()?.localizedMessage
+                        ?: "No se pudo verificar y admitir al vecino."
+                )
+            }
+        }
+    }
+
+    fun onRechazarSolicitudIngreso(solicitud: SolicitudIngresoVecino) {
+        val comId = uiState.comunidadIdActual
+        val uidActual = uiState.usuarioActual?.uid.orEmpty()
+        if (!uiState.esAdministradorActual || comId.isBlank() || uiState.procesandoSolicitudIngreso) return
+
+        viewModelScope.launch {
+            uiState = uiState.copy(procesandoSolicitudIngreso = true, errorMensaje = null)
+            val resultado = comunidadRepository.rechazarSolicitudIngresoVecino(
+                comunidadId = comId,
+                administradorUid = uidActual,
+                solicitanteUid = solicitud.solicitanteUid
+            )
+            uiState = if (resultado.isSuccess) {
+                uiState.copy(
+                    procesandoSolicitudIngreso = false,
+                    mensajeExito = "Solicitud de ${solicitud.solicitanteNombre} rechazada."
+                )
+            } else {
+                uiState.copy(
+                    procesandoSolicitudIngreso = false,
+                    errorMensaje = resultado.exceptionOrNull()?.localizedMessage
+                        ?: "No se pudo rechazar la solicitud."
+                )
+            }
+        }
+    }
+
+    fun onCancelarSolicitudEnviada(comunidad: Comunidad) {
+        val usuario = uiState.usuarioActual ?: return
+        val uidActual = usuario.uid
+        if (uidActual.isBlank() || uiState.procesandoSolicitudAdmin || uiState.procesandoSolicitudIngreso) return
+
+        viewModelScope.launch {
+            uiState = uiState.copy(
+                procesandoSolicitudAdmin = true,
+                procesandoSolicitudIngreso = true,
+                errorMensaje = null
+            )
+            val resultado = if (usuario.esAdministradorFincas) {
+                comunidadRepository.cancelarSolicitudTraspasoAdmin(comunidad.id, uidActual)
+            } else {
+                comunidadRepository.cancelarSolicitudIngresoVecino(comunidad.id, uidActual)
+            }
             uiState = if (resultado.isSuccess) {
                 uiState.copy(
                     procesandoSolicitudAdmin = false,
+                    procesandoSolicitudIngreso = false,
                     mensajeExito = "Solicitud en ${comunidad.nombre} cancelada."
                 )
             } else {
                 uiState.copy(
                     procesandoSolicitudAdmin = false,
+                    procesandoSolicitudIngreso = false,
                     errorMensaje = resultado.exceptionOrNull()?.localizedMessage
                         ?: "No se pudo cancelar la solicitud."
                 )

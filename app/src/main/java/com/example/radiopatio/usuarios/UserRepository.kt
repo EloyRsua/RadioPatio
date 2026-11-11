@@ -367,58 +367,11 @@ class UserRepository(
                 }
             }
 
-            val comunidadAnteriorId = snapshotAnterior.getString("comunidadId").orEmpty()
-
-            if (comunidadAnteriorId.isNotBlank() && comunidadAnteriorId != comunidadId) {
-                val comAnteriorSnap = db.collection(ComunidadRepository.COLECCION_COMUNIDADES)
-                    .document(comunidadAnteriorId)
-                    .get()
-                    .await()
-                val presAnteriorUid = comAnteriorSnap.getString("presidenteUid").orEmpty()
-                val esPresidenteSaliente = (presAnteriorUid == currentUser.uid) ||
-                    (presAnteriorUid.isBlank() && rolAnterior.equals("Presidente", ignoreCase = true))
-
-                if (esPresidenteSaliente && comAnteriorSnap.exists()) {
-                    db.collection(ComunidadRepository.COLECCION_COMUNIDADES)
-                        .document(comunidadAnteriorId)
-                        .update("presidenteUid", "")
-                        .await()
-                }
-            }
-
-            val cambios = mutableMapOf<String, Any>(
-                "uid" to currentUser.uid,
-                "email" to (snapshotAnterior.getString("email") ?: currentUser.email ?: ""),
-                "comunidadId" to comunidadId,
-                "comunidadNombre" to comunidadNombre,
-                "comunidadesIds" to listOf(comunidadId)
+            return Result.failure(
+                SecurityException(
+                    "La unión a una comunidad requiere solicitud y verificación previa de su administrador."
+                )
             )
-            if (!snapshotAnterior.exists()) {
-                val nombreBase = currentUser.displayName?.takeIf { it.isNotBlank() }
-                    ?: currentUser.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
-                    ?: "Vecino"
-                cambios["nombre"] = nombreBase
-                cambios["apellidos"] = ""
-                cambios["piso"] = "Portal 1"
-                cambios["role"] = nuevoRol ?: ROL_VECINO
-                cambios["tipoCuenta"] = ROL_VECINO
-                cambios["photoUrl"] = ""
-            } else if (!nuevoRol.isNullOrBlank()) {
-                cambios["role"] = nuevoRol
-            } else if (comunidadAnteriorId != comunidadId) {
-                cambios["role"] = ROL_VECINO
-            }
-
-            userRef.set(cambios, SetOptions.merge()).await()
-
-            if (comunidadAnteriorId != comunidadId) {
-                if (comunidadAnteriorId.isNotBlank()) {
-                    comunidadRepository.ajustarContadorVecinos(comunidadAnteriorId, -1L)
-                }
-                comunidadRepository.ajustarContadorVecinos(comunidadId, 1L)
-            }
-
-            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

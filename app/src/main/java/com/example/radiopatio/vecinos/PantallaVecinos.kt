@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.radiopatio.comunidad.Comunidad
+import com.example.radiopatio.comunidad.SolicitudIngresoVecino
 import com.example.radiopatio.comunidad.SolicitudTraspasoAdmin
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.ui.theme.RadioPatioTheme
@@ -135,6 +136,8 @@ fun VecinosScreen(
         onCambiarComunidadAdministrada = viewModel::onCambiarComunidadAdministrada,
         onAceptarSolicitudAdmin = viewModel::onAceptarSolicitudAdmin,
         onRechazarSolicitudAdmin = viewModel::onRechazarSolicitudAdmin,
+        onAceptarSolicitudIngreso = viewModel::onAceptarSolicitudIngreso,
+        onRechazarSolicitudIngreso = viewModel::onRechazarSolicitudIngreso,
         onCancelarSolicitudEnviada = viewModel::onCancelarSolicitudEnviada
     )
 }
@@ -157,6 +160,8 @@ fun VecinosContent(
     onCambiarComunidadAdministrada: (Comunidad) -> Unit = {},
     onAceptarSolicitudAdmin: (SolicitudTraspasoAdmin) -> Unit = {},
     onRechazarSolicitudAdmin: (SolicitudTraspasoAdmin) -> Unit = {},
+    onAceptarSolicitudIngreso: (SolicitudIngresoVecino) -> Unit = {},
+    onRechazarSolicitudIngreso: (SolicitudIngresoVecino) -> Unit = {},
     onCancelarSolicitudEnviada: (Comunidad) -> Unit = {}
 ) {
     val vecinosFiltrados = uiState.vecinosFiltrados
@@ -190,7 +195,7 @@ fun VecinosContent(
                     TarjetaSinComunidad(
                         esAdministrador = esAdministrador,
                         solicitudesEnviadas = uiState.comunidadesSolicitadasPendientes,
-                        procesandoSolicitud = uiState.procesandoSolicitudAdmin,
+                        procesandoSolicitud = uiState.procesandoSolicitudAdmin || uiState.procesandoSolicitudIngreso,
                         onSeleccionarOCrear = onIrABuscarComunidad,
                         onCancelarSolicitud = onCancelarSolicitudEnviada,
                         modifier = Modifier
@@ -218,6 +223,18 @@ fun VecinosContent(
                             }
                         }
 
+                        // 0a. Solicitudes entrantes de vecinos pendientes de verificación del administrador
+                        if (uiState.esAdministradorActual && uiState.solicitudesIngresoPendientes.isNotEmpty()) {
+                            item {
+                                TarjetaSolicitudesIngresoVecino(
+                                    solicitudes = uiState.solicitudesIngresoPendientes,
+                                    procesando = uiState.procesandoSolicitudIngreso,
+                                    onAceptar = onAceptarSolicitudIngreso,
+                                    onRechazar = onRechazarSolicitudIngreso
+                                )
+                            }
+                        }
+
                         // 0b. Solicitudes entrantes de traspaso (solo visibles para el administrador actual de esta comunidad)
                         if (uiState.esAdministradorActual && uiState.solicitudesTraspasoPendientes.isNotEmpty()) {
                             item {
@@ -230,12 +247,13 @@ fun VecinosContent(
                             }
                         }
 
-                        // 0c. Solicitudes salientes enviadas a otras comunidades
-                        if (esAdministrador && uiState.comunidadesSolicitadasPendientes.isNotEmpty()) {
+                        // 0c. Solicitudes salientes enviadas a otras comunidades (vecinos y administradores)
+                        if (uiState.comunidadesSolicitadasPendientes.isNotEmpty()) {
                             item {
-                                TarjetaSolicitudesEnviadasAdmin(
+                                TarjetaSolicitudesEnviadas(
                                     comunidades = uiState.comunidadesSolicitadasPendientes,
-                                    procesando = uiState.procesandoSolicitudAdmin,
+                                    esAdministrador = esAdministrador,
+                                    procesando = uiState.procesandoSolicitudAdmin || uiState.procesandoSolicitudIngreso,
                                     onCancelar = onCancelarSolicitudEnviada
                                 )
                             }
@@ -1002,19 +1020,81 @@ private fun SelectorComunidadesAdministrador(
 }
 
 @Composable
+private fun TarjetaSolicitudesIngresoVecino(
+    solicitudes: List<SolicitudIngresoVecino>,
+    procesando: Boolean,
+    onAceptar: (SolicitudIngresoVecino) -> Unit,
+    onRechazar: (SolicitudIngresoVecino) -> Unit
+) {
+    TarjetaSolicitudesPendientesContenedor(
+        titulo = "Verificación de miembros pendientes (${solicitudes.size})",
+        descripcion = "Comprueba si estos vecinos pertenecen realmente a la comunidad. Hasta que los verifiques no tendrán acceso.",
+        colorFondo = VerdeSuave,
+        colorBorde = Color(0xFFA5D6A7),
+        colorAcento = VerdeOscuro,
+        colorDescripcion = AzulPrincipal
+    ) {
+        solicitudes.forEach { solicitud ->
+            ItemSolicitudPendienteCard(
+                nombre = solicitud.solicitanteNombre,
+                subtitulo = listOf(
+                    solicitud.solicitanteVivienda.takeIf { it.isNotBlank() }?.let { "Vivienda: $it" }.orEmpty(),
+                    solicitud.solicitanteEmail
+                ).filter { it.isNotBlank() }.joinToString(" · "),
+                textoAceptar = "Verificar y admitir",
+                procesando = procesando,
+                onAceptar = { onAceptar(solicitud) },
+                onRechazar = { onRechazar(solicitud) }
+            )
+        }
+    }
+}
+
+@Composable
 private fun TarjetaSolicitudesTraspasoAdmin(
     solicitudes: List<SolicitudTraspasoAdmin>,
     procesando: Boolean,
     onAceptar: (SolicitudTraspasoAdmin) -> Unit,
     onRechazar: (SolicitudTraspasoAdmin) -> Unit
 ) {
+    TarjetaSolicitudesPendientesContenedor(
+        titulo = "Solicitudes de traspaso de administración (${solicitudes.size})",
+        descripcion = "Si aceptas el cambio, el solicitante pasará a ser el único administrador de esta comunidad y tú dejarás de gestionarla.",
+        colorFondo = Color(0xFFFFFBEB),
+        colorBorde = Color(0xFFFDE68A),
+        colorAcento = Color(0xFFB45309),
+        colorDescripcion = Color(0xFF78350F)
+    ) {
+        solicitudes.forEach { solicitud ->
+            ItemSolicitudPendienteCard(
+                nombre = solicitud.solicitanteNombre,
+                subtitulo = solicitud.solicitanteEmail,
+                textoAceptar = "Aceptar traspaso",
+                procesando = procesando,
+                onAceptar = { onAceptar(solicitud) },
+                onRechazar = { onRechazar(solicitud) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun TarjetaSolicitudesPendientesContenedor(
+    titulo: String,
+    descripcion: String,
+    colorFondo: Color,
+    colorBorde: Color,
+    colorAcento: Color,
+    colorDescripcion: Color,
+    contenido: @Composable () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+        colors = CardDefaults.cardColors(containerColor = colorFondo),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = CardDefaults.outlinedCardBorder().copy(
-            brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFFDE68A))
+            brush = androidx.compose.ui.graphics.SolidColor(colorBorde)
         )
     ) {
         Column(
@@ -1025,72 +1105,82 @@ private fun TarjetaSolicitudesTraspasoAdmin(
                 Icon(
                     imageVector = Icons.Outlined.AdminPanelSettings,
                     contentDescription = null,
-                    tint = Color(0xFFB45309),
+                    tint = colorAcento,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Solicitudes de traspaso de administración (${solicitudes.size})",
+                    text = titulo,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF92400E)
+                    color = colorAcento
                 )
             }
 
             Text(
-                text = "Si aceptas el cambio, el solicitante pasará a ser el único administrador de esta comunidad y tú dejarás de gestionarla.",
+                text = descripcion,
                 fontSize = 12.sp,
-                color = Color(0xFF78350F)
+                color = colorDescripcion
             )
 
-            solicitudes.forEach { solicitud ->
-                Surface(
+            contenido()
+        }
+    }
+}
+
+@Composable
+private fun ItemSolicitudPendienteCard(
+    nombre: String,
+    subtitulo: String,
+    textoAceptar: String,
+    procesando: Boolean,
+    onAceptar: () -> Unit,
+    onRechazar: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column {
+                Text(
+                    text = nombre,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AzulPrincipal
+                )
+                if (subtitulo.isNotBlank()) {
+                    Text(
+                        text = subtitulo,
+                        fontSize = 12.sp,
+                        color = Color(0xFF607D8B)
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onRechazar,
+                    enabled = !procesando,
                     shape = RoundedCornerShape(12.dp),
-                    color = Color.White,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = solicitud.solicitanteNombre,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = AzulPrincipal
-                            )
-                            if (solicitud.solicitanteEmail.isNotBlank()) {
-                                Text(
-                                    text = solicitud.solicitanteEmail,
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF607D8B)
-                                )
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = { onRechazar(solicitud) },
-                                enabled = !procesando,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Rechazar", color = Color(0xFFD32F2F), fontSize = 12.sp)
-                            }
-                            Button(
-                                onClick = { onAceptar(solicitud) },
-                                enabled = !procesando,
-                                colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Aceptar traspaso", fontSize = 12.sp)
-                            }
-                        }
-                    }
+                    Text("Rechazar", color = Color(0xFFD32F2F), fontSize = 12.sp)
+                }
+                Button(
+                    onClick = onAceptar,
+                    enabled = !procesando,
+                    colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(textoAceptar, fontSize = 12.sp)
                 }
             }
         }
@@ -1098,8 +1188,9 @@ private fun TarjetaSolicitudesTraspasoAdmin(
 }
 
 @Composable
-private fun TarjetaSolicitudesEnviadasAdmin(
+private fun TarjetaSolicitudesEnviadas(
     comunidades: List<Comunidad>,
+    esAdministrador: Boolean,
     procesando: Boolean,
     onCancelar: (Comunidad) -> Unit
 ) {
@@ -1117,7 +1208,11 @@ private fun TarjetaSolicitudesEnviadasAdmin(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Solicitudes pendientes de aceptación (${comunidades.size})",
+                text = if (esAdministrador) {
+                    "Solicitudes de traspaso pendientes (${comunidades.size})"
+                } else {
+                    "Solicitudes de ingreso pendientes (${comunidades.size})"
+                },
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = AzulPrincipal
@@ -1138,7 +1233,11 @@ private fun TarjetaSolicitudesEnviadasAdmin(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Esperando confirmación del administrador actual",
+                            text = if (esAdministrador) {
+                                "Esperando confirmación del administrador actual"
+                            } else {
+                                "Esperando verificación del administrador"
+                            },
                             fontSize = 11.sp,
                             color = Color(0xFF64748B)
                         )
@@ -1164,6 +1263,7 @@ private fun TarjetaSinComunidad(
     onCancelarSolicitud: (Comunidad) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val tieneSolicitudesVecino = !esAdministrador && solicitudesEnviadas.isNotEmpty()
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -1196,10 +1296,10 @@ private fun TarjetaSinComunidad(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = if (esAdministrador) {
-                        "Sin comunidades asignadas todavía"
-                    } else {
-                        "Aún no perteneces a una comunidad"
+                    text = when {
+                        esAdministrador -> "Sin comunidades asignadas todavía"
+                        tieneSolicitudesVecino -> "Solicitud pendiente de verificación"
+                        else -> "Aún no perteneces a una comunidad"
                     },
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
@@ -1210,10 +1310,10 @@ private fun TarjetaSinComunidad(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = if (esAdministrador) {
-                        "Crea una nueva comunidad o solicita el traspaso de administración de una existente."
-                    } else {
-                        "Únete a tu edificio o urbanización para ver a tus vecinos, publicaciones del tablón, mercadillo y eventos."
+                    text = when {
+                        esAdministrador -> "Crea una nueva comunidad o solicita el traspaso de administración de una existente."
+                        tieneSolicitudesVecino -> "Tu unión a la comunidad no será efectiva hasta que su administrador de fincas verifique y acepte tu solicitud."
+                        else -> "Solicita unirte a tu edificio o urbanización para acceder al tablón, mercadillo, vecinos y eventos tras ser verificado."
                     },
                     fontSize = 13.sp,
                     color = Color(0xFF64748B),
@@ -1231,16 +1331,17 @@ private fun TarjetaSinComunidad(
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (esAdministrador) "Crear o buscar comunidad" else "Buscar y unirme a comunidad",
+                        text = if (esAdministrador) "Crear o buscar comunidad" else "Buscar y solicitar ingreso",
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
 
-        if (esAdministrador && solicitudesEnviadas.isNotEmpty()) {
-            TarjetaSolicitudesEnviadasAdmin(
+        if (solicitudesEnviadas.isNotEmpty()) {
+            TarjetaSolicitudesEnviadas(
                 comunidades = solicitudesEnviadas,
+                esAdministrador = esAdministrador,
                 procesando = procesandoSolicitud,
                 onCancelar = onCancelarSolicitud
             )

@@ -302,13 +302,32 @@ fun AppNavHost(
                                         apellidos = apellidos,
                                         vivienda = vivienda,
                                         email = email,
-                                        comunidadId = com.id,
-                                        comunidadNombre = com.nombre,
+                                        comunidadId = "",
+                                        comunidadNombre = "",
                                         rol = ROL_VECINO,
                                         tipoCuenta = ROL_VECINO,
-                                        comunidadesIds = listOf(com.id),
+                                        comunidadesIds = emptyList(),
                                         photoUrl = photoUrl
                                     ).getOrThrow()
+
+                                    val nombreCompleto = "$nombre $apellidos".trim().ifBlank { nombre }
+                                    val solicitante = Usuario(
+                                        nombre = nombreCompleto,
+                                        inicial = nombre.firstOrNull()?.uppercase() ?: "V",
+                                        vivienda = vivienda,
+                                        email = email,
+                                        telefono = "",
+                                        rol = ROL_VECINO,
+                                        uid = uid,
+                                        photoUrl = photoUrl,
+                                        tipoCuenta = ROL_VECINO
+                                    )
+                                    comunidadRepository.solicitarIngresoVecino(
+                                        comunidadId = com.id,
+                                        solicitante = solicitante,
+                                        viviendaIndicada = vivienda
+                                    ).getOrThrow()
+                                    mensajeBienvenida = "Cuenta creada. Tu solicitud de ingreso en ${com.nombre} queda pendiente de verificación por el administrador."
                                 }
 
                                 datosComunidadRegistro = DatosRegistroComunidad()

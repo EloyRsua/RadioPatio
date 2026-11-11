@@ -131,6 +131,7 @@ fun PaginaPrincipalContent(
 
                 uiState.comunidadIdActual.isBlank() -> {
                     SinComunidadTablonCard(
+                        tieneSolicitudPendiente = uiState.usuarioActual?.solicitudesPendientesComunidades?.isNotEmpty() == true,
                         onIrAComunidad = onIrAComunidad,
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -384,6 +385,7 @@ private fun CampoCrearPublicacion(
 
 @Composable
 private fun SinComunidadTablonCard(
+    tieneSolicitudPendiente: Boolean = false,
     onIrAComunidad: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -405,14 +407,23 @@ private fun SinComunidadTablonCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Sin comunidad asignada",
+                text = if (tieneSolicitudPendiente) {
+                    "Solicitud pendiente de verificación"
+                } else {
+                    "Sin comunidad asignada"
+                },
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF133E54)
+                color = Color(0xFF133E54),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Para ver y publicar avisos en el tablón, selecciona o crea tu comunidad en la pestaña Vecinos.",
+                text = if (tieneSolicitudPendiente) {
+                    "Tu acceso al tablón se activará en cuanto el administrador de tu comunidad verifique y acepte tu solicitud."
+                } else {
+                    "Para ver y publicar avisos en el tablón, selecciona o solicita unirte a tu comunidad en la pestaña Vecinos."
+                },
                 fontSize = 13.sp,
                 color = Color(0xFF64748B),
                 textAlign = TextAlign.Center
