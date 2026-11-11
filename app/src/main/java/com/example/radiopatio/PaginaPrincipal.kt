@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
@@ -84,13 +85,24 @@ fun PaginaPrincipal(
     Scaffold(
         modifier = modifier,
         topBar = { BarraSuperior() },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onIrACrearPublicacion,
+                containerColor = Color(0xFF389F82),
+                contentColor = Color.White,
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(4.dp)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Nueva publicación")
+            }
+        }
     ) { rellenoInterior ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF9FAFB))
                 .padding(rellenoInterior),
-            contentPadding = PaddingValues(bottom = 16.dp),
+            contentPadding = PaddingValues(bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
@@ -246,7 +258,7 @@ private fun CampoCrearPublicacion(
             .background(Color.White)
             .border(1.dp, Color(0xFFECEFF1), RoundedCornerShape(12.dp))
             .clickable { onCrearClick() }
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -255,20 +267,12 @@ private fun CampoCrearPublicacion(
             color = Color.Gray,
             modifier = Modifier.weight(1f)
         )
-        Box(
-            modifier = Modifier
-                .size(26.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF0F8A5F)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = "Crear publicación",
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
-        }
+        Icon(
+            imageVector = Icons.Outlined.Edit,
+            contentDescription = "Crear publicación",
+            tint = Color(0xFF389F82),
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 

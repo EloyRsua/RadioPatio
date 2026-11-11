@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -75,9 +77,18 @@ fun MercadilloContent(
 ) {
     Scaffold(
         topBar = {
-            BarraSuperiorMercadillo(
-                onSubirProducto = onAbrirDialogo
-            )
+            BarraSuperiorMercadillo()
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAbrirDialogo,
+                containerColor = Color(0xFF389F82),
+                contentColor = Color.White,
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(4.dp)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Subir Artículo")
+            }
         }
     ) { rellenoInterior ->
         LazyColumn (
@@ -85,7 +96,7 @@ fun MercadilloContent(
                 .fillMaxSize()
                 .background(Color.White)
                 .padding(rellenoInterior),
-            contentPadding = PaddingValues(bottom = 16.dp),
+            contentPadding = PaddingValues(bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // 1. Buscador (hace scroll normal)
@@ -259,10 +270,8 @@ fun DialogoNuevoProducto(
 }
 
 @Composable
-private fun BarraSuperiorMercadillo(
-    onSubirProducto: () -> Unit
-){
-    Surface(shadowElevation = 2.dp){
+private fun BarraSuperiorMercadillo() {
+    Surface(shadowElevation = 2.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -270,7 +279,7 @@ private fun BarraSuperiorMercadillo(
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
-        ){
+        ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Mercadillo vecinal",
@@ -282,14 +291,6 @@ private fun BarraSuperiorMercadillo(
                     text = "Compra, vende y presta en tu comunidad",
                     fontSize = 11.sp,
                     color = Color.Gray
-                )
-            }
-
-            IconButton(onClick = onSubirProducto) {
-                Icon(
-                    Icons.Outlined.AddCircleOutline,
-                    contentDescription = "Subir Artículo",
-                    tint = Color(0xFF389F82)
                 )
             }
         }
