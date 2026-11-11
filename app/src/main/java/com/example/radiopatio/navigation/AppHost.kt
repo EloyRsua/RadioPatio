@@ -55,9 +55,10 @@ fun AppNavHost(
 
         composable<InicioSesion> {
             RegistroUsuario(
-                onLoginClick = { email, password ->
+                onLoginClick = { email, password, onError ->
                     if (email.isBlank() || password.isBlank()) {
                         Toast.makeText(context, "Por favor, introduce email y contraseña", Toast.LENGTH_SHORT).show()
+                        onError()
                         return@RegistroUsuario
                     }
 
@@ -72,11 +73,15 @@ fun AppNavHost(
                                 popUpTo(InicioSesion) { inclusive = true }
                             }
                         } catch (e: Exception) {
-                            // Si el usuario no existe en Firebase Auth, redirige para pruebas
-                            Toast.makeText(context, "Accediendo... (${e.localizedMessage ?: "Credenciales de prueba"})", Toast.LENGTH_SHORT).show()
-                            navController.navigate(Inicio) {
-                                popUpTo(InicioSesion) { inclusive = true }
-                            }
+                            // 2. Si falla la autenticación, avisamos y desbloqueamos el botón
+                            Toast.makeText(
+                                context,
+                                "Error al iniciar sesión: Correo o contraseña incorrectos.",
+                                Toast.LENGTH_LONG
+                            ).show()
+
+                            // Restablece la variable 'cargando = false' en RegistroUsuario
+                            onError()
                         }
                     }
                 },
