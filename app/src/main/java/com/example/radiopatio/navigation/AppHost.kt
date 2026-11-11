@@ -411,9 +411,6 @@ fun AppNavHost(
 
         composable<Eventos> {
             CalendarioEventosScreen(
-                onVolverAInicio = {
-                    navController.popBackStack()
-                },
                 onIrAComunidad = {
                     navController.navigate(Vecinos) {
                         launchSingleTop = true

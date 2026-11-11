@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -45,7 +44,6 @@ import java.util.Locale
  */
 @Composable
 fun CalendarioEventosScreen(
-    onVolverAInicio: () -> Unit = {},
     onIrAComunidad: () -> Unit = {},
     barraInferior: @Composable () -> Unit = {},
     viewModel: CalendarioViewModel = viewModel(factory = CalendarioViewModelFactory())
@@ -73,7 +71,6 @@ fun CalendarioEventosScreen(
         onAbrirDialogoNuevoEvento = viewModel::onAbrirDialogoNuevoEvento,
         onCerrarDialogoNuevoEvento = viewModel::onCerrarDialogoNuevoEvento,
         onCrearEvento = viewModel::onCrearEvento,
-        onVolverAInicio = onVolverAInicio,
         onIrAComunidad = onIrAComunidad,
         barraInferior = barraInferior
     )
@@ -97,7 +94,6 @@ fun CalendarioEventosContent(
     onAbrirDialogoNuevoEvento: () -> Unit,
     onCerrarDialogoNuevoEvento: () -> Unit,
     onCrearEvento: (Evento) -> Unit,
-    onVolverAInicio: () -> Unit,
     onIrAComunidad: () -> Unit = {},
     barraInferior: @Composable () -> Unit = {}
 ) {
@@ -108,8 +104,7 @@ fun CalendarioEventosContent(
     Scaffold(
         topBar = {
             BarraSuperiorEventos(
-                nombreComunidad = uiState.comunidadNombre,
-                onVolver = onVolverAInicio
+                nombreComunidad = uiState.comunidadNombre
             )
         },
         bottomBar = barraInferior,
@@ -335,8 +330,7 @@ private fun SinComunidadEventosCard(
  */
 @Composable
 private fun BarraSuperiorEventos(
-    nombreComunidad: String = "",
-    onVolver: () -> Unit
+    nombreComunidad: String = ""
 ) {
     Surface(shadowElevation = 2.dp) {
         Row(
@@ -344,19 +338,9 @@ private fun BarraSuperiorEventos(
                 .fillMaxWidth()
                 .background(Color.White)
                 .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onVolver) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Volver",
-                    tint = Color(0xFF133E54)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Calendario de Eventos",
@@ -1142,8 +1126,7 @@ fun CalendarioEventosContentPreview() {
             onToggleRecordatorio = {},
             onAbrirDialogoNuevoEvento = {},
             onCerrarDialogoNuevoEvento = {},
-            onCrearEvento = {},
-            onVolverAInicio = {}
+            onCrearEvento = {}
         )
     }
 }
@@ -1170,8 +1153,7 @@ fun CalendarioEventosVacioPreview() {
             onToggleRecordatorio = {},
             onAbrirDialogoNuevoEvento = {},
             onCerrarDialogoNuevoEvento = {},
-            onCrearEvento = {},
-            onVolverAInicio = {}
+            onCrearEvento = {}
         )
     }
 }
