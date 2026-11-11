@@ -116,6 +116,7 @@ class MercadilloViewModel(
 
                 val entidad = ProductoEntidad(
                     // Al ser autogenerado en Room, le pasamos 0 o dejamos que Room le asigne el ID
+                    autorUid = autorUid?: "",
                     titulo = titulo,
                     precio = precio,
                     ubicacion = ubicacion,
@@ -169,6 +170,7 @@ class MercadilloViewModel(
             val fechaActual = System.currentTimeMillis()
 
             val productoMap = hashMapOf(
+                "autorUid" to (auth.currentUser?.uid?: ""),
                 "titulo" to nuevoProducto.titulo,
                 "precio" to nuevoProducto.precio,
                 "ubicacion" to ubicacionReal,

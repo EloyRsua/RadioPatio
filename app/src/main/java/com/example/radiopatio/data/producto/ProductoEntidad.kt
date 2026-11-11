@@ -9,6 +9,9 @@ data class ProductoEntidad (
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
 
+    @ColumnInfo(name = "autor_uid")
+    val autorUid: String = "",
+
     @ColumnInfo(name = "titulo")
     val titulo: String,
 
