@@ -1,4 +1,4 @@
-package com.example.radiopatio
+package com.example.radiopatio.publicacion
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -28,10 +28,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.radiopatio.R
+import com.example.radiopatio.RadioPatioApplication
+import com.example.radiopatio.RadioPatioViewModel
+import com.example.radiopatio.RadioPatioViewModelFactory
 import com.example.radiopatio.data.PublicacionEntidad
-import com.example.radiopatio.publicacion.Publicacion
-import com.example.radiopatio.publicacion.PublicacionDetalleDialog
-import com.example.radiopatio.publicacion.TarjetaPublicacion
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
