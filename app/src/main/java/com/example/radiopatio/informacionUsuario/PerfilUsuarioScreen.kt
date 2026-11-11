@@ -170,13 +170,32 @@ fun PerfilUsuarioScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Comunidad", fontSize = 13.sp, color = textoSecundario)
+                                Text(
+                                    text = if (usuarioActual.esAdministradorFincas) "Comunidad activa" else "Comunidad",
+                                    fontSize = 13.sp,
+                                    color = textoSecundario
+                                )
                                 Text(
                                     text = nombreComunidad.ifBlank { "Sin comunidad" },
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = azulPrincipal
                                 )
+                            }
+
+                            if (usuarioActual.esAdministradorFincas) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Comunidades gestionadas", fontSize = 13.sp, color = textoSecundario)
+                                    Text(
+                                        text = "${usuarioActual.comunidadesIds.size}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = verdeBoton
+                                    )
+                                }
                             }
 
                             Row(

@@ -4,6 +4,8 @@ import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.data.toEntidad
 import com.example.radiopatio.data.toModelo
+import com.example.radiopatio.informacionUsuario.ROL_ADMINISTRADOR_FINCAS
+import com.example.radiopatio.informacionUsuario.ROL_VECINO
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.marketplace.CategoriaProducto
 import com.example.radiopatio.marketplace.MercadilloUiState
@@ -179,14 +181,93 @@ class MultitenancyIsolationTest {
             tipo = "Residencial",
             totalVecinos = 15,
             verificada = true,
-            presidenteUid = "u1"
+            presidenteUid = "u1",
+            administradorUid = "adm1"
         )
         val reconstruida = original.toEntidad().toModelo()
         assertEquals(original.id, reconstruida.id)
         assertEquals(original.nombre, reconstruida.nombre)
         assertEquals(original.presidenteUid, reconstruida.presidenteUid)
+        assertEquals(original.administradorUid, reconstruida.administradorUid)
         assertEquals(original.totalVecinos, reconstruida.totalVecinos)
         assertEquals(original.verificada, reconstruida.verificada)
+    }
+
+    @Test
+    fun administradorMultiComunidad_perteneceYSeAislaPorComunidadActiva() {
+        val adminMulti = Usuario(
+            nombre = "Marta Fincas",
+            inicial = "M",
+            vivienda = "Administración",
+            email = "marta@fincas.es",
+            telefono = "",
+            rol = ROL_ADMINISTRADOR_FINCAS,
+            uid = "adm_1",
+            comunidadId = comA,
+            comunidadesIds = listOf(comA, comB),
+            tipoCuenta = ROL_ADMINISTRADOR_FINCAS
+        )
+        val vecinoA = Usuario("Lucía", "L", "2ºB", "l@rp.es", "", rol = ROL_VECINO, uid = "u_a", comunidadId = comA)
+        val vecinoB = Usuario("Elena", "E", "3ºC", "e@rp.es", "", rol = ROL_VECINO, uid = "u_b", comunidadId = comB)
+
+        assertTrue(adminMulti.esAdministradorFincas)
+        assertTrue(adminMulti.perteneceAComunidad(comA))
+        assertTrue(adminMulti.perteneceAComunidad(comB))
+
+        val stateComB = VecinosUiState(
+            comunidadIdActual = comB,
+            comunidad = Comunidad(id = comB, nombre = "Com B", administradorUid = "adm_1"),
+            usuarioActual = adminMulti.copy(comunidadId = comB),
+            vecinos = listOf(adminMulti, vecinoA, vecinoB)
+        )
+        assertEquals(listOf("adm_1", "u_b"), stateComB.vecinosFiltrados.map { it.uid })
+        assertTrue(stateComB.esAdministradorActual)
+        assertFalse(stateComB.esPresidenteActual)
+    }
+
+    @Test
+    fun soloElAdministradorActualDeLaComunidadPuedeAceptarTraspasos() {
+        val comunidad = Comunidad(id = comA, nombre = "Com A", administradorUid = "adm_actual")
+        val adminActual = Usuario(
+            nombre = "Admin Actual",
+            inicial = "A",
+            vivienda = "Despacho",
+            email = "a@rp.es",
+            telefono = "",
+            rol = ROL_ADMINISTRADOR_FINCAS,
+            uid = "adm_actual",
+            comunidadId = comA,
+            comunidadesIds = listOf(comA),
+            tipoCuenta = ROL_ADMINISTRADOR_FINCAS
+        )
+        val adminSolicitante = Usuario(
+            nombre = "Admin Solicitante",
+            inicial = "S",
+            vivienda = "Despacho 2",
+            email = "s@rp.es",
+            telefono = "",
+            rol = ROL_ADMINISTRADOR_FINCAS,
+            uid = "adm_sol",
+            comunidadId = "",
+            comunidadesIds = emptyList(),
+            solicitudesPendientesComunidades = listOf(comA),
+            tipoCuenta = ROL_ADMINISTRADOR_FINCAS
+        )
+
+        val stateActual = VecinosUiState(
+            comunidadIdActual = comA,
+            comunidad = comunidad,
+            usuarioActual = adminActual
+        )
+        assertTrue(stateActual.esAdministradorActual)
+
+        val stateSolicitante = VecinosUiState(
+            comunidadIdActual = comA,
+            comunidad = comunidad,
+            usuarioActual = adminSolicitante
+        )
+        assertFalse(stateSolicitante.esAdministradorActual)
+        assertFalse(adminSolicitante.perteneceAComunidad(comA))
     }
 }
 

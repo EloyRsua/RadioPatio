@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Home
@@ -48,10 +49,11 @@ import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
 /**
- * Datos de comunidad seleccionados o introducidos durante el registro de un nuevo vecino.
+ * Datos de comunidad seleccionados o introducidos durante el registro de un nuevo usuario.
  */
 data class DatosRegistroComunidad(
     val crearNueva: Boolean = false,
+    val solicitarTraspaso: Boolean = false,
     val comunidadExistente: Comunidad? = null,
     val nuevaComunidadNombre: String = "",
     val nuevaComunidadDireccion: String = "",
@@ -60,22 +62,27 @@ data class DatosRegistroComunidad(
     val nuevaComunidadTipo: String = "Residencial",
     val nuevaComunidadDescripcion: String = ""
 ) {
-    fun estaConfigurada(): Boolean {
-        return if (crearNueva) {
-            nuevaComunidadNombre.isNotBlank() && nuevaComunidadDireccion.isNotBlank()
-        } else {
-            comunidadExistente != null
+    fun estaConfigurada(esAdministrador: Boolean = false): Boolean {
+        return when {
+            crearNueva -> esAdministrador &&
+                nuevaComunidadNombre.isNotBlank() &&
+                nuevaComunidadDireccion.isNotBlank()
+            esAdministrador -> true
+            else -> comunidadExistente != null && !solicitarTraspaso
         }
     }
 }
 
 /**
- * Pantalla para el registro de nuevos usuarios con datos de vivienda y selector unificado de comunidad.
+ * Pantalla para el registro de nuevos usuarios (Vecino/a o Administrador de fincas)
+ * con selector unificado de comunidad.
  */
 @Composable
 fun RegistroNuevoUsuario(
     datosComunidad: DatosRegistroComunidad = DatosRegistroComunidad(),
+    esAdministrador: Boolean = false,
     cargando: Boolean = false,
+    onTipoCuentaChange: (Boolean) -> Unit = {},
     onAbrirBuscadorComunidades: () -> Unit = {},
     onRegisterClick: (
         nombre: String,
@@ -84,8 +91,9 @@ fun RegistroNuevoUsuario(
         email: String,
         pass: String,
         photoUri: Uri?,
+        esAdministrador: Boolean,
         datosComunidad: DatosRegistroComunidad
-    ) -> Unit = { _, _, _, _, _, _, _ -> },
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     onVolverClick: () -> Unit = {}
 ) {
     val azulPrincipal = Color(0xFF133E54)
@@ -104,13 +112,14 @@ fun RegistroNuevoUsuario(
     var photoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     val photoUri = photoUriString?.let { Uri.parse(it) }
 
+    val viviendaValida = esAdministrador || vivienda.isNotBlank()
     val formularioValido = !cargando &&
         aceptoNormas &&
         nombre.isNotBlank() &&
-        vivienda.isNotBlank() &&
+        viviendaValida &&
         email.isNotBlank() &&
         password.length >= 6 &&
-        datosComunidad.estaConfigurada()
+        datosComunidad.estaConfigurada(esAdministrador)
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -162,7 +171,11 @@ fun RegistroNuevoUsuario(
                         color = azulPrincipal
                     )
                     Text(
-                        text = "Registro de Nuevo Vecino",
+                        text = if (esAdministrador) {
+                            "Registro de Administrador"
+                        } else {
+                            "Registro de Nuevo Vecino"
+                        },
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
@@ -205,7 +218,15 @@ fun RegistroNuevoUsuario(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Selector de tipo de cuenta: Vecino/a vs Administrador de fincas
+            SelectorTipoCuentaRegistro(
+                esAdministrador = esAdministrador,
+                onSeleccionar = onTipoCuentaChange
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Formulario
             Column(
@@ -232,11 +253,15 @@ fun RegistroNuevoUsuario(
                     )
                 }
 
-                // Campo Vivienda / Piso
+                // Campo Vivienda / Despacho
                 CampoEntradaTexto(
                     value = vivienda,
                     onValueChange = { vivienda = it },
-                    placeholder = "Piso / Vivienda (ej. Portal 1, 2ºA)",
+                    placeholder = if (esAdministrador) {
+                        "Despacho o vivienda (opcional)"
+                    } else {
+                        "Piso / Vivienda (ej. Portal 1, 2ºA)"
+                    },
                     icono = Icons.Outlined.Home,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -244,6 +269,7 @@ fun RegistroNuevoUsuario(
                 // Selector unificado que abre la ventana de búsqueda avanzada de comunidades
                 SelectorComunidadRegistro(
                     datosComunidad = datosComunidad,
+                    esAdministrador = esAdministrador,
                     onClick = onAbrirBuscadorComunidades
                 )
 
@@ -306,13 +332,17 @@ fun RegistroNuevoUsuario(
             Button(
                 onClick = {
                     if (formularioValido) {
+                        val viviendaFinal = vivienda.trim().ifBlank {
+                            if (esAdministrador) "Administración" else ""
+                        }
                         onRegisterClick(
                             nombre.trim(),
                             apellidos.trim(),
-                            vivienda.trim(),
+                            viviendaFinal,
                             email.trim(),
                             password,
                             photoUri,
+                            esAdministrador,
                             datosComunidad
                         )
                     }
@@ -357,8 +387,77 @@ fun RegistroNuevoUsuario(
 }
 
 @Composable
+private fun SelectorTipoCuentaRegistro(
+    esAdministrador: Boolean,
+    onSeleccionar: (Boolean) -> Unit
+) {
+    val azulPrincipal = Color(0xFF133E54)
+    val verdeBoton = Color(0xFF0F8A5F)
+    val fondoSuave = Color(0xFFF4F6F8)
+    val bordeGris = Color(0xFFE2E8F0)
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = "Tipo de cuenta",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF475569)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                Triple(false, "Vecino/a", Icons.Outlined.Person),
+                Triple(true, "Admin. de fincas", Icons.Outlined.AdminPanelSettings)
+            ).forEach { (esAdminOpcion, etiqueta, icono) ->
+                val seleccionado = esAdministrador == esAdminOpcion
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { onSeleccionar(esAdminOpcion) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (seleccionado) Color(0xFFEAF5EC) else fondoSuave,
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = if (seleccionado) verdeBoton else bordeGris
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = icono,
+                            contentDescription = null,
+                            tint = if (seleccionado) verdeBoton else Color(0xFF64748B),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = etiqueta,
+                            fontSize = 12.sp,
+                            fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Medium,
+                            color = if (seleccionado) azulPrincipal else Color(0xFF475569),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SelectorComunidadRegistro(
     datosComunidad: DatosRegistroComunidad,
+    esAdministrador: Boolean,
     onClick: () -> Unit
 ) {
     val azulPrincipal = Color(0xFF133E54)
@@ -367,13 +466,16 @@ private fun SelectorComunidadRegistro(
     val bordeGris = Color(0xFFE2E8F0)
     val textoSecundario = Color(0xFF64748B)
 
-    val seleccionada = datosComunidad.estaConfigurada()
+    val tieneSeleccionConcreta = datosComunidad.crearNueva || datosComunidad.comunidadExistente != null
     val titulo = when {
         datosComunidad.crearNueva && datosComunidad.nuevaComunidadNombre.isNotBlank() ->
             "Nueva: ${datosComunidad.nuevaComunidadNombre}"
+        datosComunidad.solicitarTraspaso && datosComunidad.comunidadExistente != null ->
+            "Solicitar: ${datosComunidad.comunidadExistente.nombre}"
         datosComunidad.comunidadExistente != null ->
             datosComunidad.comunidadExistente.nombre
-        else -> "Buscar o crear tu comunidad"
+        esAdministrador -> "Crear o buscar comunidad (opcional)"
+        else -> "Buscar tu comunidad"
     }
     val subtitulo = when {
         datosComunidad.crearNueva && datosComunidad.nuevaComunidadDireccion.isNotBlank() ->
@@ -381,19 +483,22 @@ private fun SelectorComunidadRegistro(
                 datosComunidad.nuevaComunidadDireccion,
                 datosComunidad.nuevaComunidadCiudad
             ).filter { it.isNotBlank() }.joinToString(" · ")
+        datosComunidad.solicitarTraspaso && datosComunidad.comunidadExistente != null ->
+            "Se enviará solicitud al administrador actual"
         datosComunidad.comunidadExistente != null ->
             datosComunidad.comunidadExistente.direccionCompleta()
-        else -> "Pulsa para buscar con filtros o dar de alta una"
+        esAdministrador -> "Puedes crear tu 1ª comunidad, solicitar una o entrar sin ella"
+        else -> "Pulsa para buscar con filtros y elegir tu comunidad"
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(if (seleccionada) Color(0xFFEAF5EC) else fondoGrisClaro)
+            .background(if (tieneSeleccionConcreta) Color(0xFFEAF5EC) else fondoGrisClaro)
             .border(
                 width = 1.dp,
-                color = if (seleccionada) Color(0xFF389F82) else bordeGris,
+                color = if (tieneSeleccionConcreta) Color(0xFF389F82) else bordeGris,
                 shape = RoundedCornerShape(20.dp)
             )
             .clickable { onClick() }
@@ -401,9 +506,9 @@ private fun SelectorComunidadRegistro(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (seleccionada) Icons.Outlined.Apartment else Icons.Outlined.Search,
+            imageVector = if (tieneSeleccionConcreta) Icons.Outlined.Apartment else Icons.Outlined.Search,
             contentDescription = null,
-            tint = if (seleccionada) verdeBoton else textoSecundario,
+            tint = if (tieneSeleccionConcreta) verdeBoton else textoSecundario,
             modifier = Modifier.size(22.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -411,15 +516,15 @@ private fun SelectorComunidadRegistro(
             Text(
                 text = titulo,
                 fontSize = 14.sp,
-                fontWeight = if (seleccionada) FontWeight.Bold else FontWeight.Medium,
-                color = if (seleccionada) azulPrincipal else textoSecundario,
+                fontWeight = if (tieneSeleccionConcreta) FontWeight.Bold else FontWeight.Medium,
+                color = if (tieneSeleccionConcreta) azulPrincipal else textoSecundario,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = subtitulo,
                 fontSize = 11.sp,
-                color = if (seleccionada) Color(0xFF455A64) else textoSecundario,
+                color = if (tieneSeleccionConcreta) Color(0xFF455A64) else textoSecundario,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -427,7 +532,7 @@ private fun SelectorComunidadRegistro(
         Icon(
             imageVector = Icons.Filled.ChevronRight,
             contentDescription = "Abrir buscador de comunidades",
-            tint = if (seleccionada) verdeBoton else textoSecundario
+            tint = if (tieneSeleccionConcreta) verdeBoton else textoSecundario
         )
     }
 }

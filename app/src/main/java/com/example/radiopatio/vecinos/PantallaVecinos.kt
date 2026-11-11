@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.radiopatio.comunidad.Comunidad
+import com.example.radiopatio.comunidad.SolicitudTraspasoAdmin
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
@@ -121,7 +122,11 @@ fun VecinosScreen(
         onIrABuscarComunidad = onIrABuscarComunidad,
         onAbrirDialogoTransferirPresidencia = viewModel::onAbrirDialogoTransferirPresidencia,
         onCerrarDialogoTransferirPresidencia = viewModel::onCerrarDialogoTransferirPresidencia,
-        onConfirmarTransferenciaPresidencia = viewModel::onTransferirPresidencia
+        onConfirmarTransferenciaPresidencia = viewModel::onTransferirPresidencia,
+        onCambiarComunidadAdministrada = viewModel::onCambiarComunidadAdministrada,
+        onAceptarSolicitudAdmin = viewModel::onAceptarSolicitudAdmin,
+        onRechazarSolicitudAdmin = viewModel::onRechazarSolicitudAdmin,
+        onCancelarSolicitudEnviada = viewModel::onCancelarSolicitudEnviada
     )
 }
 
@@ -136,10 +141,15 @@ fun VecinosContent(
     onIrABuscarComunidad: () -> Unit = {},
     onAbrirDialogoTransferirPresidencia: () -> Unit = {},
     onCerrarDialogoTransferirPresidencia: () -> Unit = {},
-    onConfirmarTransferenciaPresidencia: (Usuario) -> Unit = {}
+    onConfirmarTransferenciaPresidencia: (Usuario) -> Unit = {},
+    onCambiarComunidadAdministrada: (Comunidad) -> Unit = {},
+    onAceptarSolicitudAdmin: (SolicitudTraspasoAdmin) -> Unit = {},
+    onRechazarSolicitudAdmin: (SolicitudTraspasoAdmin) -> Unit = {},
+    onCancelarSolicitudEnviada: (Comunidad) -> Unit = {}
 ) {
     val vecinosFiltrados = uiState.vecinosFiltrados
     val candidatosPresidencia = uiState.candidatosPresidencia
+    val esAdministrador = uiState.usuarioActual?.esAdministradorFincas == true
 
     Scaffold(
         topBar = {
@@ -165,7 +175,11 @@ fun VecinosContent(
 
                 uiState.comunidadIdActual.isBlank() -> {
                     TarjetaSinComunidad(
+                        esAdministrador = esAdministrador,
+                        solicitudesEnviadas = uiState.comunidadesSolicitadasPendientes,
+                        procesandoSolicitud = uiState.procesandoSolicitudAdmin,
                         onSeleccionarOCrear = onIrABuscarComunidad,
+                        onCancelarSolicitud = onCancelarSolicitudEnviada,
                         modifier = Modifier
                             .align(Alignment.Center)
                             .padding(24.dp)
@@ -178,6 +192,42 @@ fun VecinosContent(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // 0. Selector multi-comunidad exclusivo para Administrador de fincas
+                        if (esAdministrador && uiState.comunidadesAdministradas.isNotEmpty()) {
+                            item {
+                                SelectorComunidadesAdministrador(
+                                    comunidades = uiState.comunidadesAdministradas,
+                                    comunidadActivaId = uiState.comunidadIdActual,
+                                    procesandoCambio = uiState.procesandoCambioComunidad,
+                                    onSeleccionarComunidad = onCambiarComunidadAdministrada,
+                                    onGestionarOAgregar = onIrABuscarComunidad
+                                )
+                            }
+                        }
+
+                        // 0b. Solicitudes entrantes de traspaso (solo visibles para el administrador actual de esta comunidad)
+                        if (uiState.esAdministradorActual && uiState.solicitudesTraspasoPendientes.isNotEmpty()) {
+                            item {
+                                TarjetaSolicitudesTraspasoAdmin(
+                                    solicitudes = uiState.solicitudesTraspasoPendientes,
+                                    procesando = uiState.procesandoSolicitudAdmin,
+                                    onAceptar = onAceptarSolicitudAdmin,
+                                    onRechazar = onRechazarSolicitudAdmin
+                                )
+                            }
+                        }
+
+                        // 0c. Solicitudes salientes enviadas a otras comunidades
+                        if (esAdministrador && uiState.comunidadesSolicitadasPendientes.isNotEmpty()) {
+                            item {
+                                TarjetaSolicitudesEnviadasAdmin(
+                                    comunidades = uiState.comunidadesSolicitadasPendientes,
+                                    procesando = uiState.procesandoSolicitudAdmin,
+                                    onCancelar = onCancelarSolicitudEnviada
+                                )
+                            }
+                        }
+
                         // 1. Datos generales de la comunidad actual
                         item {
                             uiState.comunidad?.let { comunidad ->
@@ -185,6 +235,7 @@ fun VecinosContent(
                                     comunidad = comunidad,
                                     totalMiembrosReales = uiState.vecinos.size,
                                     esPresidenteActual = uiState.esPresidenteActual,
+                                    esAdministradorCuenta = esAdministrador,
                                     hayOtrosMiembros = candidatosPresidencia.isNotEmpty(),
                                     onCambiarComunidad = onIrABuscarComunidad,
                                     onTransferirPresidencia = onAbrirDialogoTransferirPresidencia
@@ -325,6 +376,7 @@ private fun TarjetaInfoComunidad(
     comunidad: Comunidad,
     totalMiembrosReales: Int,
     esPresidenteActual: Boolean,
+    esAdministradorCuenta: Boolean = false,
     hayOtrosMiembros: Boolean,
     onCambiarComunidad: () -> Unit,
     onTransferirPresidencia: () -> Unit
@@ -421,7 +473,7 @@ private fun TarjetaInfoComunidad(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Cambiar",
+                        text = if (esAdministradorCuenta) "Gestionar" else "Cambiar",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = VerdeOscuro
@@ -706,66 +758,341 @@ private fun TarjetaVecino(
 }
 
 @Composable
-private fun TarjetaSinComunidad(
-    onSeleccionarOCrear: () -> Unit,
-    modifier: Modifier = Modifier
+private fun SelectorComunidadesAdministrador(
+    comunidades: List<Comunidad>,
+    comunidadActivaId: String,
+    procesandoCambio: Boolean,
+    onSeleccionarComunidad: (Comunidad) -> Unit,
+    onGestionarOAgregar: () -> Unit
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = androidx.compose.ui.graphics.SolidColor(BordeSuave)
+        )
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(VerdeSuave),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.AdminPanelSettings,
+                        contentDescription = null,
+                        tint = VerdeOscuro,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Comunidades administradas (${comunidades.size})",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AzulPrincipal
+                    )
+                }
+                TextButton(
+                    onClick = onGestionarOAgregar,
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = null,
+                        tint = VerdeOscuro,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = "Nueva / Solicitar",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = VerdeOscuro
+                    )
+                }
+            }
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(comunidades, key = { it.id }) { comunidad ->
+                    val esActiva = comunidad.id == comunidadActivaId
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (esActiva) AzulPrincipal else VerdeSuave,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable(enabled = !procesandoCambio && !esActiva) {
+                                onSeleccionarComunidad(comunidad)
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = comunidad.nombre.ifBlank { comunidad.id },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (esActiva) Color.White else AzulPrincipal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TarjetaSolicitudesTraspasoAdmin(
+    solicitudes: List<SolicitudTraspasoAdmin>,
+    procesando: Boolean,
+    onAceptar: (SolicitudTraspasoAdmin) -> Unit,
+    onRechazar: (SolicitudTraspasoAdmin) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFFDE68A))
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Outlined.Apartment,
+                    imageVector = Icons.Outlined.AdminPanelSettings,
                     contentDescription = null,
-                    tint = VerdeOscuro,
-                    modifier = Modifier.size(32.dp)
+                    tint = Color(0xFFB45309),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Solicitudes de traspaso de administración (${solicitudes.size})",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF92400E)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
             Text(
-                text = "Aún no perteneces a una comunidad",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = AzulPrincipal,
-                textAlign = TextAlign.Center
+                text = "Si aceptas el cambio, el solicitante pasará a ser el único administrador de esta comunidad y tú dejarás de gestionarla.",
+                fontSize = 12.sp,
+                color = Color(0xFF78350F)
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Únete a tu edificio o urbanización para ver a tus vecinos, publicaciones del tablón, mercadillo y eventos.",
-                fontSize = 13.sp,
-                color = Color(0xFF64748B),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Button(
-                onClick = onSeleccionarOCrear,
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Seleccionar o crear comunidad", fontWeight = FontWeight.Bold)
+            solicitudes.forEach { solicitud ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = solicitud.solicitanteNombre,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AzulPrincipal
+                            )
+                            if (solicitud.solicitanteEmail.isNotBlank()) {
+                                Text(
+                                    text = solicitud.solicitanteEmail,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF607D8B)
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { onRechazar(solicitud) },
+                                enabled = !procesando,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Rechazar", color = Color(0xFFD32F2F), fontSize = 12.sp)
+                            }
+                            Button(
+                                onClick = { onAceptar(solicitud) },
+                                enabled = !procesando,
+                                colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Aceptar traspaso", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun TarjetaSolicitudesEnviadasAdmin(
+    comunidades: List<Comunidad>,
+    procesando: Boolean,
+    onCancelar: (Comunidad) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = androidx.compose.ui.graphics.SolidColor(BordeSuave)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Solicitudes pendientes de aceptación (${comunidades.size})",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = AzulPrincipal
+            )
+            comunidades.forEach { com ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = com.nombre,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AzulPrincipal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Esperando confirmación del administrador actual",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                    TextButton(
+                        onClick = { onCancelar(com) },
+                        enabled = !procesando
+                    ) {
+                        Text("Cancelar", fontSize = 12.sp, color = Color(0xFFD32F2F))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TarjetaSinComunidad(
+    esAdministrador: Boolean,
+    solicitudesEnviadas: List<Comunidad>,
+    procesandoSolicitud: Boolean,
+    onSeleccionarOCrear: () -> Unit,
+    onCancelarSolicitud: (Comunidad) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(VerdeSuave),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Apartment,
+                        contentDescription = null,
+                        tint = VerdeOscuro,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = if (esAdministrador) {
+                        "Sin comunidades asignadas todavía"
+                    } else {
+                        "Aún no perteneces a una comunidad"
+                    },
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AzulPrincipal,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = if (esAdministrador) {
+                        "Crea una nueva comunidad o solicita el traspaso de administración de una existente."
+                    } else {
+                        "Únete a tu edificio o urbanización para ver a tus vecinos, publicaciones del tablón, mercadillo y eventos."
+                    },
+                    fontSize = 13.sp,
+                    color = Color(0xFF64748B),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Button(
+                    onClick = onSeleccionarOCrear,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (esAdministrador) "Crear o buscar comunidad" else "Buscar y unirme a comunidad",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        if (esAdministrador && solicitudesEnviadas.isNotEmpty()) {
+            TarjetaSolicitudesEnviadasAdmin(
+                comunidades = solicitudesEnviadas,
+                procesando = procesandoSolicitud,
+                onCancelar = onCancelarSolicitud
+            )
         }
     }
 }

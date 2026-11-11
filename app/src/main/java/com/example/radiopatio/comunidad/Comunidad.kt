@@ -15,6 +15,7 @@ data class Comunidad(
     val photoUrl: String = "",
     val verificada: Boolean = false,
     val presidenteUid: String = "",
+    val administradorUid: String = "",
     val createdByUid: String = ""
 ) {
     /**

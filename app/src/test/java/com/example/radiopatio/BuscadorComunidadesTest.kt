@@ -4,6 +4,10 @@ import com.example.radiopatio.comunidad.BuscadorComunidadesUiState
 import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.comunidad.OrdenComunidad
 import com.example.radiopatio.comunidad.filtrarYOrdenarComunidades
+import com.example.radiopatio.informacionUsuario.ROL_ADMINISTRADOR_FINCAS
+import com.example.radiopatio.informacionUsuario.ROL_VECINO
+import com.example.radiopatio.informacionUsuario.Usuario
+import com.example.radiopatio.registroInicio.DatosRegistroComunidad
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -115,6 +119,59 @@ class BuscadorComunidadesTest {
         )
         assertTrue(stateFiltrado.hayFiltrosActivos)
         assertEquals(3, stateFiltrado.cantidadFiltrosActivos)
+    }
+
+    @Test
+    fun soloAdministradoresFincasPuedenCrearComunidades() {
+        val vecino = Usuario("Lucía", "L", "2ºA", "l@rp.es", "", rol = ROL_VECINO, uid = "u_vec")
+        val admin = Usuario(
+            nombre = "Marta",
+            inicial = "M",
+            vivienda = "Administración",
+            email = "m@rp.es",
+            telefono = "",
+            rol = ROL_ADMINISTRADOR_FINCAS,
+            uid = "u_adm",
+            tipoCuenta = ROL_ADMINISTRADOR_FINCAS
+        )
+
+        val stateVecino = BuscadorComunidadesUiState(usuarioActual = vecino)
+        assertFalse(stateVecino.puedeCrearComunidad(modoRegistro = false, esAdministradorRegistro = false))
+        assertFalse(stateVecino.puedeCrearComunidad(modoRegistro = true, esAdministradorRegistro = false))
+
+        val stateAdmin = BuscadorComunidadesUiState(usuarioActual = admin)
+        assertTrue(stateAdmin.puedeCrearComunidad(modoRegistro = false, esAdministradorRegistro = false))
+        assertTrue(stateAdmin.puedeCrearComunidad(modoRegistro = true, esAdministradorRegistro = true))
+    }
+
+    @Test
+    fun datosRegistroComunidad_validaCorrectamenteSegunTipoCuenta() {
+        val comunidadExistente = comunidades.first()
+
+        assertFalse(DatosRegistroComunidad().estaConfigurada(esAdministrador = false))
+        assertTrue(DatosRegistroComunidad(comunidadExistente = comunidadExistente).estaConfigurada(esAdministrador = false))
+        assertFalse(
+            DatosRegistroComunidad(
+                crearNueva = true,
+                nuevaComunidadNombre = "Nueva",
+                nuevaComunidadDireccion = "Calle 1"
+            ).estaConfigurada(esAdministrador = false)
+        )
+
+        assertTrue(DatosRegistroComunidad().estaConfigurada(esAdministrador = true))
+        assertTrue(
+            DatosRegistroComunidad(
+                crearNueva = true,
+                nuevaComunidadNombre = "Nueva",
+                nuevaComunidadDireccion = "Calle 1"
+            ).estaConfigurada(esAdministrador = true)
+        )
+        assertTrue(
+            DatosRegistroComunidad(
+                solicitarTraspaso = true,
+                comunidadExistente = comunidadExistente
+            ).estaConfigurada(esAdministrador = true)
+        )
     }
 }
 

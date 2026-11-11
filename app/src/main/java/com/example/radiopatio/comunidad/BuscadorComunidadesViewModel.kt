@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.radiopatio.informacionUsuario.ROL_VECINO
+import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.usuarios.UserRepository
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -23,6 +25,7 @@ enum class OrdenComunidad(val etiqueta: String) {
 data class BuscadorComunidadesUiState(
     val comunidadesTotales: List<Comunidad> = emptyList(),
     val comunidadActualId: String = "",
+    val usuarioActual: Usuario? = null,
     val textoBusqueda: String = "",
     val tipoSeleccionado: String = "Todos",
     val ciudadSeleccionada: String = "Todas",
@@ -31,8 +34,19 @@ data class BuscadorComunidadesUiState(
     val cargando: Boolean = true,
     val procesando: Boolean = false,
     val mostrarDialogoCrear: Boolean = false,
+    val mensajeExito: String? = null,
     val errorMensaje: String? = null
 ) {
+    fun puedeCrearComunidad(
+        modoRegistro: Boolean,
+        esAdministradorRegistro: Boolean
+    ): Boolean {
+        return if (modoRegistro) {
+            esAdministradorRegistro
+        } else {
+            usuarioActual?.esAdministradorFincas == true
+        }
+    }
     val tiposDisponibles: List<String>
         get() {
             val base = listOf("Residencial", "Urbanización", "Edificio")
@@ -201,13 +215,14 @@ class BuscadorComunidadesViewModel(
         viewModelScope.launch {
             combine(
                 comunidadRepository.observarComunidades(),
-                userRepository.observarComunidadIdActual()
-            ) { comunidades, comIdActual ->
-                Pair(comunidades, comIdActual)
-            }.collect { (comunidades, comIdActual) ->
+                userRepository.observarUsuarioActual()
+            ) { comunidades, usuario ->
+                Pair(comunidades, usuario)
+            }.collect { (comunidades, usuario) ->
                 uiState = uiState.copy(
                     comunidadesTotales = comunidades,
-                    comunidadActualId = comIdActual,
+                    usuarioActual = usuario,
+                    comunidadActualId = usuario?.comunidadId.orEmpty(),
                     cargando = false
                 )
             }
@@ -244,7 +259,16 @@ class BuscadorComunidadesViewModel(
         )
     }
 
-    fun onAbrirDialogoCrear() {
+    fun onAbrirDialogoCrear(
+        modoRegistro: Boolean = false,
+        esAdministradorRegistro: Boolean = false
+    ) {
+        if (!uiState.puedeCrearComunidad(modoRegistro, esAdministradorRegistro)) {
+            uiState = uiState.copy(
+                errorMensaje = "Solo los administradores de fincas pueden crear comunidades."
+            )
+            return
+        }
         uiState = uiState.copy(mostrarDialogoCrear = true, errorMensaje = null)
     }
 
@@ -256,13 +280,66 @@ class BuscadorComunidadesViewModel(
         uiState = uiState.copy(errorMensaje = null)
     }
 
+    fun onLimpiarMensajeExito() {
+        uiState = uiState.copy(mensajeExito = null)
+    }
+
     fun onUnirseAComunidad(comunidad: Comunidad, onExito: () -> Unit) {
+        val usuario = uiState.usuarioActual
         viewModelScope.launch {
-            uiState = uiState.copy(procesando = true, errorMensaje = null)
+            uiState = uiState.copy(procesando = true, errorMensaje = null, mensajeExito = null)
+
+            if (usuario?.esAdministradorFincas == true) {
+                if (usuario.perteneceAComunidad(comunidad.id) || comunidad.administradorUid == usuario.uid) {
+                    val cambio = userRepository.cambiarComunidadActivaAdministrador(comunidad)
+                    if (cambio.isSuccess) {
+                        uiState = uiState.copy(procesando = false)
+                        onExito()
+                    } else {
+                        uiState = uiState.copy(
+                            procesando = false,
+                            errorMensaje = cambio.exceptionOrNull()?.localizedMessage
+                                ?: "No se pudo cambiar a la comunidad seleccionada."
+                        )
+                    }
+                    return@launch
+                }
+
+                if (comunidad.administradorUid.isBlank()) {
+                    val union = userRepository.unirseComoAdministradorAComunidadSinAdmin(comunidad.id)
+                    if (union.isSuccess) {
+                        uiState = uiState.copy(procesando = false)
+                        onExito()
+                    } else {
+                        uiState = uiState.copy(
+                            procesando = false,
+                            errorMensaje = union.exceptionOrNull()?.localizedMessage
+                                ?: "No se pudo asignar la administración."
+                        )
+                    }
+                    return@launch
+                }
+
+                val solicitud = comunidadRepository.solicitarTraspasoAdmin(comunidad.id, usuario)
+                uiState = if (solicitud.isSuccess) {
+                    uiState.copy(
+                        procesando = false,
+                        mensajeExito = "Solicitud enviada al administrador de ${comunidad.nombre}. Podrás acceder cuando acepte el traspaso."
+                    )
+                } else {
+                    uiState.copy(
+                        procesando = false,
+                        errorMensaje = solicitud.exceptionOrNull()?.localizedMessage
+                            ?: "No se pudo enviar la solicitud de administración."
+                    )
+                }
+                return@launch
+            }
+
             val resultado = userRepository.asignarComunidadUsuario(
                 comunidadId = comunidad.id,
                 comunidadNombre = comunidad.nombre,
-                nuevoRol = "Vecino/a"
+                nuevoRol = ROL_VECINO
             )
             if (resultado.isSuccess) {
                 uiState = uiState.copy(procesando = false)
@@ -286,9 +363,17 @@ class BuscadorComunidadesViewModel(
         descripcion: String,
         onExito: () -> Unit
     ) {
+        val usuario = uiState.usuarioActual
+        if (usuario?.esAdministradorFincas != true) {
+            uiState = uiState.copy(
+                errorMensaje = "Solo los administradores de fincas pueden crear comunidades."
+            )
+            return
+        }
+
         viewModelScope.launch {
             uiState = uiState.copy(procesando = true, errorMensaje = null)
-            val uid = userRepository.getCurrentUserData().getOrNull()?.uid.orEmpty()
+            val uid = usuario.uid.ifBlank { userRepository.getCurrentUserData().getOrNull()?.uid.orEmpty() }
             val creacion = comunidadRepository.crearComunidad(
                 nombre = nombre,
                 direccion = direccion,
@@ -296,15 +381,12 @@ class BuscadorComunidadesViewModel(
                 codigoPostal = codigoPostal,
                 descripcion = descripcion,
                 tipo = tipo,
-                createdByUid = uid
+                createdByUid = uid,
+                creadorEsAdministrador = true
             )
 
             creacion.onSuccess { nuevaComunidad ->
-                val asignacion = userRepository.asignarComunidadUsuario(
-                    comunidadId = nuevaComunidad.id,
-                    comunidadNombre = nuevaComunidad.nombre,
-                    nuevoRol = "Presidente"
-                )
+                val asignacion = userRepository.asignarComunidadCreadaAdministrador(nuevaComunidad)
                 if (asignacion.isSuccess) {
                     uiState = uiState.copy(
                         procesando = false,
@@ -315,7 +397,7 @@ class BuscadorComunidadesViewModel(
                     uiState = uiState.copy(
                         procesando = false,
                         errorMensaje = asignacion.exceptionOrNull()?.localizedMessage
-                            ?: "Comunidad creada, pero no se pudo asignar al usuario."
+                            ?: "Comunidad creada, pero no se pudo asignar al administrador."
                     )
                 }
             }.onFailure { error ->

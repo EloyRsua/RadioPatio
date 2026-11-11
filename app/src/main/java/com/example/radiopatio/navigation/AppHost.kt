@@ -26,6 +26,9 @@ import com.example.radiopatio.comunidad.BuscadorComunidadesScreen
 import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.comunidad.ComunidadRepository
 import com.example.radiopatio.informacionUsuario.PerfilUsuarioScreen
+import com.example.radiopatio.informacionUsuario.ROL_ADMINISTRADOR_FINCAS
+import com.example.radiopatio.informacionUsuario.ROL_VECINO
+import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.marketplace.MercadilloScreen
 import com.example.radiopatio.publicacion.PantallaCrearPublicacion
 import com.example.radiopatio.registroInicio.DatosRegistroComunidad
@@ -41,12 +44,14 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
     save = { datos ->
         listOf(
             datos.crearNueva,
+            datos.solicitarTraspaso,
             datos.comunidadExistente?.id ?: "",
             datos.comunidadExistente?.nombre ?: "",
             datos.comunidadExistente?.direccion ?: "",
             datos.comunidadExistente?.ciudad ?: "",
             datos.comunidadExistente?.codigoPostal ?: "",
             datos.comunidadExistente?.tipo ?: "Residencial",
+            datos.comunidadExistente?.administradorUid ?: "",
             datos.nuevaComunidadNombre,
             datos.nuevaComunidadDireccion,
             datos.nuevaComunidadCiudad,
@@ -56,27 +61,29 @@ private val DatosRegistroComunidadSaver = listSaver<DatosRegistroComunidad, Any?
         )
     },
     restore = { lista ->
-        val comId = lista[1] as String
+        val comId = lista[2] as String
         val comExistente = if (comId.isNotBlank()) {
             Comunidad(
                 id = comId,
-                nombre = lista[2] as String,
-                direccion = lista[3] as String,
-                ciudad = lista[4] as String,
-                codigoPostal = lista[5] as String,
-                tipo = lista[6] as String
+                nombre = lista[3] as String,
+                direccion = lista[4] as String,
+                ciudad = lista[5] as String,
+                codigoPostal = lista[6] as String,
+                tipo = lista[7] as String,
+                administradorUid = lista[8] as String
             )
         } else null
 
         DatosRegistroComunidad(
             crearNueva = lista[0] as Boolean,
+            solicitarTraspaso = lista[1] as Boolean,
             comunidadExistente = comExistente,
-            nuevaComunidadNombre = lista[7] as String,
-            nuevaComunidadDireccion = lista[8] as String,
-            nuevaComunidadCiudad = lista[9] as String,
-            nuevaComunidadCp = lista[10] as String,
-            nuevaComunidadTipo = lista[11] as String,
-            nuevaComunidadDescripcion = lista[12] as String
+            nuevaComunidadNombre = lista[9] as String,
+            nuevaComunidadDireccion = lista[10] as String,
+            nuevaComunidadCiudad = lista[11] as String,
+            nuevaComunidadCp = lista[12] as String,
+            nuevaComunidadTipo = lista[13] as String,
+            nuevaComunidadDescripcion = lista[14] as String
         )
     }
 )
@@ -110,6 +117,7 @@ fun AppNavHost(
     var datosComunidadRegistro by rememberSaveable(stateSaver = DatosRegistroComunidadSaver) {
         mutableStateOf(DatosRegistroComunidad())
     }
+    var esAdministradorRegistro by rememberSaveable { mutableStateOf(false) }
 
     NavHost(
         navController = navController,
@@ -149,6 +157,7 @@ fun AppNavHost(
                 },
                 onIrANuevoRegistroClick = {
                     datosComunidadRegistro = DatosRegistroComunidad()
+                    esAdministradorRegistro = false
                     navController.navigate(RegistroNuevo)
                 }
             )
@@ -159,51 +168,144 @@ fun AppNavHost(
 
             RegistroNuevoUsuario(
                 datosComunidad = datosComunidadRegistro,
+                esAdministrador = esAdministradorRegistro,
                 cargando = registrando,
-                onAbrirBuscadorComunidades = {
-                    navController.navigate(BuscarComunidad(modoRegistro = true))
+                onTipoCuentaChange = { nuevoEsAdmin ->
+                    esAdministradorRegistro = nuevoEsAdmin
+                    if (!nuevoEsAdmin && (datosComunidadRegistro.crearNueva || datosComunidadRegistro.solicitarTraspaso)) {
+                        datosComunidadRegistro = DatosRegistroComunidad()
+                    }
                 },
-                onRegisterClick = { nombre, apellidos, vivienda, email, pass, photoUri, datosComunidad ->
+                onAbrirBuscadorComunidades = {
+                    navController.navigate(
+                        BuscarComunidad(
+                            modoRegistro = true,
+                            esAdministradorRegistro = esAdministradorRegistro
+                        )
+                    )
+                },
+                onRegisterClick = { nombre, apellidos, vivienda, email, pass, photoUri, esAdmin, datosComunidad ->
                     coroutineScope.launch {
                         registrando = true
                         try {
+                            if (datosComunidad.crearNueva && !esAdmin) {
+                                throw SecurityException("Solo los administradores de fincas pueden crear comunidades.")
+                            }
+
                             val auth = FirebaseAuth.getInstance()
                             val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
                             val uid = authResult.user?.uid
 
                             if (uid != null) {
-                                val (comunidadId, comunidadNombre, rol) = if (datosComunidad.crearNueva) {
-                                    val comunidadCreada = comunidadRepository.crearComunidad(
-                                        nombre = datosComunidad.nuevaComunidadNombre,
-                                        direccion = datosComunidad.nuevaComunidadDireccion,
-                                        ciudad = datosComunidad.nuevaComunidadCiudad,
-                                        codigoPostal = datosComunidad.nuevaComunidadCp,
-                                        descripcion = datosComunidad.nuevaComunidadDescripcion,
-                                        tipo = datosComunidad.nuevaComunidadTipo,
-                                        createdByUid = uid
-                                    ).getOrThrow()
-                                    Triple(comunidadCreada.id, comunidadCreada.nombre, "Presidente")
+                                val photoUrl = userRepository.subirAvatarSiExiste(uid, photoUri)
+                                var mensajeBienvenida = "¡Bienvenido a RadioPatio, $nombre!"
+
+                                if (esAdmin) {
+                                    when {
+                                        datosComunidad.crearNueva -> {
+                                            val comunidadCreada = comunidadRepository.crearComunidad(
+                                                nombre = datosComunidad.nuevaComunidadNombre,
+                                                direccion = datosComunidad.nuevaComunidadDireccion,
+                                                ciudad = datosComunidad.nuevaComunidadCiudad,
+                                                codigoPostal = datosComunidad.nuevaComunidadCp,
+                                                descripcion = datosComunidad.nuevaComunidadDescripcion,
+                                                tipo = datosComunidad.nuevaComunidadTipo,
+                                                createdByUid = uid,
+                                                creadorEsAdministrador = true
+                                            ).getOrThrow()
+
+                                            userRepository.registrarUsuarioEnFirestore(
+                                                uid = uid,
+                                                nombre = nombre,
+                                                apellidos = apellidos,
+                                                vivienda = vivienda,
+                                                email = email,
+                                                comunidadId = comunidadCreada.id,
+                                                comunidadNombre = comunidadCreada.nombre,
+                                                rol = ROL_ADMINISTRADOR_FINCAS,
+                                                tipoCuenta = ROL_ADMINISTRADOR_FINCAS,
+                                                comunidadesIds = listOf(comunidadCreada.id),
+                                                photoUrl = photoUrl
+                                            ).getOrThrow()
+                                        }
+
+                                        datosComunidad.comunidadExistente != null -> {
+                                            val com = datosComunidad.comunidadExistente
+                                            userRepository.registrarUsuarioEnFirestore(
+                                                uid = uid,
+                                                nombre = nombre,
+                                                apellidos = apellidos,
+                                                vivienda = vivienda,
+                                                email = email,
+                                                comunidadId = "",
+                                                comunidadNombre = "",
+                                                rol = ROL_ADMINISTRADOR_FINCAS,
+                                                tipoCuenta = ROL_ADMINISTRADOR_FINCAS,
+                                                comunidadesIds = emptyList(),
+                                                photoUrl = photoUrl
+                                            ).getOrThrow()
+
+                                            val unionDirecta = if (!datosComunidad.solicitarTraspaso && com.administradorUid.isBlank()) {
+                                                userRepository.unirseComoAdministradorAComunidadSinAdmin(com.id)
+                                            } else {
+                                                Result.failure(IllegalStateException("Requiere solicitud"))
+                                            }
+
+                                            if (unionDirecta.isFailure) {
+                                                val solicitante = Usuario(
+                                                    nombre = "$nombre $apellidos".trim().ifBlank { nombre },
+                                                    inicial = nombre.firstOrNull()?.uppercase() ?: "A",
+                                                    vivienda = vivienda,
+                                                    email = email,
+                                                    telefono = "",
+                                                    rol = ROL_ADMINISTRADOR_FINCAS,
+                                                    uid = uid,
+                                                    photoUrl = photoUrl,
+                                                    tipoCuenta = ROL_ADMINISTRADOR_FINCAS
+                                                )
+                                                comunidadRepository.solicitarTraspasoAdmin(com.id, solicitante).getOrThrow()
+                                                mensajeBienvenida = "Cuenta creada. Solicitud enviada al administrador de ${com.nombre}."
+                                            }
+                                        }
+
+                                        else -> {
+                                            userRepository.registrarUsuarioEnFirestore(
+                                                uid = uid,
+                                                nombre = nombre,
+                                                apellidos = apellidos,
+                                                vivienda = vivienda,
+                                                email = email,
+                                                comunidadId = "",
+                                                comunidadNombre = "",
+                                                rol = ROL_ADMINISTRADOR_FINCAS,
+                                                tipoCuenta = ROL_ADMINISTRADOR_FINCAS,
+                                                comunidadesIds = emptyList(),
+                                                photoUrl = photoUrl
+                                            ).getOrThrow()
+                                        }
+                                    }
                                 } else {
                                     val com = datosComunidad.comunidadExistente
-                                    Triple(com?.id.orEmpty(), com?.nombre.orEmpty(), "Vecino/a")
+                                        ?: throw IllegalArgumentException("Debes seleccionar una comunidad para registrarte.")
+
+                                    userRepository.registrarUsuarioEnFirestore(
+                                        uid = uid,
+                                        nombre = nombre,
+                                        apellidos = apellidos,
+                                        vivienda = vivienda,
+                                        email = email,
+                                        comunidadId = com.id,
+                                        comunidadNombre = com.nombre,
+                                        rol = ROL_VECINO,
+                                        tipoCuenta = ROL_VECINO,
+                                        comunidadesIds = listOf(com.id),
+                                        photoUrl = photoUrl
+                                    ).getOrThrow()
                                 }
 
-                                val photoUrl = userRepository.subirAvatarSiExiste(uid, photoUri)
-
-                                userRepository.registrarUsuarioEnFirestore(
-                                    uid = uid,
-                                    nombre = nombre,
-                                    apellidos = apellidos,
-                                    vivienda = vivienda,
-                                    email = email,
-                                    comunidadId = comunidadId,
-                                    comunidadNombre = comunidadNombre,
-                                    rol = rol,
-                                    photoUrl = photoUrl
-                                ).getOrThrow()
-
                                 datosComunidadRegistro = DatosRegistroComunidad()
-                                Toast.makeText(context, "¡Bienvenido a RadioPatio, $nombre!", Toast.LENGTH_SHORT).show()
+                                esAdministradorRegistro = false
+                                Toast.makeText(context, mensajeBienvenida, Toast.LENGTH_LONG).show()
                                 navController.navigate(Inicio) {
                                     popUpTo(InicioSesion) { inclusive = true }
                                 }
@@ -221,6 +323,7 @@ fun AppNavHost(
                 },
                 onVolverClick = {
                     datosComunidadRegistro = DatosRegistroComunidad()
+                    esAdministradorRegistro = false
                     navController.popBackStack()
                 }
             )
@@ -235,29 +338,34 @@ fun AppNavHost(
 
             BuscadorComunidadesScreen(
                 modoRegistro = ruta.modoRegistro,
+                esAdministradorRegistro = ruta.esAdministradorRegistro,
                 comunidadPreseleccionadaId = datosComunidadRegistro.comunidadExistente?.id.orEmpty(),
                 onVolver = {
                     navController.popBackStack()
                 },
-                onComunidadSeleccionadaEnRegistro = { comunidad ->
+                onComunidadSeleccionadaEnRegistro = { comunidad, solicitarTraspaso ->
                     datosComunidadRegistro = DatosRegistroComunidad(
                         crearNueva = false,
+                        solicitarTraspaso = solicitarTraspaso,
                         comunidadExistente = comunidad
                     )
                     navController.popBackStack()
                 },
                 onNuevaComunidadEnRegistro = { formulario ->
-                    datosComunidadRegistro = DatosRegistroComunidad(
-                        crearNueva = true,
-                        comunidadExistente = null,
-                        nuevaComunidadNombre = formulario.nombre,
-                        nuevaComunidadDireccion = formulario.direccion,
-                        nuevaComunidadCiudad = formulario.ciudad,
-                        nuevaComunidadCp = formulario.codigoPostal,
-                        nuevaComunidadTipo = formulario.tipo,
-                        nuevaComunidadDescripcion = formulario.descripcion
-                    )
-                    navController.popBackStack()
+                    if (ruta.esAdministradorRegistro) {
+                        datosComunidadRegistro = DatosRegistroComunidad(
+                            crearNueva = true,
+                            solicitarTraspaso = false,
+                            comunidadExistente = null,
+                            nuevaComunidadNombre = formulario.nombre,
+                            nuevaComunidadDireccion = formulario.direccion,
+                            nuevaComunidadCiudad = formulario.ciudad,
+                            nuevaComunidadCp = formulario.codigoPostal,
+                            nuevaComunidadTipo = formulario.tipo,
+                            nuevaComunidadDescripcion = formulario.descripcion
+                        )
+                        navController.popBackStack()
+                    }
                 },
                 onComunidadCambiada = {
                     navController.popBackStack()

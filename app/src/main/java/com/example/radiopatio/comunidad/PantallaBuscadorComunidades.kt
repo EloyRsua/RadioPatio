@@ -113,20 +113,29 @@ data class NuevaComunidadFormulario(
 @Composable
 fun BuscadorComunidadesScreen(
     modoRegistro: Boolean,
+    esAdministradorRegistro: Boolean = false,
     comunidadPreseleccionadaId: String = "",
     onVolver: () -> Unit,
-    onComunidadSeleccionadaEnRegistro: (Comunidad) -> Unit = {},
+    onComunidadSeleccionadaEnRegistro: (Comunidad, Boolean) -> Unit = { _, _ -> },
     onNuevaComunidadEnRegistro: (NuevaComunidadFormulario) -> Unit = {},
     onComunidadCambiada: () -> Unit = {},
     viewModel: BuscadorComunidadesViewModel = viewModel(factory = BuscadorComunidadesViewModelFactory())
 ) {
     val uiState = viewModel.uiState
     val context = LocalContext.current
+    var comunidadParaSolicitar by remember { mutableStateOf<Comunidad?>(null) }
 
     LaunchedEffect(uiState.errorMensaje) {
         uiState.errorMensaje?.let { msg ->
             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             viewModel.onLimpiarError()
+        }
+    }
+
+    LaunchedEffect(uiState.mensajeExito) {
+        uiState.mensajeExito?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            viewModel.onLimpiarMensajeExito()
         }
     }
 
@@ -136,10 +145,23 @@ fun BuscadorComunidadesScreen(
         uiState.comunidadActualId
     }
 
+    val esAdminFlujo = if (modoRegistro) {
+        esAdministradorRegistro
+    } else {
+        uiState.usuarioActual?.esAdministradorFincas == true
+    }
+
+    val puedeCrear = uiState.puedeCrearComunidad(
+        modoRegistro = modoRegistro,
+        esAdministradorRegistro = esAdministradorRegistro
+    )
+
     BuscadorComunidadesContent(
         uiState = uiState,
         comunidadSeleccionadaId = idResaltado,
         modoRegistro = modoRegistro,
+        esAdminFlujo = esAdminFlujo,
+        puedeCrearComunidad = puedeCrear,
         onVolver = onVolver,
         onTextoBusquedaChange = viewModel::onTextoBusquedaChange,
         onTipoSeleccionadoChange = viewModel::onTipoSeleccionadoChange,
@@ -147,21 +169,49 @@ fun BuscadorComunidadesScreen(
         onToggleSoloVerificadas = viewModel::onToggleSoloVerificadas,
         onOrdenSeleccionadoChange = viewModel::onOrdenSeleccionadoChange,
         onLimpiarFiltros = viewModel::onLimpiarFiltros,
-        onAbrirDialogoCrear = viewModel::onAbrirDialogoCrear,
+        onAbrirDialogoCrear = {
+            viewModel.onAbrirDialogoCrear(
+                modoRegistro = modoRegistro,
+                esAdministradorRegistro = esAdministradorRegistro
+            )
+        },
         onCerrarDialogoCrear = viewModel::onCerrarDialogoCrear,
         onSeleccionarComunidad = { comunidad ->
             if (modoRegistro) {
-                onComunidadSeleccionadaEnRegistro(comunidad)
+                val requiereSolicitud = esAdministradorRegistro && comunidad.administradorUid.isNotBlank()
+                onComunidadSeleccionadaEnRegistro(comunidad, requiereSolicitud)
             } else {
-                viewModel.onUnirseAComunidad(comunidad) {
-                    onComunidadCambiada()
+                val usuario = uiState.usuarioActual
+                val yaPertenece = usuario?.perteneceAComunidad(comunidad.id) == true ||
+                    (usuario != null && comunidad.administradorUid == usuario.uid)
+                val yaSolicitada = usuario != null &&
+                    comunidad.id in usuario.solicitudesPendientesComunidades
+
+                when {
+                    esAdminFlujo && !yaPertenece && yaSolicitada -> {
+                        Toast.makeText(
+                            context,
+                            "Ya tienes una solicitud pendiente en ${comunidad.nombre}.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    esAdminFlujo && !yaPertenece && comunidad.administradorUid.isNotBlank() -> {
+                        comunidadParaSolicitar = comunidad
+                    }
+                    else -> {
+                        viewModel.onUnirseAComunidad(comunidad) {
+                            onComunidadCambiada()
+                        }
+                    }
                 }
             }
         },
         onConfirmarCrearComunidad = { formulario ->
             if (modoRegistro) {
-                viewModel.onCerrarDialogoCrear()
-                onNuevaComunidadEnRegistro(formulario)
+                if (esAdministradorRegistro) {
+                    viewModel.onCerrarDialogoCrear()
+                    onNuevaComunidadEnRegistro(formulario)
+                }
             } else {
                 viewModel.onCrearYUnirseAComunidad(
                     nombre = formulario.nombre,
@@ -176,6 +226,43 @@ fun BuscadorComunidadesScreen(
             }
         }
     )
+
+    comunidadParaSolicitar?.let { comunidadObjetivo ->
+        AlertDialog(
+            onDismissRequest = { if (!uiState.procesando) comunidadParaSolicitar = null },
+            title = {
+                Text(
+                    text = "Solicitar administración",
+                    fontWeight = FontWeight.Bold,
+                    color = AzulPrincipal
+                )
+            },
+            text = {
+                Text(
+                    text = "${comunidadObjetivo.nombre} ya tiene un administrador de fincas asignado. " +
+                        "Se enviará una solicitud de traspaso y permanecerás fuera de esta comunidad hasta que la acepte.",
+                    fontSize = 13.sp,
+                    color = Color(0xFF455A64)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        comunidadParaSolicitar = null
+                        viewModel.onUnirseAComunidad(comunidadObjetivo) {}
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro)
+                ) {
+                    Text("Enviar solicitud")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { comunidadParaSolicitar = null }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -183,6 +270,8 @@ fun BuscadorComunidadesContent(
     uiState: BuscadorComunidadesUiState,
     comunidadSeleccionadaId: String,
     modoRegistro: Boolean,
+    esAdminFlujo: Boolean = false,
+    puedeCrearComunidad: Boolean = false,
     onVolver: () -> Unit,
     onTextoBusquedaChange: (String) -> Unit,
     onTipoSeleccionadoChange: (String) -> Unit,
@@ -202,6 +291,7 @@ fun BuscadorComunidadesContent(
         topBar = {
             BarraSuperiorBuscadorComunidades(
                 modoRegistro = modoRegistro,
+                puedeCrearComunidad = puedeCrearComunidad,
                 resultados = comunidadesFiltradas.size,
                 total = uiState.comunidadesTotales.size,
                 onVolver = onVolver,
@@ -209,14 +299,16 @@ fun BuscadorComunidadesContent(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAbrirDialogoCrear,
-                containerColor = VerdeAccion,
-                contentColor = Color.White,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(4.dp)
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Crear nueva comunidad")
+            if (puedeCrearComunidad) {
+                FloatingActionButton(
+                    onClick = onAbrirDialogoCrear,
+                    containerColor = VerdeAccion,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Crear nueva comunidad")
+                }
             }
         }
     ) { padding ->
@@ -359,6 +451,7 @@ fun BuscadorComunidadesContent(
                         EstadoSinComunidades(
                             textoBusqueda = uiState.textoBusqueda,
                             hayFiltrosActivos = uiState.hayFiltrosActivos,
+                            puedeCrearComunidad = puedeCrearComunidad,
                             onLimpiarFiltros = onLimpiarFiltros,
                             onCrearComunidad = onAbrirDialogoCrear
                         )
@@ -402,11 +495,31 @@ fun BuscadorComunidadesContent(
                                 items = comunidadesFiltradas,
                                 key = { index, com -> com.id.ifBlank { "com-$index-${com.nombre}" } }
                             ) { _, comunidad ->
+                                val usuario = uiState.usuarioActual
+                                val esActiva = comunidad.id == comunidadSeleccionadaId &&
+                                    comunidadSeleccionadaId.isNotBlank()
+                                val yaAdministrada = !modoRegistro &&
+                                    esAdminFlujo &&
+                                    usuario != null &&
+                                    (usuario.perteneceAComunidad(comunidad.id) || comunidad.administradorUid == usuario.uid)
+                                val yaSolicitada = !modoRegistro &&
+                                    esAdminFlujo &&
+                                    usuario != null &&
+                                    comunidad.id in usuario.solicitudesPendientesComunidades
+                                val etiquetaAccion = when {
+                                    esAdminFlujo && yaAdministrada -> "Cambiar"
+                                    esAdminFlujo && yaSolicitada -> "Solicitada"
+                                    esAdminFlujo && comunidad.administradorUid.isNotBlank() -> "Solicitar"
+                                    esAdminFlujo -> "Administrar"
+                                    modoRegistro -> "Elegir"
+                                    else -> "Unirme"
+                                }
+
                                 TarjetaComunidadBuscador(
                                     comunidad = comunidad,
-                                    esSeleccionada = comunidad.id == comunidadSeleccionadaId &&
-                                        comunidadSeleccionadaId.isNotBlank(),
-                                    modoRegistro = modoRegistro,
+                                    esSeleccionada = esActiva,
+                                    etiquetaAccion = etiquetaAccion,
+                                    esSecundaria = esAdminFlujo && (yaSolicitada || (comunidad.administradorUid.isNotBlank() && !yaAdministrada)),
                                     habilitado = !uiState.procesando,
                                     onClick = { onSeleccionarComunidad(comunidad) }
                                 )
@@ -451,7 +564,7 @@ fun BuscadorComunidadesContent(
         }
     }
 
-    if (uiState.mostrarDialogoCrear) {
+    if (uiState.mostrarDialogoCrear && puedeCrearComunidad) {
         DialogoCrearComunidad(
             nombreInicial = uiState.textoBusqueda.trim(),
             procesando = uiState.procesando,
@@ -464,6 +577,7 @@ fun BuscadorComunidadesContent(
 @Composable
 private fun BarraSuperiorBuscadorComunidades(
     modoRegistro: Boolean,
+    puedeCrearComunidad: Boolean,
     resultados: Int,
     total: Int,
     onVolver: () -> Unit,
@@ -488,7 +602,7 @@ private fun BarraSuperiorBuscadorComunidades(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (modoRegistro) "Elige tu comunidad" else "Cambiar de comunidad",
+                    text = if (modoRegistro) "Elige tu comunidad" else "Buscar comunidad",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = AzulPrincipal
@@ -500,20 +614,22 @@ private fun BarraSuperiorBuscadorComunidades(
                 )
             }
 
-            TextButton(onClick = onNuevaComunidad) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = null,
-                    tint = VerdeOscuro,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Nueva",
-                    color = VerdeOscuro,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
+            if (puedeCrearComunidad) {
+                TextButton(onClick = onNuevaComunidad) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = null,
+                        tint = VerdeOscuro,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Nueva",
+                        color = VerdeOscuro,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
             }
         }
     }
@@ -756,7 +872,8 @@ private fun PanelFiltrosAvanzados(
 private fun TarjetaComunidadBuscador(
     comunidad: Comunidad,
     esSeleccionada: Boolean,
-    modoRegistro: Boolean,
+    etiquetaAccion: String,
+    esSecundaria: Boolean = false,
     habilitado: Boolean,
     onClick: () -> Unit
 ) {
@@ -860,13 +977,13 @@ private fun TarjetaComunidadBuscador(
                 } else {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = AzulPrincipal
+                        color = if (esSecundaria) VerdeSuave else AzulPrincipal
                     ) {
                         Text(
-                            text = if (modoRegistro) "Elegir" else "Unirme",
+                            text = etiquetaAccion,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = if (esSecundaria) VerdeOscuro else Color.White,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         )
                     }
@@ -937,6 +1054,7 @@ private fun EtiquetaComunidad(
 private fun EstadoSinComunidades(
     textoBusqueda: String,
     hayFiltrosActivos: Boolean,
+    puedeCrearComunidad: Boolean,
     onLimpiarFiltros: () -> Unit,
     onCrearComunidad: () -> Unit
 ) {
@@ -963,10 +1081,10 @@ private fun EstadoSinComunidades(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = if (hayFiltrosActivos) {
-                "Prueba con otros términos de búsqueda o limpia los filtros activos."
-            } else {
-                "Sé el primero en dar de alta tu edificio o urbanización."
+            text = when {
+                hayFiltrosActivos -> "Prueba con otros términos de búsqueda o limpia los filtros activos."
+                puedeCrearComunidad -> "Da de alta la primera comunidad desde aquí."
+                else -> "Solo los administradores de fincas pueden dar de alta nuevas comunidades."
             },
             fontSize = 13.sp,
             color = Color.Gray,
@@ -983,21 +1101,23 @@ private fun EstadoSinComunidades(
                     Text("Limpiar filtros", color = AzulPrincipal, fontSize = 12.sp)
                 }
             }
-            Button(
-                onClick = onCrearComunidad,
-                colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro),
-                shape = RoundedCornerShape(22.dp)
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = if (textoBusqueda.isNotBlank()) {
-                        "Crear \"${textoBusqueda.trim().take(18)}\""
-                    } else {
-                        "Crear comunidad"
-                    },
-                    fontSize = 12.sp
-                )
+            if (puedeCrearComunidad) {
+                Button(
+                    onClick = onCrearComunidad,
+                    colors = ButtonDefaults.buttonColors(containerColor = VerdeOscuro),
+                    shape = RoundedCornerShape(22.dp)
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (textoBusqueda.isNotBlank()) {
+                            "Crear \"${textoBusqueda.trim().take(18)}\""
+                        } else {
+                            "Crear comunidad"
+                        },
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
     }

@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [ComunidadEntidad::class, PublicacionEntidad::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class RadioPatioDatabase : RoomDatabase() {

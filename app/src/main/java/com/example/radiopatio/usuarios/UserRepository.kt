@@ -2,11 +2,15 @@ package com.example.radiopatio.usuarios
 
 import android.net.Uri
 import android.util.Log
+import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.comunidad.ComunidadRepository
+import com.example.radiopatio.informacionUsuario.ROL_ADMINISTRADOR_FINCAS
+import com.example.radiopatio.informacionUsuario.ROL_VECINO
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
@@ -56,7 +60,26 @@ class UserRepository(
 
         val rol = doc.getString("role")?.takeIf { it.isNotBlank() }
             ?: doc.getString("rol")?.takeIf { it.isNotBlank() }
-            ?: "Vecino/a"
+            ?: ROL_VECINO
+        val tipoCuenta = doc.getString("tipoCuenta")?.takeIf { it.isNotBlank() } ?: rol
+        val comunidadActivaId = doc.getString("comunidadId") ?: ""
+        val comunidadesIds = ((doc.get("comunidadesIds") as? List<*>)
+            ?.mapNotNull { it as? String }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList())
+            .let { lista ->
+                if (comunidadActivaId.isNotBlank() && comunidadActivaId !in lista) {
+                    lista + comunidadActivaId
+                } else {
+                    lista
+                }
+            }
+            .distinct()
+        val solicitudesPendientes = (doc.get("solicitudesPendientesComunidades") as? List<*>)
+            ?.mapNotNull { it as? String }
+            ?.filter { it.isNotBlank() }
+            ?.distinct()
+            ?: emptyList()
 
         return Usuario(
             nombre = nombreCompleto,
@@ -68,9 +91,12 @@ class UserRepository(
             fechaAlta = doc.getString("fechaAlta") ?: "Enero 2026",
             totalPublicaciones = (doc.getLong("totalPublicaciones") ?: 0L).toInt(),
             uid = doc.getString("uid")?.takeIf { it.isNotBlank() } ?: doc.id,
-            comunidadId = doc.getString("comunidadId") ?: "",
+            comunidadId = comunidadActivaId,
             comunidadNombre = doc.getString("comunidadNombre") ?: "",
-            photoUrl = doc.getString("photoUrl") ?: ""
+            photoUrl = doc.getString("photoUrl") ?: "",
+            tipoCuenta = tipoCuenta,
+            comunidadesIds = comunidadesIds,
+            solicitudesPendientesComunidades = solicitudesPendientes
         )
     }
 
@@ -181,8 +207,8 @@ class UserRepository(
     }
 
     /**
-     * Observa en tiempo real los vecinos que pertenecen exclusivamente a [comunidadId].
-     * Aplica filtro obligatorio en la consulta de Firestore y validación adicional en memoria.
+     * Observa en tiempo real los vecinos y administradores pertenecientes a [comunidadId].
+     * Combina consulta directa por `comunidadId` activo y por `comunidadesIds` (para administradores multi-comunidad).
      */
     fun observarVecinosPorComunidad(comunidadId: String): Flow<List<Usuario>> = callbackFlow {
         if (comunidadId.isBlank()) {
@@ -191,30 +217,48 @@ class UserRepository(
             return@callbackFlow
         }
 
-        var listener: ListenerRegistration? = null
+        var listenerActivos: ListenerRegistration? = null
+        var listenerMultiComunidad: ListenerRegistration? = null
+        var listaActivos = emptyList<Usuario>()
+        var listaMulti = emptyList<Usuario>()
+
+        fun reemitirCombinados() {
+            val combinados = (listaActivos + listaMulti)
+                .filter { it.perteneceAComunidad(comunidadId) }
+                .distinctBy { it.uid.ifBlank { it.email } }
+                .sortedBy { it.nombre.lowercase() }
+            trySend(combinados)
+        }
+
         try {
-            listener = db.collection(COLECCION_USERS)
+            listenerActivos = db.collection(COLECCION_USERS)
                 .whereEqualTo("comunidadId", comunidadId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        trySend(emptyList())
+                        reemitirCombinados()
                         return@addSnapshotListener
                     }
+                    listaActivos = snapshot?.documents?.map { documentToUsuario(it) }.orEmpty()
+                    reemitirCombinados()
+                }
 
-                    val vecinos = snapshot?.documents
-                        ?.map { documentToUsuario(it) }
-                        ?.filter { it.comunidadId == comunidadId }
-                        ?.sortedBy { it.nombre.lowercase() }
-                        ?: emptyList()
-
-                    trySend(vecinos)
+            listenerMultiComunidad = db.collection(COLECCION_USERS)
+                .whereArrayContains("comunidadesIds", comunidadId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        reemitirCombinados()
+                        return@addSnapshotListener
+                    }
+                    listaMulti = snapshot?.documents?.map { documentToUsuario(it) }.orEmpty()
+                    reemitirCombinados()
                 }
         } catch (_: Exception) {
             trySend(emptyList())
         }
 
         awaitClose {
-            listener?.remove()
+            listenerActivos?.remove()
+            listenerMultiComunidad?.remove()
         }
     }
 
@@ -234,7 +278,7 @@ class UserRepository(
     }
 
     /**
-     * Registra o actualiza el perfil del usuario en Firestore asociándolo a su comunidad.
+     * Registra o actualiza el perfil del usuario en Firestore asociándolo a su comunidad y tipo de cuenta.
      */
     suspend fun registrarUsuarioEnFirestore(
         uid: String,
@@ -244,14 +288,18 @@ class UserRepository(
         email: String,
         comunidadId: String,
         comunidadNombre: String,
-        rol: String = "Vecino/a",
-        photoUrl: String = ""
+        rol: String = ROL_VECINO,
+        photoUrl: String = "",
+        tipoCuenta: String = rol,
+        comunidadesIds: List<String> = if (comunidadId.isNotBlank()) listOf(comunidadId) else emptyList(),
+        solicitudesPendientesComunidades: List<String> = emptyList()
     ): Result<Unit> {
         if (uid.isBlank()) {
             return Result.failure(IllegalArgumentException("Usuario no autenticado."))
         }
 
         return try {
+            val listaComunidadesLimpia = comunidadesIds.filter { it.isNotBlank() }.distinct()
             val nuevoUsuario = mapOf(
                 "uid" to uid,
                 "nombre" to nombre.trim(),
@@ -259,9 +307,12 @@ class UserRepository(
                 "piso" to vivienda.trim(),
                 "email" to email.trim(),
                 "role" to rol,
+                "tipoCuenta" to tipoCuenta,
                 "photoUrl" to photoUrl,
                 "comunidadId" to comunidadId,
                 "comunidadNombre" to comunidadNombre,
+                "comunidadesIds" to listaComunidadesLimpia,
+                "solicitudesPendientesComunidades" to solicitudesPendientesComunidades.filter { it.isNotBlank() }.distinct(),
                 "isRegistered" to true
             )
 
@@ -279,6 +330,7 @@ class UserRepository(
 
     /**
      * Asigna o cambia la comunidad del usuario autenticado actual en Firestore.
+     * Si el usuario es Administrador de fincas conserva su lista de comunidades administradas.
      */
     suspend fun asignarComunidadUsuario(
         comunidadId: String,
@@ -295,10 +347,27 @@ class UserRepository(
         return try {
             val userRef = db.collection(COLECCION_USERS).document(currentUser.uid)
             val snapshotAnterior = userRef.get().await()
-            val comunidadAnteriorId = snapshotAnterior.getString("comunidadId").orEmpty()
             val rolAnterior = snapshotAnterior.getString("role")
                 ?: snapshotAnterior.getString("rol")
                 ?: ""
+            val tipoCuentaAnterior = snapshotAnterior.getString("tipoCuenta") ?: rolAnterior
+
+            if (rolAnterior.equals(ROL_ADMINISTRADOR_FINCAS, ignoreCase = true) ||
+                tipoCuentaAnterior.equals(ROL_ADMINISTRADOR_FINCAS, ignoreCase = true)
+            ) {
+                val yaPertenece = snapshotAnterior.getString("comunidadId") == comunidadId ||
+                    comunidadId in ((snapshotAnterior.get("comunidadesIds") as? List<*>)
+                        ?.mapNotNull { it as? String } ?: emptyList())
+                return if (yaPertenece) {
+                    cambiarComunidadActivaAdministrador(
+                        Comunidad(id = comunidadId, nombre = comunidadNombre)
+                    )
+                } else {
+                    unirseComoAdministradorAComunidadSinAdmin(comunidadId)
+                }
+            }
+
+            val comunidadAnteriorId = snapshotAnterior.getString("comunidadId").orEmpty()
 
             if (comunidadAnteriorId.isNotBlank() && comunidadAnteriorId != comunidadId) {
                 val comAnteriorSnap = db.collection(ComunidadRepository.COLECCION_COMUNIDADES)
@@ -334,7 +403,8 @@ class UserRepository(
                 "uid" to currentUser.uid,
                 "email" to (snapshotAnterior.getString("email") ?: currentUser.email ?: ""),
                 "comunidadId" to comunidadId,
-                "comunidadNombre" to comunidadNombre
+                "comunidadNombre" to comunidadNombre,
+                "comunidadesIds" to listOf(comunidadId)
             )
             if (!snapshotAnterior.exists()) {
                 val nombreBase = currentUser.displayName?.takeIf { it.isNotBlank() }
@@ -343,13 +413,13 @@ class UserRepository(
                 cambios["nombre"] = nombreBase
                 cambios["apellidos"] = ""
                 cambios["piso"] = "Portal 1"
-                cambios["role"] = nuevoRol ?: "Vecino/a"
+                cambios["role"] = nuevoRol ?: ROL_VECINO
+                cambios["tipoCuenta"] = ROL_VECINO
                 cambios["photoUrl"] = ""
             } else if (!nuevoRol.isNullOrBlank()) {
                 cambios["role"] = nuevoRol
             } else if (comunidadAnteriorId != comunidadId) {
-                // Al cambiar a una comunidad ajena nunca se conserva el rol de Presidente anterior
-                cambios["role"] = "Vecino/a"
+                cambios["role"] = ROL_VECINO
             }
 
             userRef.set(cambios, SetOptions.merge()).await()
@@ -360,6 +430,184 @@ class UserRepository(
                 }
                 comunidadRepository.ajustarContadorVecinos(comunidadId, 1L)
             }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Añade una comunidad recién creada por el administrador autenticado a su lista de comunidades
+     * administradas y la marca como su comunidad activa sin perder las anteriores.
+     */
+    suspend fun asignarComunidadCreadaAdministrador(comunidad: Comunidad): Result<Unit> {
+        val currentUser = auth.currentUser
+            ?: return Result.failure(IllegalStateException("Debes iniciar sesión."))
+
+        return try {
+            val userRef = db.collection(COLECCION_USERS).document(currentUser.uid)
+            val snap = userRef.get().await()
+            val rol = snap.getString("role") ?: ""
+            val tipo = snap.getString("tipoCuenta") ?: ""
+            if (!rol.equals(ROL_ADMINISTRADOR_FINCAS, true) && !tipo.equals(ROL_ADMINISTRADOR_FINCAS, true)) {
+                return Result.failure(SecurityException("Solo los administradores de fincas pueden administrar múltiples comunidades."))
+            }
+
+            val existentes = (snap.get("comunidadesIds") as? List<*>)
+                ?.mapNotNull { it as? String }
+                ?.filter { it.isNotBlank() }
+                ?.toMutableList()
+                ?: mutableListOf()
+            val comActivaAnterior = snap.getString("comunidadId").orEmpty()
+            if (comActivaAnterior.isNotBlank() && comActivaAnterior !in existentes) {
+                existentes.add(comActivaAnterior)
+            }
+            val yaEstaba = comunidad.id in existentes
+            if (!yaEstaba) {
+                existentes.add(comunidad.id)
+            }
+
+            userRef.set(
+                mapOf(
+                    "comunidadId" to comunidad.id,
+                    "comunidadNombre" to comunidad.nombre,
+                    "comunidadesIds" to existentes.distinct(),
+                    "role" to ROL_ADMINISTRADOR_FINCAS,
+                    "tipoCuenta" to ROL_ADMINISTRADOR_FINCAS
+                ),
+                SetOptions.merge()
+            ).await()
+
+            if (!yaEstaba) {
+                comunidadRepository.ajustarContadorVecinos(comunidad.id, 1L)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Cambia la comunidad activa visualizada por un administrador entre las comunidades que ya administra.
+     */
+    suspend fun cambiarComunidadActivaAdministrador(comunidad: Comunidad): Result<Unit> {
+        val currentUser = auth.currentUser
+            ?: return Result.failure(IllegalStateException("Debes iniciar sesión."))
+        if (comunidad.id.isBlank()) {
+            return Result.failure(IllegalArgumentException("Comunidad inválida."))
+        }
+
+        return try {
+            val userRef = db.collection(COLECCION_USERS).document(currentUser.uid)
+            val comRef = db.collection(ComunidadRepository.COLECCION_COMUNIDADES).document(comunidad.id)
+            val snap = userRef.get().await()
+            val comSnap = comRef.get().await()
+            val comunidades = (snap.get("comunidadesIds") as? List<*>)
+                ?.mapNotNull { it as? String }
+                ?: emptyList()
+            val adminEnCom = comSnap.getString("administradorUid")?.trim().orEmpty()
+            val pertenece = comunidad.id in comunidades ||
+                snap.getString("comunidadId") == comunidad.id ||
+                adminEnCom == currentUser.uid
+
+            if (!pertenece) {
+                return Result.failure(SecurityException("No administras esta comunidad."))
+            }
+
+            val listaActualizada = (comunidades + comunidad.id).filter { it.isNotBlank() }.distinct()
+            val nombreFinal = comSnap.getString("nombre")?.takeIf { it.isNotBlank() } ?: comunidad.nombre
+
+            userRef.set(
+                mapOf(
+                    "comunidadId" to comunidad.id,
+                    "comunidadNombre" to nombreFinal,
+                    "comunidadesIds" to listaActualizada
+                ),
+                SetOptions.merge()
+            ).await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Asigna al administrador autenticado como único administrador de una comunidad que aún no tiene uno.
+     * Si la comunidad ya tiene administrador, falla indicando que debe enviar solicitud de traspaso.
+     */
+    suspend fun unirseComoAdministradorAComunidadSinAdmin(comunidadId: String): Result<Unit> {
+        val currentUser = auth.currentUser
+            ?: return Result.failure(IllegalStateException("Debes iniciar sesión."))
+        if (comunidadId.isBlank()) {
+            return Result.failure(IllegalArgumentException("Comunidad inválida."))
+        }
+
+        return try {
+            val comRef = db.collection(ComunidadRepository.COLECCION_COMUNIDADES).document(comunidadId)
+            val userRef = db.collection(COLECCION_USERS).document(currentUser.uid)
+
+            db.runTransaction { transaction ->
+                val comSnap = transaction.get(comRef)
+                val userSnap = transaction.get(userRef)
+
+                if (!comSnap.exists()) {
+                    throw IllegalStateException("La comunidad no existe.")
+                }
+                if (!userSnap.exists()) {
+                    throw IllegalStateException("Perfil de usuario no encontrado.")
+                }
+
+                val rol = userSnap.getString("role") ?: ""
+                val tipo = userSnap.getString("tipoCuenta") ?: ""
+                if (!rol.equals(ROL_ADMINISTRADOR_FINCAS, true) && !tipo.equals(ROL_ADMINISTRADOR_FINCAS, true)) {
+                    throw SecurityException("Solo los administradores de fincas pueden administrar comunidades.")
+                }
+
+                val adminActualUid = comSnap.getString("administradorUid")?.trim().orEmpty()
+                if (adminActualUid.isNotBlank() && adminActualUid != currentUser.uid) {
+                    throw IllegalStateException(
+                        "Esta comunidad ya tiene un administrador de fincas. Solicita el traspaso de administración."
+                    )
+                }
+
+                val existentes = (userSnap.get("comunidadesIds") as? List<*>)
+                    ?.mapNotNull { it as? String }
+                    ?.filter { it.isNotBlank() }
+                    ?.toMutableList()
+                    ?: mutableListOf()
+                val comActivaAnterior = userSnap.getString("comunidadId").orEmpty()
+                if (comActivaAnterior.isNotBlank() && comActivaAnterior !in existentes) {
+                    existentes.add(comActivaAnterior)
+                }
+                val yaEstaba = comunidadId in existentes
+                if (!yaEstaba) {
+                    existentes.add(comunidadId)
+                }
+
+                val pendientes = (userSnap.get("solicitudesPendientesComunidades") as? List<*>)
+                    ?.mapNotNull { it as? String }
+                    ?.filter { it.isNotBlank() && it != comunidadId }
+                    ?: emptyList()
+
+                transaction.update(comRef, "administradorUid", currentUser.uid)
+                if (!yaEstaba) {
+                    transaction.update(comRef, "totalVecinos", FieldValue.increment(1L))
+                }
+                transaction.update(
+                    userRef,
+                    mapOf(
+                        "comunidadId" to comunidadId,
+                        "comunidadNombre" to (comSnap.getString("nombre") ?: ""),
+                        "comunidadesIds" to existentes.distinct(),
+                        "solicitudesPendientesComunidades" to pendientes,
+                        "role" to ROL_ADMINISTRADOR_FINCAS,
+                        "tipoCuenta" to ROL_ADMINISTRADOR_FINCAS
+                    )
+                )
+                null
+            }.await()
 
             Result.success(Unit)
         } catch (e: Exception) {

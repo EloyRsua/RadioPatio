@@ -34,6 +34,9 @@ data class ComunidadEntidad(
     @ColumnInfo(name = "presidente_uid")
     val presidenteUid: String = "",
 
+    @ColumnInfo(name = "administrador_uid")
+    val administradorUid: String = "",
+
     @ColumnInfo(name = "verificada")
     val verificada: Boolean = false
 )
@@ -48,6 +51,7 @@ fun Comunidad.toEntidad(): ComunidadEntidad = ComunidadEntidad(
     tipo = tipo,
     totalVecinos = totalVecinos,
     presidenteUid = presidenteUid,
+    administradorUid = administradorUid,
     verificada = verificada
 )
 
@@ -61,6 +65,7 @@ fun ComunidadEntidad.toModelo(): Comunidad = Comunidad(
     tipo = tipo,
     totalVecinos = totalVecinos,
     presidenteUid = presidenteUid,
+    administradorUid = administradorUid,
     verificada = verificada
 )
 

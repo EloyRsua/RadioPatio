@@ -33,4 +33,7 @@ object InicioSesion
 object RegistroNuevo
 
 @Serializable
-data class BuscarComunidad(val modoRegistro: Boolean = false)
+data class BuscarComunidad(
+    val modoRegistro: Boolean = false,
+    val esAdministradorRegistro: Boolean = false
+)
