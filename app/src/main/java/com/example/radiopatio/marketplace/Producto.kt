@@ -38,6 +38,8 @@ data class Producto(
     val estado: EstadoProducto = EstadoProducto.DISPONIBLE,
 
     val compradorUid: String = "",
+    val compradorNombre: String = "",
+    val compradorPiso: String = "",
     val fechaCompra: Long = 0L,
     val plazoDiasEntrega: Int = 7,      // Plazo para quedar y entregarlo fisicamente
     val diasPrestamo: Int = 7,          // Cuantos dias dura el prestamo

@@ -40,7 +40,8 @@ import kotlinx.coroutines.tasks.await
 @Composable
 fun PaginaPrincipal(
     modifier: Modifier = Modifier,
-    onIrACrearPublicacion: () -> Unit = {}
+    onIrACrearPublicacion: () -> Unit = {},
+    onIrANotificaciones: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as RadioPatioApplication
@@ -56,11 +57,29 @@ fun PaginaPrincipal(
     // Estado para controlar la publicación seleccionada para ver a pantalla completa
     var publicacionSeleccionada by remember { mutableStateOf<PublicacionEntidad?>(null) }
 
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    var notificacionesNoLeidas by remember { mutableIntStateOf(0) }
+
+    DisposableEffect(currentUser?.uid) {
+        val uid = currentUser?.uid
+        if (uid.isNullOrBlank()) {
+            return@DisposableEffect onDispose {}
+        }
+        val registration = FirebaseFirestore.getInstance()
+            .collection("notificaciones")
+            .whereEqualTo("destinatarioUid", uid)
+            .whereEqualTo("leida", false)
+            .addSnapshotListener { snapshot, _ ->
+                notificacionesNoLeidas = snapshot?.size() ?: 0
+            }
+        onDispose {
+            registration.remove()
+        }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.insertarDatosIniciales()
 
-        // Obtener usuario actual de Firebase Auth y Firestore
-        val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
             emailUsuarioActual = currentUser.email ?: ""
             try {
@@ -83,7 +102,10 @@ fun PaginaPrincipal(
 
     Scaffold(
         modifier = modifier,
-        topBar = { BarraSuperior() },
+        topBar = { BarraSuperior(
+            onIrANotificaciones = onIrANotificaciones,
+            notificacionesNoLeidas = notificacionesNoLeidas
+        ) },
     ) { rellenoInterior ->
         LazyColumn(
             modifier = Modifier
@@ -161,7 +183,10 @@ fun PaginaPrincipal(
 }
 
 @Composable
-private fun BarraSuperior() {
+private fun BarraSuperior(
+    onIrANotificaciones: () -> Unit,
+    notificacionesNoLeidas: Int = 0
+) {
     Surface(shadowElevation = 2.dp) {
         Row(
             modifier = Modifier
@@ -191,8 +216,30 @@ private fun BarraSuperior() {
             IconButton(onClick = {}) {
                 Icon(Icons.Outlined.Search, contentDescription = "Buscar", tint = Color(0xFF133E54))
             }
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Notifications, contentDescription = "Avisos", tint = Color(0xFF133E54))
+
+            // Notificaciones
+            BadgedBox(
+                badge = {
+                    if (notificacionesNoLeidas > 0) {
+                        Badge(
+                            containerColor = Color(0xFFEF4444),
+                            contentColor = Color.White
+                        ) {
+                            Text(
+                                text = if (notificacionesNoLeidas > 99) "+99" else notificacionesNoLeidas.toString(),
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            ) {
+                IconButton(onClick = onIrANotificaciones) {
+                    Icon(
+                        Icons.Outlined.Notifications,
+                        contentDescription = "Avisos",
+                        tint = Color(0xFF133E54)
+                    )
+                }
             }
         }
     }

@@ -39,3 +39,6 @@ object CrearProducto
 
 @Serializable
 data class DetalleProducto(val firestoreId: String)
+
+@Serializable
+object Notificaciones

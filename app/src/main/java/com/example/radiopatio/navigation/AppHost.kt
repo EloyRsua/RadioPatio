@@ -26,6 +26,7 @@ import com.example.radiopatio.marketplace.MercadilloViewModelFactory
 import com.example.radiopatio.misProductos.MisProductosScreen
 import com.example.radiopatio.marketplace.CrearProductoScreen
 import com.example.radiopatio.marketplace.DetalleProductoScreen
+import com.example.radiopatio.notificacion.NotificacionesScreen
 import com.example.radiopatio.publicacion.PantallaCrearPublicacion
 import com.example.radiopatio.registroInicio.RegistroNuevoUsuario
 import com.example.radiopatio.registroInicio.RegistroUsuario
@@ -161,6 +162,20 @@ fun AppNavHost(
             PaginaPrincipal(
                 onIrACrearPublicacion = {
                     navController.navigate(Publicar)
+                },
+                onIrANotificaciones = {
+                    navController.navigate(Notificaciones)
+                }
+            )
+        }
+
+        composable<Notificaciones> {
+            NotificacionesScreen(
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onProductoClick = { firestoreId ->
+                    navController.navigate(DetalleProducto(firestoreId))
                 }
             )
         }

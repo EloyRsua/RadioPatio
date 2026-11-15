@@ -1,5 +1,6 @@
 package com.example.radiopatio.marketplace
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -10,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material.icons.outlined.Warning
@@ -284,25 +286,71 @@ fun DetalleProductoContent(
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Person,
+                                            contentDescription = null,
+                                            tint = AzulPrincipal,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (producto.esParaComprar) "¡Artículo vendido!" else "¡Préstamo solicitado!",
+                                            fontWeight = FontWeight.Bold,
+                                            color = AzulPrincipal,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // Ficha destacada con el vecino comprador y su puerta
+                                    val compradorTexto = producto.compradorNombre.ifBlank { "Un vecino" }
+                                    val pisoTexto = if (producto.compradorPiso.isNotBlank()) " · ${producto.compradorPiso}" else ""
+
+                                    Surface(
+                                        color = Color.White,
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Entregar a:",
+                                                fontSize = 13.sp,
+                                                color = TextoSecundario,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text(
+                                                text = "$compradorTexto$pisoTexto",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                color = AzulPrincipal
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
                                     Text(
-                                        text = "¡Un vecino ha comprado este artículo!",
-                                        fontWeight = FontWeight.Bold,
-                                        color = AzulPrincipal
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Tienes ${uiState.diasRestantes} días para entregarlo.",
+                                        text = "Tienes ${uiState.diasRestantes} días para entregarlo en mano.",
                                         fontSize = 13.sp,
                                         color = TextoSecundario
                                     )
+
                                     Spacer(modifier = Modifier.height(12.dp))
+
                                     Button(
                                         onClick = onConfirmarEntregaVendedor,
                                         enabled = !producto.vendedorConfirmoEntrega,
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = AzulPrincipal)
                                     ) {
-                                        Text(if (producto.vendedorConfirmoEntrega) "Ya has marcado como entregado (esperando comprador)" else "Marcar como entregado al vecino")
+                                        Text(if (producto.vendedorConfirmoEntrega) "Ya has marcado como entregado (esperando confirmación)" else "Marcar como entregado al vecino")
                                     }
                                 }
                             }

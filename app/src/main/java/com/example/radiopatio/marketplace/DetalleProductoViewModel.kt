@@ -5,8 +5,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.example.radiopatio.notificacion.NotificacionesHelper
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 data class DetalleProductoUiState(
     val cargando: Boolean = true,
@@ -81,11 +85,17 @@ class DetalleProductoViewModel(
                     db.collection("productos").document(firestoreId).update("estado", nuevoEstado.name)
                 }
 
+                val compradorNombre = snapshot.getString("compradorNombre") ?: ""
+                val compradorPiso = snapshot.getString("compradorPiso") ?: ""
+
                 @Suppress("UNCHECKED_CAST")
                 val fotos = snapshot.get("fotos") as? List<String> ?: emptyList()
                 val prod = Producto(
                     firestoreId = snapshot.id,
                     autorUid = autorUid,
+                    compradorUid = compradorUid,
+                    compradorNombre = compradorNombre,
+                    compradorPiso = compradorPiso,
                     titulo = snapshot.getString("titulo") ?: "",
                     descripcion = snapshot.getString("descripcion") ?: "",
                     precio = snapshot.getString("precio") ?: "",
@@ -102,7 +112,6 @@ class DetalleProductoViewModel(
                     fotos = fotos,
                     imagenUrl = fotos.firstOrNull(),
                     estado = estado,
-                    compradorUid = compradorUid,
                     fechaCompra = fechaCompra,
                     plazoDiasEntrega = plazoDias,
                     diasPrestamo = diasPrestamo,
@@ -129,21 +138,61 @@ class DetalleProductoViewModel(
     // Acción de comprar / tomar prestado
     fun onComprarOPrestar() {
         val prod = uiState.producto ?: return
-        val plazoDias = prod.plazoDiasEntrega
-        val fechaActual = System.currentTimeMillis()
-        val fechaLimite = fechaActual + (plazoDias * 24 * 60 * 60 * 1000L)
-        val updates = hashMapOf<String, Any>(
-            "estado" to EstadoProducto.EN_ENTREGA.name,
-            "compradorUid" to currentUid,
-            "fechaCompra" to fechaActual,
-            "fechaLimiteEntrega" to fechaLimite,
-            "vendedorConfirmoEntrega" to false,
-            "compradorConfirmoRecepcion" to false
-        )
-        db.collection("productos").document(prod.firestoreId).update(updates)
+
+        viewModelScope.launch {
+            // 1. Buscamos el nombre y vivienda del usuario actual (el que compra/pide)
+            var nombreComprador = "Un vecino"
+            var pisoComprador = ""
+            try {
+                val userDoc = db.collection("users").document(currentUid).get().await()
+                if (userDoc.exists()) {
+                    val nom = userDoc.getString("nombre") ?: ""
+                    val ape = userDoc.getString("apellidos") ?: ""
+                    nombreComprador = "$nom $ape".trim().ifBlank {
+                        auth.currentUser?.email?.substringBefore("@") ?: "Un vecino"
+                    }
+                    pisoComprador = userDoc.getString("piso")
+                        ?: userDoc.getString("vivienda") ?: ""
+                }
+            } catch (e: Exception) {
+                nombreComprador = auth.currentUser?.email?.substringBefore("@") ?: "Un vecino"
+            }
+
+            val plazoDias = prod.plazoDiasEntrega
+            val fechaActual = System.currentTimeMillis()
+            val fechaLimite = fechaActual + (plazoDias * 24 * 60 * 60 * 1000L)
+
+            val updates = hashMapOf<String, Any>(
+                "estado" to EstadoProducto.EN_ENTREGA.name,
+                "compradorUid" to currentUid,
+                "compradorNombre" to nombreComprador,
+                "compradorPiso" to pisoComprador,
+                "fechaCompra" to fechaActual,
+                "fechaLimiteEntrega" to fechaLimite,
+                "vendedorConfirmoEntrega" to false,
+                "compradorConfirmoRecepcion" to false
+            )
+            db.collection("productos").document(prod.firestoreId).update(updates)
+
+            // 2. Notificación con los datos concretos del vecino para el vendedor
+            val datosVecino = if (pisoComprador.isNotBlank()) "$nombreComprador ($pisoComprador)" else nombreComprador
+            val titulo = if (prod.esParaComprar) "¡Artículo vendido!" else "¡Préstamo solicitado!"
+            val mensaje = if (prod.esParaComprar) {
+                "El vecino $datosVecino ha comprado \"${prod.titulo}\". Tienes $plazoDias días para llevárselo."
+            } else {
+                "El vecino $datosVecino ha solicitado el préstamo de \"${prod.titulo}\"."
+            }
+
+            NotificacionesHelper.enviarNotificacion(
+                destinatarioUid = prod.autorUid,
+                titulo = titulo,
+                mensaje = mensaje,
+                productoId = prod.firestoreId
+            )
+        }
     }
 
-    // Vendedor confirma que ya lo entregó
+    // Vendedor confirma que ya lo entregó + notificacion
     fun onConfirmarEntregaVendedor() {
         val prod = uiState.producto ?: return
         val estadoFinal = if (prod.esParaComprar) EstadoProducto.VENDIDO.name else EstadoProducto.PRESTADO.name
@@ -152,9 +201,17 @@ class DetalleProductoViewModel(
             "vendedorConfirmoEntrega", true,
             "estado", nuevoEstado
         )
+
+        // Enviar aviso al comprador
+        NotificacionesHelper.enviarNotificacion(
+            destinatarioUid = prod.compradorUid,
+            titulo = "Producto entregado por el vendedor",
+            mensaje = "El vendedor ha marcado \"${prod.titulo}\" como entregado. Por favor, confirma su recepción cuando lo tengas en mano.",
+            productoId = prod.firestoreId
+        )
     }
 
-    // Comprador confirma que ya lo recibió
+    // Comprador confirma que ya lo recibió + notitifacion
     fun onConfirmarRecepcionComprador() {
         val prod = uiState.producto ?: return
         val estadoFinal = if (prod.esParaComprar) EstadoProducto.VENDIDO.name else EstadoProducto.PRESTADO.name
@@ -172,6 +229,14 @@ class DetalleProductoViewModel(
         }
 
         db.collection("productos").document(prod.firestoreId).update(updates)
+
+        // Enviar aviso al vendedor
+        NotificacionesHelper.enviarNotificacion(
+            destinatarioUid = prod.autorUid,
+            titulo = "Entrega completada",
+            mensaje = "El comprador ha confirmado la recepción de \"${prod.titulo}\". ¡Trato finalizado con éxito!",
+            productoId = prod.firestoreId
+        )
     }
 
     // Reportar conflicto al Administrador
