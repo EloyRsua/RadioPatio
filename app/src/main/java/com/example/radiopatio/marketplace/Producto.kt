@@ -13,8 +13,11 @@ enum class CategoriaProducto(val nombre: String) {
 // Estados posibles del producto
 enum class EstadoProducto(val etiqueta: String) {
     DISPONIBLE("Disponible"),
+    EN_ENTREGA("En proceso de entrega"),
     VENDIDO("Vendido"),
-    PRESTADO("Prestado")
+    PRESTADO("Prestado"),
+    DEVUELTO("Devuelto"),
+    EN_CONFLICTO("En conflicto")
 }
 
 data class Producto(
@@ -33,5 +36,14 @@ data class Producto(
     val estadoUso: String = "",
     val fotos: List<String> = emptyList(),
     val estado: EstadoProducto = EstadoProducto.DISPONIBLE,
+
+    val compradorUid: String = "",
+    val fechaCompra: Long = 0L,
+    val plazoDiasEntrega: Int = 7,      // Plazo para quedar y entregarlo fisicamente
+    val diasPrestamo: Int = 7,          // Cuantos dias dura el prestamo
+    val fechaLimiteEntrega: Long = 0L,
+    val vendedorConfirmoEntrega: Boolean = false,
+    val compradorConfirmoRecepcion: Boolean = false,
+    val motivoConflicto: String = "",
     val fechaDevolucion: String = ""
 )

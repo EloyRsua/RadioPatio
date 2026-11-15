@@ -56,8 +56,9 @@ fun CrearProductoScreen(
         marca: String,
         color: String,
         estadoUso: String,
-        fotosUris: List<String>
-            ) -> Unit
+        fotosUris: List<String>,
+        plazoDias: Int
+    ) -> Unit
 ){
     CrearProductoContent(
         onVolver = onVolver,
@@ -78,14 +79,16 @@ fun CrearProductoContent(
         marca: String,
         color: String,
         estadoUso: String,
-        fotosUris: List<String>
-        ) -> Unit
+        fotosUris: List<String>,
+        plazoDias: Int
+    ) -> Unit
 ) {
     val context = LocalContext.current
 
     var titulo by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
     var precio by remember { mutableStateOf("") }
+    var diasPrestamo by remember { mutableStateOf("") }
     var esParaComprar by remember { mutableStateOf(true) }
     var categoriaSeleccionada by remember { mutableStateOf(CategoriaProducto.TODOS) }
     var menuCategoriasExpandido by remember { mutableStateOf(false) }
@@ -281,7 +284,7 @@ fun CrearProductoContent(
                     focusedContainerColor = Color.White
                 )
             )
-            // 4. Precio (solo si es venta)
+            // 4. Precio (si es venta) o Días de préstamo (si es préstamo)
             if (esParaComprar) {
                 OutlinedTextField(
                     value = precio,
@@ -297,6 +300,24 @@ fun CrearProductoContent(
                         }
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AzulPrincipal,
+                        unfocusedContainerColor = Color.White,
+                        focusedContainerColor = Color.White
+                    )
+                )
+            } else {
+                OutlinedTextField(
+                    value = diasPrestamo,
+                    onValueChange = { diasPrestamo = it.filter { char -> char.isDigit() } },
+                    label = { Text("Duración máxima del préstamo (en días) *") },
+                    placeholder = { Text("Ej: 7") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    supportingText = {
+                        Text("Indica cuántos días dejas el producto antes de que te lo devuelvan", fontSize = 12.sp, color = TextoPrincipal.copy(alpha = 0.6f))
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = AzulPrincipal,
                         unfocusedContainerColor = Color.White,
@@ -323,6 +344,7 @@ fun CrearProductoContent(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 )
 
                 ExposedDropdownMenu(
@@ -400,16 +422,26 @@ fun CrearProductoContent(
                     val fotosStrings = listaFotos.mapNotNull {
                         if (it is Uri) it.toString() else null
                     }
+
+
+                    val diasInt = diasPrestamo.toIntOrNull()?.coerceAtLeast(1) ?: 7
+                    val precioFinal = if (esParaComprar) {
+                        if (precio.contains("€")) precio else "$precio€"
+                    } else {
+                        "Préstamo ($diasInt días)"
+                    }
+
                     onPublicar(
                         titulo,
                         descripcion,
-                        if (esParaComprar) (if (precio.contains("€")) precio else "$precio€") else "Préstamo",
+                        precioFinal,
                         esParaComprar,
                         if (categoriaSeleccionada == CategoriaProducto.TODOS) CategoriaProducto.MUEBLES else categoriaSeleccionada,
                         marca,
                         colorArticulo,
                         estadoUsoSeleccionado,
-                        fotosStrings
+                        fotosStrings,
+                        diasInt
                     )
                 },
                 enabled = !publicando,
@@ -462,6 +494,6 @@ fun copiarUriACache(context: android.content.Context, uri: Uri): Uri {
 fun CrearProductoContentPreview() {
     CrearProductoContent(
         onVolver = {},
-        onPublicar = { _, _, _, _, _, _, _, _, _ -> }
+        onPublicar = { _, _, _, _, _, _, _, _, _ , _ -> }
     )
 }

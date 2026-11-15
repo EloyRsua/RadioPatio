@@ -1,6 +1,7 @@
 package com.example.radiopatio.misProductos
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,19 +26,15 @@ import coil.compose.AsyncImage
 import com.example.radiopatio.marketplace.EstadoProducto
 import com.example.radiopatio.marketplace.Producto
 
-// Paleta de colores de RadioPatio
 private val AzulPrincipal = Color(0xFF133E54)
 private val VerdeBoton = Color(0xFF0F8A5F)
 private val TextoPrincipal = Color(0xFF0F172A)
 private val TextoSecundario = Color(0xFF64748B)
 private val FondoApp = Color(0xFFF8FAFC)
-
-/**
- * Screen de mis productos
- */
 @Composable
 fun MisProductosScreen(
     onVolver: () -> Unit,
+    onProductoClick: (String) -> Unit = {},
     viewModel: MisProductosViewModel = viewModel()
 ) {
     val uiState = viewModel.uiState
@@ -47,12 +44,9 @@ fun MisProductosScreen(
         pestanaSeleccionada = uiState.pestanaSeleccionada,
         onCambiarPestana = { viewModel.onPestanaSeleccionada(it) },
         onVolver = onVolver,
-        onMarcarVendido = { id -> viewModel.onActualizarEstado(id, EstadoProducto.VENDIDO) },
-        onMarcarPrestado = { id, fecha -> viewModel.onActualizarEstado(id, EstadoProducto.PRESTADO, fecha) },
-        onMarcarDisponible = { id -> viewModel.onActualizarEstado(id, EstadoProducto.DISPONIBLE) }
+        onProductoClick = onProductoClick
     )
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MisProductosContent(
@@ -61,9 +55,7 @@ fun MisProductosContent(
     pestanaSeleccionada: Int,
     onCambiarPestana: (Int) -> Unit,
     onVolver: () -> Unit,
-    onMarcarVendido: (String) -> Unit,
-    onMarcarPrestado: (String, String) -> Unit,
-    onMarcarDisponible: (String) -> Unit
+    onProductoClick: (String) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -78,9 +70,7 @@ fun MisProductosContent(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         }
     ) { paddingValues ->
@@ -113,7 +103,6 @@ fun MisProductosContent(
                     unselectedContentColor = TextoSecundario
                 )
             }
-
             if (cargando) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = VerdeBoton)
@@ -121,7 +110,7 @@ fun MisProductosContent(
             } else if (productos.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = if (pestanaSeleccionada == 0) "No has publicado artículos para venta" else "No tienes artículos en préstamo",
+                        text = if (pestanaSeleccionada == 0) "No tienes artículos en venta" else "No tienes artículos en préstamo",
                         color = TextoSecundario
                     )
                 }
@@ -134,9 +123,7 @@ fun MisProductosContent(
                     items(productos) { producto ->
                         TarjetaMiArticulo(
                             producto = producto,
-                            onMarcarVendido = { onMarcarVendido(producto.firestoreId) },
-                            onMarcarPrestado = { fecha -> onMarcarPrestado(producto.firestoreId, fecha) },
-                            onMarcarDisponible = { onMarcarDisponible(producto.firestoreId) }
+                            onClick = { onProductoClick(producto.firestoreId) }
                         )
                     }
                 }
@@ -144,182 +131,79 @@ fun MisProductosContent(
         }
     }
 }
-
 @Composable
 fun TarjetaMiArticulo(
     producto: Producto,
-    onMarcarVendido: () -> Unit,
-    onMarcarPrestado: (String) -> Unit,
-    onMarcarDisponible: () -> Unit
+    onClick: () -> Unit
 ) {
-    var mostrarDialogoPrestar by remember { mutableStateOf(false) }
-    var fechaDevolucionTexto by remember { mutableStateOf("") }
-
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Miniatura de la foto si existe
-                if (!producto.imagenUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = producto.imagenUrl,
-                        contentDescription = producto.titulo,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = producto.titulo,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = TextoPrincipal,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = if (producto.esParaComprar) producto.precio else "Préstamo",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        color = AzulPrincipal
-                    )
-                }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Miniatura de la foto
+            if (!producto.imagenUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = producto.imagenUrl,
+                    contentDescription = producto.titulo,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(65.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+                Spacer(modifier = Modifier.width(12.dp))
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Etiquetas de estado
-            when (producto.estado) {
-                EstadoProducto.DISPONIBLE -> {
-                    BadgeEstado(
-                        texto = "Disponible",
-                        colorFondo = Color(0xFFDCFCE7),
-                        colorTexto = Color(0xFF15803D)
-                    )
-                }
-                EstadoProducto.VENDIDO -> {
-                    BadgeEstado(
-                        texto = "Vendido",
-                        colorFondo = Color(0xFFFEE2E2),
-                        colorTexto = Color(0xFFB91C1C)
-                    )
-                }
-                EstadoProducto.PRESTADO -> {
-                    BadgeEstado(
-                        texto = if (producto.fechaDevolucion.isNotBlank()) "Prestado · Devuelve: ${producto.fechaDevolucion}" else "Prestado",
-                        colorFondo = Color(0xFFFEF3C7),
-                        colorTexto = Color(0xFFB45309)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Botones de acción
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (producto.esParaComprar) {
-                    if (producto.estado == EstadoProducto.DISPONIBLE) {
-                        OutlinedButton(
-                            onClick = onMarcarVendido,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AzulPrincipal)
-                        ) {
-                            Text("Marcar como Vendido")
-                        }
-                    } else {
-                        TextButton(
-                            onClick = onMarcarDisponible,
-                            colors = ButtonDefaults.textButtonColors(contentColor = VerdeBoton)
-                        ) {
-                            Text("Poner en Venta de nuevo")
-                        }
-                    }
-                } else {
-                    if (producto.estado == EstadoProducto.DISPONIBLE) {
-                        OutlinedButton(
-                            onClick = { mostrarDialogoPrestar = true },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AzulPrincipal)
-                        ) {
-                            Text("Registrar Préstamo")
-                        }
-                    } else {
-                        TextButton(
-                            onClick = onMarcarDisponible,
-                            colors = ButtonDefaults.textButtonColors(contentColor = VerdeBoton)
-                        ) {
-                            Text("Marcar como Devuelto")
-                        }
-                    }
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = producto.titulo,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = TextoPrincipal,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (producto.esParaComprar) producto.precio else "Préstamo",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = AzulPrincipal
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                // Etiqueta de estado
+                BadgeEstado(producto.estado, producto.fechaDevolucion)
             }
         }
     }
-
-    if (mostrarDialogoPrestar) {
-        AlertDialog(
-            onDismissRequest = { mostrarDialogoPrestar = false },
-            title = { Text("Registrar Préstamo", color = AzulPrincipal, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("¿Cuándo te devolverán este artículo?", color = TextoPrincipal)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = fechaDevolucionTexto,
-                        onValueChange = { fechaDevolucionTexto = it },
-                        placeholder = { Text("Ej: Mañana, 20 Nov...") },
-                        singleLine = true
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onMarcarPrestado(fechaDevolucionTexto.ifBlank { "Sin fecha" })
-                        mostrarDialogoPrestar = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = VerdeBoton)
-                ) {
-                    Text("Guardar", color = Color.White)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { mostrarDialogoPrestar = false },
-                    colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)
-                ) {
-                    Text("Cancelar")
-                }
-            },
-            containerColor = Color.White
-        )
-    }
 }
-
 @Composable
-fun BadgeEstado(texto: String, colorFondo: Color, colorTexto: Color) {
-    Surface(
-        color = colorFondo,
-        shape = RoundedCornerShape(16.dp)
-    ) {
+fun BadgeEstado(estado: EstadoProducto, fechaDevolucion: String = "") {
+    val (fondo, texto, etiqueta) = when (estado) {
+        EstadoProducto.DISPONIBLE -> Triple(Color(0xFFDCFCE7), Color(0xFF15803D), "Disponible")
+        EstadoProducto.EN_ENTREGA -> Triple(Color(0xFFFEF3C7), Color(0xFFB45309), "En proceso de entrega")
+        EstadoProducto.VENDIDO -> Triple(Color(0xFFF1F5F9), Color(0xFF475569), "Vendido")
+        EstadoProducto.PRESTADO -> Triple(Color(0xFFF3E8FF), Color(0xFF7E22CE), if (fechaDevolucion.isNotBlank()) "Prestado · Devuelve: $fechaDevolucion" else "Prestado")
+        EstadoProducto.DEVUELTO -> Triple(Color(0xFFEFF6FF), Color(0xFF1D4ED8), "Devuelto")
+        EstadoProducto.EN_CONFLICTO -> Triple(Color(0xFFFEE2E2), Color(0xFFB91C1C), "En conflicto")
+    }
+    Surface(color = fondo, shape = RoundedCornerShape(16.dp)) {
         Text(
-            text = texto,
-            color = colorTexto,
+            text = etiqueta,
+            color = texto,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }
-
 @Preview(showBackground = true)
 @Composable
 fun MisProductosContentPreview() {
@@ -332,8 +216,6 @@ fun MisProductosContentPreview() {
         pestanaSeleccionada = 0,
         onCambiarPestana = {},
         onVolver = {},
-        onMarcarVendido = {},
-        onMarcarPrestado = { _, _ -> },
-        onMarcarDisponible = {}
+        onProductoClick = {}
     )
 }

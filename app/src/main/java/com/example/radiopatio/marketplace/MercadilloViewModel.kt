@@ -88,27 +88,38 @@ class MercadilloViewModel(
             val listaEntidades = withContext(Dispatchers.IO){
                 productoDao.obtenerProductos()
             }
-
-            actualizarUiStateConEntidades(listaEntidades)
+            // Solo usamos Room como carga inicial rápida si Firestore aún no ha entregado productos
+            if (uiState.productosTotales.isEmpty() && listaEntidades.isNotEmpty()) {
+                actualizarUiStateConEntidades(listaEntidades)
+            }
         }
     }
 
     private fun descargarProductosDeFirebase() {
-        val currentUserUid = auth.currentUser?.uid
+        db.collection("productos").addSnapshotListener { documentos, error ->
+            if (error != null || documentos == null) return@addSnapshotListener
 
-        db.collection("productos").get().addOnSuccessListener { documentos ->
-            val listaNuevosProductos = mutableListOf<ProductoEntidad>()
+            // Obtenemos el UID dentro del listener para que detecte al usuario activo actual
+            val currentUserUid = auth.currentUser?.uid
+            val listaNuevosProductos = mutableListOf<Producto>()
+            val listaEntidadesParaRoom = mutableListOf<ProductoEntidad>()
 
             for (documento in documentos) {
                 val autorUid = documento.getString("autorUid") ?: ""
-                // No mostramos en el mercadillo los productos subidos por el propio usuario
+                // No mostramos en el mercadillo los productos subidos por el propio usuario activo
                 if (autorUid.isNotBlank() && autorUid == currentUserUid) {
                     continue
                 }
 
-                // Tampoco mostramos los que ya estén vendidos
-                val estado = documento.getString("estado") ?: "DISPONIBLE"
-                if (estado == "VENDIDO") {
+                // Tampoco mostramos los que ya estén completamente finalizados
+                val estadoStr = documento.getString("estado") ?: EstadoProducto.DISPONIBLE.name
+                val estado = try {
+                    EstadoProducto.valueOf(estadoStr)
+                } catch (e: Exception) {
+                    EstadoProducto.DISPONIBLE
+                }
+
+                if (estado == EstadoProducto.VENDIDO || estado == EstadoProducto.DEVUELTO) {
                     continue
                 }
 
@@ -122,36 +133,70 @@ class MercadilloViewModel(
                 val marca = documento.getString("marca") ?: ""
                 val color = documento.getString("color") ?: ""
                 val estadoUso = documento.getString("estadoUso") ?: ""
+                val compradorUid = documento.getString("compradorUid") ?: ""
+                val plazoDias = documento.getLong("plazoDiasEntrega")?.toInt() ?: 7
+                val diasPrestamo = documento.getLong("diasPrestamo")?.toInt() ?: 7
 
                 @Suppress("UNCHECKED_CAST")
                 val fotos = documento.get("fotos") as? List<String> ?: emptyList()
                 val fotoPortada = fotos.firstOrNull()
 
-                val entidad = ProductoEntidad(
-                    firestoreId = documento.id, // Guardamos el ID real de Firestore
-                    autorUid = autorUid,
-                    titulo = titulo,
-                    descripcion = descripcion,
-                    precio = precio,
-                    ubicacion = ubicacion,
-                    fechaCreacion = fechaCreacion,
-                    categoria = categoria,
-                    esParaComprar = esParaComprar,
-                    marca = marca,
-                    color = color,
-                    estadoUso = estadoUso,
-                    estado = estado,
-                    imagenUrl = fotoPortada
+                val tiempoString = calcularTiempoTranscurrido(fechaCreacion)
+
+                listaNuevosProductos.add(
+                    Producto(
+                        firestoreId = documento.id,
+                        autorUid = autorUid,
+                        compradorUid = compradorUid,
+                        titulo = titulo,
+                        descripcion = descripcion,
+                        precio = precio,
+                        ubicacionYTiempo = "$ubicacion - $tiempoString",
+                        categoriaProducto = try {
+                            CategoriaProducto.valueOf(categoria)
+                        } catch (e: Exception) {
+                            CategoriaProducto.TODOS
+                        },
+                        esParaComprar = esParaComprar,
+                        marca = marca,
+                        color = color,
+                        estadoUso = estadoUso,
+                        estado = estado,
+                        plazoDiasEntrega = plazoDias,
+                        diasPrestamo = diasPrestamo,
+                        fotos = fotos,
+                        imagenUrl = fotoPortada
+                    )
                 )
-                listaNuevosProductos.add(entidad)
+
+                // Guardamos en Room con el firestoreId real
+                listaEntidadesParaRoom.add(
+                    ProductoEntidad(
+                        firestoreId = documento.id,
+                        autorUid = autorUid,
+                        titulo = titulo,
+                        descripcion = descripcion,
+                        precio = precio,
+                        ubicacion = ubicacion,
+                        fechaCreacion = fechaCreacion,
+                        categoria = categoria,
+                        esParaComprar = esParaComprar,
+                        marca = marca,
+                        color = color,
+                        estadoUso = estadoUso,
+                        estado = estadoStr,
+                        imagenUrl = fotoPortada
+                    )
+                )
             }
 
-            viewModelScope.launch {
-                withContext(Dispatchers.IO) {
-                    productoDao.obtenerProductos().forEach { productoDao.eliminar(it) }
-                    listaNuevosProductos.forEach { productoDao.insertar(it) }
-                }
-                cargarProductosDesdeRoom()
+            // 1. Actualizamos la UI en tiempo real
+            uiState = uiState.copy(productosTotales = listaNuevosProductos)
+
+            // 2. Limpiamos en Room los artículos viejos sin ID e insertamos los actuales de Firestore
+            viewModelScope.launch(Dispatchers.IO) {
+                productoDao.obtenerProductos().forEach { productoDao.eliminar(it) }
+                listaEntidadesParaRoom.forEach { productoDao.insertar(it) }
             }
         }
     }
@@ -229,6 +274,7 @@ class MercadilloViewModel(
         color: String,
         estadoUso: String,
         fotosUris: List<String>,
+        plazoDias: Int,
         onSuccess: () -> Unit
     ) {
         viewModelScope.launch {
@@ -250,6 +296,8 @@ class MercadilloViewModel(
                 "color" to color,
                 "estadoUso" to estadoUso,
                 "fotos" to fotosUris,
+                "plazoDiasEntrega" to 7,        // 7 dias para entregarlo en mano
+                "diasPrestamo" to plazoDias,    // dias que dura el prestamo
                 "estado" to EstadoProducto.DISPONIBLE.name
             )
 

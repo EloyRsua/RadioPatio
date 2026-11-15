@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
 
 import com.example.radiopatio.CalendarioEventosScreen
 import com.example.radiopatio.PaginaPrincipal
@@ -24,6 +25,7 @@ import com.example.radiopatio.marketplace.MercadilloViewModel
 import com.example.radiopatio.marketplace.MercadilloViewModelFactory
 import com.example.radiopatio.misProductos.MisProductosScreen
 import com.example.radiopatio.marketplace.CrearProductoScreen
+import com.example.radiopatio.marketplace.DetalleProductoScreen
 import com.example.radiopatio.publicacion.PantallaCrearPublicacion
 import com.example.radiopatio.registroInicio.RegistroNuevoUsuario
 import com.example.radiopatio.registroInicio.RegistroUsuario
@@ -165,8 +167,22 @@ fun AppNavHost(
 
         composable<Mercadillo> {
             MercadilloScreen(
+                onProductoClick = { firestoreId ->
+                    navController.navigate(DetalleProducto(firestoreId))
+                },
                 onIrACrearProducto = {
                     navController.navigate(CrearProducto)
+                }
+            )
+        }
+
+        // Pantalla de Detalle de Producto
+        composable<DetalleProducto> { backStackEntry ->
+            val ruta = backStackEntry.toRoute<DetalleProducto>()
+            DetalleProductoScreen(
+                firestoreId = ruta.firestoreId,
+                onVolver = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -182,7 +198,7 @@ fun AppNavHost(
                 onVolver = {
                     navController.popBackStack()
                 },
-                onPublicar = { titulo, descripcion, precio, esParaComprar, categoria, marca, color, estadoUso, fotosUris ->
+                onPublicar = { titulo, descripcion, precio, esParaComprar, categoria, marca, color, estadoUso, fotosUris, plazoDias ->
                     mercadilloViewModel.publicarNuevoProducto(
                         titulo = titulo,
                         descripcion = descripcion,
@@ -192,10 +208,11 @@ fun AppNavHost(
                         marca = marca,
                         color = color,
                         estadoUso = estadoUso,
-                        fotosUris = fotosUris
+                        fotosUris = fotosUris,
+                        plazoDias = plazoDias
                     ) {
                         Toast.makeText(context, "¡Artículo publicado con éxito!", Toast.LENGTH_SHORT).show()
-                        navController.popBackStack() // Vuelve automáticamente al mercadillo
+                        navController.popBackStack()
                     }
                 }
             )
@@ -243,6 +260,9 @@ fun AppNavHost(
             MisProductosScreen(
                 onVolver = {
                     navController.popBackStack()
+                },
+                onProductoClick = { firestoreId ->
+                    navController.navigate(DetalleProducto(firestoreId))
                 }
             )
         }

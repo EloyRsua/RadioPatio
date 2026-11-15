@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -71,6 +72,26 @@ fun TarjetaProducto(
                     tint = Color(0xFF90A4AE),
                     modifier = Modifier.size(36.dp)
                 )
+            }
+
+            // Insignia si está en proceso de entrega
+            if (producto.estado == EstadoProducto.EN_ENTREGA) {
+                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                val esMiCompra = producto.compradorUid.isNotBlank() && producto.compradorUid == currentUid
+
+                Surface(
+                    color = if (esMiCompra) Color(0xFF0F8A5F) else Color(0xD9B45309), // Verde si lo compraste tú, ámbar para los demás
+                    shape = RoundedCornerShape(bottomEnd = 8.dp),
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Text(
+                        text = if (esMiCompra) "RESERVADO POR TI" else "RESERVADO",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
