@@ -21,7 +21,6 @@ object Eventos
 @Serializable
 object Publicar
 
-
 @Serializable
 object Perfil
 
@@ -42,3 +41,16 @@ data class DetalleProducto(val firestoreId: String)
 
 @Serializable
 object Notificaciones
+
+@Serializable
+data class BuscarComunidad(
+    val modoRegistro: Boolean = false,
+    val esAdministradorRegistro: Boolean = false
+)
+
+@Serializable
+data class CrearComunidad(
+    val modoRegistro: Boolean = false,
+    val esAdministradorRegistro: Boolean = false,
+    val nombreInicial: String = ""
+)

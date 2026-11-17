@@ -18,15 +18,18 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaCrearPublicacion(
+    autorInicial: String = "",
+    ubicacionInicial: String = "",
+    publicando: Boolean = false,
     onVolver: () -> Unit = {},
     onPublicarClick: (autor: String, ubicacion: String, contenido: String) -> Unit = { _, _, _ -> }
 ) {
     val azulPrincipal = Color(0xFF133E54)
     val verdeBoton = Color(0xFF0F8A5F)
 
-    // Estados manuales editables (iniciados con valores de ejemplo o vacíos)
-    var autor by remember { mutableStateOf("") }
-    var ubicacion by remember { mutableStateOf("") }
+    // Estados manuales editables (pre-rellenados con la sesión del usuario si está disponible)
+    var autor by remember(autorInicial) { mutableStateOf(autorInicial) }
+    var ubicacion by remember(ubicacionInicial) { mutableStateOf(ubicacionInicial) }
     var contenido by remember { mutableStateOf("") }
 
     Scaffold(
@@ -94,19 +97,27 @@ fun PantallaCrearPublicacion(
                         contenido.trim()
                     )
                 },
-                enabled = contenido.isNotBlank(),
+                enabled = !publicando && contenido.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(25.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = verdeBoton)
             ) {
-                Text(
-                    text = "Publicar anuncio",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (publicando) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Publicar anuncio",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

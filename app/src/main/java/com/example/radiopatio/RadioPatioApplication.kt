@@ -11,6 +11,8 @@ class RadioPatioApplication : Application() {
             this,
             RadioPatioDatabase::class.java,
             "radiopatio.db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 }

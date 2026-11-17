@@ -1,5 +1,6 @@
 package com.example.radiopatio.marketplace
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,14 +40,13 @@ import com.example.radiopatio.ui.theme.RadioPatioTheme
 fun TarjetaProducto(
     producto: Producto,
     onClick: () -> Unit,
-    modifier: Modifier
-){
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(Color.White)
-            .border(1.dp, Color(0xFFD6DDE1),
-                RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0xFFD6DDE1), RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(10.dp)
     ) {
@@ -57,7 +58,8 @@ fun TarjetaProducto(
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFFF0F4F7)),
             contentAlignment = Alignment.Center
-        ){
+        ) {
+            // 1. Foto subida por usuario (tu rama)
             if (!producto.imagenUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = producto.imagenUrl,
@@ -65,6 +67,15 @@ fun TarjetaProducto(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+            // 2. Foto local drawable (de master)
+            } else if (producto.imagenRes != null) {
+                Image(
+                    painter = painterResource(id = producto.imagenRes),
+                    contentDescription = producto.titulo,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            // 3. Icono por defecto
             } else {
                 Icon(
                     imageVector = Icons.Outlined.ShoppingBag,
@@ -74,13 +85,13 @@ fun TarjetaProducto(
                 )
             }
 
-            // Insignia si está en proceso de entrega
+            // Insignia si está en proceso de entrega o préstamo
             if (producto.estado == EstadoProducto.EN_ENTREGA) {
                 val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
                 val esMiCompra = producto.compradorUid.isNotBlank() && producto.compradorUid == currentUid
 
                 Surface(
-                    color = if (esMiCompra) Color(0xFF0F8A5F) else Color(0xD9B45309), // Verde si lo compraste tú, ámbar para los demás
+                    color = if (esMiCompra) Color(0xFF0F8A5F) else Color(0xD9B45309),
                     shape = RoundedCornerShape(bottomEnd = 8.dp),
                     modifier = Modifier.align(Alignment.TopStart)
                 ) {
@@ -92,11 +103,25 @@ fun TarjetaProducto(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
+            } else if (producto.estado == EstadoProducto.PRESTADO) {
+                Surface(
+                    color = Color(0xFF1E40AF),
+                    shape = RoundedCornerShape(bottomEnd = 8.dp),
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Text(
+                        text = "EN PRÉSTAMO",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        
-        // Titulo
+
+        // Título del artículo (sin papelera)
         Text(
             text = producto.titulo,
             fontWeight = FontWeight.Bold,
@@ -113,11 +138,12 @@ fun TarjetaProducto(
             color = Color(0xFF2E9473)
         )
 
-        // Ubicacion y antiguedad
+        // Ubicación y antigüedad
         Text(
             text = producto.ubicacionYTiempo,
             fontSize = 11.sp,
-            color = Color.Gray
+            color = Color.Gray,
+            maxLines = 1
         )
     }
 }

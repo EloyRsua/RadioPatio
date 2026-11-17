@@ -6,9 +6,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.radiopatio.comunidad.subcoleccionComunidad
 import com.example.radiopatio.notificacion.NotificacionesHelper
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -41,6 +44,9 @@ class DetalleProductoViewModel(
     private val auth = FirebaseAuth.getInstance()
     private val currentUid = auth.currentUser?.uid ?: ""
 
+    private var targetDocRef: DocumentReference? = null
+    private var docListener: ListenerRegistration? = null
+
     init {
         cargarYEscucharProducto()
     }
@@ -51,14 +57,77 @@ class DetalleProductoViewModel(
             return
         }
 
-        db.collection("productos").document(firestoreId)
-            .addSnapshotListener { snapshot, error ->
+        viewModelScope.launch {
+            // Buscamos la referencia adecuada (primero en la comunidad activa del usuario, o collectionGroup)
+            var userComId = ""
+            try {
+                val userDoc = db.collection("users").document(currentUid).get().await()
+                userComId = userDoc.getString("comunidadId").orEmpty()
+            } catch (e: Exception) {
+                // ignore
+            }
+
+            var ref: DocumentReference? = null
+
+            // 1. Probar en la subcolección de la comunidad del usuario
+            if (userComId.isNotBlank()) {
+                val candidate = db.subcoleccionComunidad(userComId, "productos").document(firestoreId)
+                try {
+                    val candidateSnap = candidate.get().await()
+                    if (candidateSnap.exists()) {
+                        ref = candidate
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+
+            // 2. Probar en colección raíz por si existía de antes
+            if (ref == null) {
+                val candidateRoot = db.collection("productos").document(firestoreId)
+                try {
+                    val rootSnap = candidateRoot.get().await()
+                    if (rootSnap.exists()) {
+                        ref = candidateRoot
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+
+            // 3. Probar por collectionGroup("productos")
+            if (ref == null) {
+                try {
+                    val groupSnap = db.collectionGroup("productos")
+                        .whereEqualTo("firestoreId", firestoreId)
+                        .limit(1)
+                        .get()
+                        .await()
+                    ref = groupSnap.documents.firstOrNull()?.reference
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+
+            // 4. Si aún no se encontró, asignar por defecto la subcolección de la comunidad o raíz
+            if (ref == null) {
+                ref = if (userComId.isNotBlank()) {
+                    db.subcoleccionComunidad(userComId, "productos").document(firestoreId)
+                } else {
+                    db.collection("productos").document(firestoreId)
+                }
+            }
+
+            targetDocRef = ref
+
+            docListener?.remove()
+            docListener = ref.addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) {
                     uiState = uiState.copy(cargando = false)
                     return@addSnapshotListener
                 }
 
-                val autorUid = snapshot.getString("autorUid") ?: ""
+                val autorUid = snapshot.getString("autorUid") ?: snapshot.getString("vendedorUid") ?: ""
                 val compradorUid = snapshot.getString("compradorUid") ?: ""
 
                 var estado = try {
@@ -75,14 +144,13 @@ class DetalleProductoViewModel(
                 val compradorOk = snapshot.getBoolean("compradorConfirmoRecepcion") ?: false
                 val motivoConflicto = snapshot.getString("motivoConflicto") ?: ""
 
-
                 // Si está en entrega, ha pasado la fecha límite y no hay conflicto abierto, se autocompleta con éxito
                 val ahora = System.currentTimeMillis()
                 val esCompra = snapshot.getBoolean("esParaComprar") ?: true
                 if (estado == EstadoProducto.EN_ENTREGA && fechaLimite > 0 && ahora > fechaLimite && motivoConflicto.isBlank()) {
                     val nuevoEstado = if (esCompra) EstadoProducto.VENDIDO else EstadoProducto.PRESTADO
                     estado = nuevoEstado
-                    db.collection("productos").document(firestoreId).update("estado", nuevoEstado.name)
+                    snapshot.reference.update("estado", nuevoEstado.name)
                 }
 
                 val compradorNombre = snapshot.getString("compradorNombre") ?: ""
@@ -92,14 +160,16 @@ class DetalleProductoViewModel(
                 val fotos = snapshot.get("fotos") as? List<String> ?: emptyList()
                 val prod = Producto(
                     firestoreId = snapshot.id,
+                    comunidadId = snapshot.getString("comunidadId") ?: userComId,
                     autorUid = autorUid,
+                    vendedorUid = snapshot.getString("vendedorUid") ?: autorUid,
                     compradorUid = compradorUid,
                     compradorNombre = compradorNombre,
                     compradorPiso = compradorPiso,
                     titulo = snapshot.getString("titulo") ?: "",
                     descripcion = snapshot.getString("descripcion") ?: "",
                     precio = snapshot.getString("precio") ?: "",
-                    ubicacionYTiempo = snapshot.getString("ubicacion") ?: "",
+                    ubicacionYTiempo = snapshot.getString("ubicacion") ?: snapshot.getString("ubicacionYTiempo") ?: "",
                     categoriaProducto = try {
                         CategoriaProducto.valueOf(snapshot.getString("categoria") ?: CategoriaProducto.TODOS.name)
                     } catch (e: Exception) {
@@ -110,7 +180,7 @@ class DetalleProductoViewModel(
                     color = snapshot.getString("color") ?: "",
                     estadoUso = snapshot.getString("estadoUso") ?: "",
                     fotos = fotos,
-                    imagenUrl = fotos.firstOrNull(),
+                    imagenUrl = fotos.firstOrNull() ?: snapshot.getString("imagenUrl"),
                     estado = estado,
                     fechaCompra = fechaCompra,
                     plazoDiasEntrega = plazoDias,
@@ -133,6 +203,7 @@ class DetalleProductoViewModel(
                     diasRestantes = diasRestantes
                 )
             }
+        }
     }
 
     // Acción de comprar / tomar prestado
@@ -140,7 +211,6 @@ class DetalleProductoViewModel(
         val prod = uiState.producto ?: return
 
         viewModelScope.launch {
-            // 1. Buscamos el nombre y vivienda del usuario actual (el que compra/pide)
             var nombreComprador = "Un vecino"
             var pisoComprador = ""
             try {
@@ -172,9 +242,10 @@ class DetalleProductoViewModel(
                 "vendedorConfirmoEntrega" to false,
                 "compradorConfirmoRecepcion" to false
             )
-            db.collection("productos").document(prod.firestoreId).update(updates)
 
-            // 2. Notificación con los datos concretos del vecino para el vendedor
+            targetDocRef?.update(updates)
+
+            // Notificación para el vendedor
             val datosVecino = if (pisoComprador.isNotBlank()) "$nombreComprador ($pisoComprador)" else nombreComprador
             val titulo = if (prod.esParaComprar) "¡Artículo vendido!" else "¡Préstamo solicitado!"
             val mensaje = if (prod.esParaComprar) {
@@ -197,10 +268,12 @@ class DetalleProductoViewModel(
         val prod = uiState.producto ?: return
         val estadoFinal = if (prod.esParaComprar) EstadoProducto.VENDIDO.name else EstadoProducto.PRESTADO.name
         val nuevoEstado = if (prod.compradorConfirmoRecepcion) estadoFinal else EstadoProducto.EN_ENTREGA.name
-        db.collection("productos").document(prod.firestoreId).update(
-            "vendedorConfirmoEntrega", true,
-            "estado", nuevoEstado
+
+        val updates = mapOf(
+            "vendedorConfirmoEntrega" to true,
+            "estado" to nuevoEstado
         )
+        targetDocRef?.update(updates)
 
         // Enviar aviso al comprador
         NotificacionesHelper.enviarNotificacion(
@@ -211,7 +284,7 @@ class DetalleProductoViewModel(
         )
     }
 
-    // Comprador confirma que ya lo recibió + notitifacion
+    // Comprador confirma que ya lo recibió + notificacion
     fun onConfirmarRecepcionComprador() {
         val prod = uiState.producto ?: return
         val estadoFinal = if (prod.esParaComprar) EstadoProducto.VENDIDO.name else EstadoProducto.PRESTADO.name
@@ -221,14 +294,13 @@ class DetalleProductoViewModel(
             "estado" to estadoFinal
         )
 
-        // Si es un préstamo, fijamos la fecha de devolución sumando los días acordados
         if (!prod.esParaComprar) {
             val fechaLimiteDevolucionMilis = System.currentTimeMillis() + (prod.diasPrestamo * 24 * 60 * 60 * 1000L)
             val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
             updates["fechaDevolucion"] = sdf.format(java.util.Date(fechaLimiteDevolucionMilis))
         }
 
-        db.collection("productos").document(prod.firestoreId).update(updates)
+        targetDocRef?.update(updates)
 
         // Enviar aviso al vendedor
         NotificacionesHelper.enviarNotificacion(
@@ -241,26 +313,18 @@ class DetalleProductoViewModel(
 
     // Reportar conflicto al Administrador
     fun onReportarConflicto(motivo: String) {
-//        val prod = uiState.producto ?: return
-//        viewModelScope.launch {
-//            // 1. Marcar el producto en conflicto
-//            db.collection("productos").document(prod.firestoreId).update(
-//                "estado", EstadoProducto.EN_CONFLICTO.name,
-//                "motivoConflicto", motivo
-//            )
-//            // 2. Crear una incidencia para el Administrador de la comunidad
-//            val incidencia = hashMapOf(
-//                "tipo" to "CONFLICTO_ENTREGA",
-//                "productoId" to prod.firestoreId,
-//                "tituloProducto" to prod.titulo,
-//                "reportadoPorUid" to currentUid,
-//                "vendedorUid" to prod.autorUid,
-//                "compradorUid" to prod.compradorUid,
-//                "motivo" to motivo,
-//                "fecha" to System.currentTimeMillis(),
-//                "resuelto" to false
-//            )
-//            db.collection("incidencias").add(incidencia)
-//        }
+        val prod = uiState.producto ?: return
+        viewModelScope.launch {
+            val updates = mapOf(
+                "estado" to EstadoProducto.EN_CONFLICTO.name,
+                "motivoConflicto" to motivo
+            )
+            targetDocRef?.update(updates)
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        docListener?.remove()
     }
 }
