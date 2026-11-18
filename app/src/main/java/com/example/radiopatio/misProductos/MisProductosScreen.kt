@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.*
@@ -31,6 +32,7 @@ private val VerdeBoton = Color(0xFF0F8A5F)
 private val TextoPrincipal = Color(0xFF0F172A)
 private val TextoSecundario = Color(0xFF64748B)
 private val FondoApp = Color(0xFFF8FAFC)
+
 @Composable
 fun MisProductosScreen(
     onVolver: () -> Unit,
@@ -44,9 +46,11 @@ fun MisProductosScreen(
         pestanaSeleccionada = uiState.pestanaSeleccionada,
         onCambiarPestana = { viewModel.onPestanaSeleccionada(it) },
         onVolver = onVolver,
-        onProductoClick = onProductoClick
+        onProductoClick = onProductoClick,
+        onEliminarProducto = { producto -> viewModel.eliminarProducto(producto) }
     )
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MisProductosContent(
@@ -55,7 +59,8 @@ fun MisProductosContent(
     pestanaSeleccionada: Int,
     onCambiarPestana: (Int) -> Unit,
     onVolver: () -> Unit,
-    onProductoClick: (String) -> Unit
+    onProductoClick: (String) -> Unit,
+    onEliminarProducto: (Producto) -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -120,10 +125,11 @@ fun MisProductosContent(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(productos) { producto ->
+                    items(productos, key = { it.firestoreId }) { producto ->
                         TarjetaMiArticulo(
                             producto = producto,
-                            onClick = { onProductoClick(producto.firestoreId) }
+                            onClick = { onProductoClick(producto.firestoreId) },
+                            onEliminar = { onEliminarProducto(producto) }
                         )
                     }
                 }
@@ -131,11 +137,15 @@ fun MisProductosContent(
         }
     }
 }
+
 @Composable
 fun TarjetaMiArticulo(
     producto: Producto,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onEliminar: () -> Unit = {}
 ) {
+    var mostrarDialogoEliminar by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -178,12 +188,48 @@ fun TarjetaMiArticulo(
                     color = AzulPrincipal
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                // Etiqueta de estado
                 BadgeEstado(producto.estado, producto.fechaDevolucion)
+            }
+
+            // Botón eliminar (solo si está disponible)
+            if (producto.estado == EstadoProducto.DISPONIBLE) {
+                IconButton(onClick = { mostrarDialogoEliminar = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Eliminar artículo",
+                        tint = Color(0xFFB91C1C)
+                    )
+                }
             }
         }
     }
+
+    if (mostrarDialogoEliminar) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoEliminar = false },
+            title = { Text("Eliminar artículo", fontWeight = FontWeight.Bold, color = AzulPrincipal) },
+            text = {
+                Text("¿Seguro que quieres eliminar \"${producto.titulo}\"? Esta acción no se puede deshacer.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        mostrarDialogoEliminar = false
+                        onEliminar()
+                    }
+                ) {
+                    Text("Eliminar", color = Color(0xFFB91C1C), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoEliminar = false }) {
+                    Text("Cancelar", color = TextoSecundario)
+                }
+            }
+        )
+    }
 }
+
 @Composable
 fun BadgeEstado(estado: EstadoProducto, fechaDevolucion: String = "") {
     val (fondo, texto, etiqueta) = when (estado) {
@@ -204,6 +250,7 @@ fun BadgeEstado(estado: EstadoProducto, fechaDevolucion: String = "") {
         )
     }
 }
+
 @Preview(showBackground = true)
 @Composable
 fun MisProductosContentPreview() {

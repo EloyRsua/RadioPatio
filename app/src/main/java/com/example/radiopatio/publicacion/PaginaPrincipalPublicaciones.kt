@@ -37,9 +37,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.radiopatio.R
 import com.example.radiopatio.RadioPatioApplication
-import com.example.radiopatio.RadioPatioViewModel
-import com.example.radiopatio.RadioPatioViewModelFactory
-import com.example.radiopatio.TablonUiState
 import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.ui.theme.RadioPatioTheme
@@ -52,8 +49,8 @@ fun PaginaPrincipal(
     onIrACrearPublicacion: () -> Unit = {},
     onIrAComunidad: () -> Unit = {},
     onIrANotificaciones: () -> Unit = {},
-    viewModel: RadioPatioViewModel = viewModel(
-        factory = RadioPatioViewModelFactory(
+    viewModel: PublicacionViewModel = viewModel(
+        factory = PublicacionViewModelFactory(
             publicacionDao = (LocalContext.current.applicationContext as RadioPatioApplication).database.publicacionDao(),
             comunidadDao = (LocalContext.current.applicationContext as RadioPatioApplication).database.comunidadDao()
         )
@@ -103,7 +100,7 @@ fun PaginaPrincipal(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PaginaPrincipalContent(
-    uiState: TablonUiState,
+    uiState: PublicacionUiState,
     modifier: Modifier = Modifier,
     onTextoBusquedaChange: (String) -> Unit = {},
     onIrACrearPublicacion: () -> Unit = {},
@@ -600,7 +597,7 @@ fun PaginaPrincipalPreview() {
     )
     RadioPatioTheme {
         PaginaPrincipalContent(
-            uiState = TablonUiState(
+            uiState = PublicacionUiState(
                 comunidadIdActual = "com_1",
                 comunidadNombre = "Residencial Montecerrao",
                 usuarioActual = usuarioEjemplo,

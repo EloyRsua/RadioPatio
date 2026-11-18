@@ -44,17 +44,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.radiopatio.R
 import com.example.radiopatio.comunidad.Comunidad
-import com.example.radiopatio.ui.theme.RadioPatioTheme
 
-/**
- * Datos de comunidad seleccionados o introducidos durante el registro de un nuevo usuario.
- */
 data class DatosRegistroComunidad(
     val crearNueva: Boolean = false,
     val solicitarTraspaso: Boolean = false,
@@ -69,39 +65,23 @@ data class DatosRegistroComunidad(
 ) {
     fun estaConfigurada(esAdministrador: Boolean = false): Boolean {
         val pisosValidos = !nuevaComunidadTipo.equals(Comunidad.TIPO_EDIFICIO, ignoreCase = true) ||
-            nuevaComunidadPisos > 0
+                nuevaComunidadPisos > 0
         return when {
             crearNueva -> esAdministrador &&
-                nuevaComunidadNombre.isNotBlank() &&
-                nuevaComunidadDireccion.isNotBlank() &&
-                pisosValidos
+                    nuevaComunidadNombre.isNotBlank() &&
+                    nuevaComunidadDireccion.isNotBlank() &&
+                    pisosValidos
             esAdministrador -> true
             else -> comunidadExistente != null && !solicitarTraspaso
         }
     }
 }
 
-/**
- * Pantalla para el registro de nuevos usuarios (Vecino/a o Administrador de fincas)
- * con selector unificado de comunidad, repetición de contraseña y validaciones completas.
- */
 @Composable
 fun RegistroNuevoUsuario(
-    datosComunidad: DatosRegistroComunidad = DatosRegistroComunidad(),
-    esAdministrador: Boolean = false,
-    cargando: Boolean = false,
-    onTipoCuentaChange: (Boolean) -> Unit = {},
+    viewModel: AutenticarViewModel = viewModel(),
     onAbrirBuscadorComunidades: () -> Unit = {},
-    onRegisterClick: (
-        nombre: String,
-        apellidos: String,
-        vivienda: String,
-        email: String,
-        pass: String,
-        photoUri: Uri?,
-        esAdministrador: Boolean,
-        datosComunidad: DatosRegistroComunidad
-    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    onRegistroExitoso: (String) -> Unit = {},
     onVolverClick: () -> Unit = {}
 ) {
     val azulPrincipal = Color(0xFF133E54)
@@ -111,15 +91,27 @@ fun RegistroNuevoUsuario(
     val textoSecundario = Color(0xFF64748B)
 
     val context = LocalContext.current
+    val uiState = viewModel.uiState
+
+    LaunchedEffect(uiState.errorMensaje) {
+        uiState.errorMensaje?.let { mensaje ->
+            Toast.makeText(context, mensaje, Toast.LENGTH_LONG).show()
+            viewModel.limpiarError()
+        }
+    }
+
+    val datosComunidad = uiState.datosComunidad
+    val esAdministrador = uiState.esAdministrador
+    val cargando = uiState.cargando
 
     var nombre by rememberSaveable { mutableStateOf("") }
     var apellidos by rememberSaveable { mutableStateOf("") }
     var vivienda by rememberSaveable { mutableStateOf("") }
     val comExistenteEdificio = datosComunidad.comunidadExistente
     val edificioConPisos = !esAdministrador &&
-        !datosComunidad.crearNueva &&
-        comExistenteEdificio?.esEdificio == true &&
-        comExistenteEdificio.numeroPisos > 0
+            !datosComunidad.crearNueva &&
+            comExistenteEdificio?.esEdificio == true &&
+            comExistenteEdificio.numeroPisos > 0
     val maxPisosEdificio = if (edificioConPisos) comExistenteEdificio?.numeroPisos ?: 0 else 0
     var pisoSeleccionado by rememberSaveable(comExistenteEdificio?.id, maxPisosEdificio) {
         mutableStateOf(if (maxPisosEdificio > 0) 1 else 0)
@@ -176,7 +168,6 @@ fun RegistroNuevoUsuario(
                 .padding(top = 20.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Cabecera con selector de Foto
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -201,7 +192,6 @@ fun RegistroNuevoUsuario(
                     )
                 }
 
-                // Avatar interactivo
                 Box(
                     modifier = Modifier
                         .size(64.dp)
@@ -239,15 +229,13 @@ fun RegistroNuevoUsuario(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Selector de tipo de cuenta: Vecino/a vs Administrador de fincas
             SelectorTipoCuentaRegistro(
                 esAdministrador = esAdministrador,
-                onSeleccionar = onTipoCuentaChange
+                onSeleccionar = { viewModel.onTipoCuentaChange(it) }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Formulario
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -272,14 +260,12 @@ fun RegistroNuevoUsuario(
                     )
                 }
 
-                // Selector unificado que abre la ventana de búsqueda avanzada de comunidades
                 SelectorComunidadRegistro(
                     datosComunidad = datosComunidad,
                     esAdministrador = esAdministrador,
                     onClick = onAbrirBuscadorComunidades
                 )
 
-                // Campo Vivienda / Despacho o selector de pisos si el administrador fijó pisos del edificio
                 if (edificioConPisos) {
                     SelectorPisoEdificioRegistro(
                         numeroPisos = maxPisosEdificio,
@@ -311,7 +297,6 @@ fun RegistroNuevoUsuario(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Campo Contraseña
                 CampoEntradaTexto(
                     value = password,
                     onValueChange = { password = it },
@@ -324,7 +309,6 @@ fun RegistroNuevoUsuario(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Campo Repetir Contraseña
                 CampoEntradaTexto(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it },
@@ -372,7 +356,6 @@ fun RegistroNuevoUsuario(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Botón Crear mi cuenta con validaciones de campos y contraseñas
             Button(
                 onClick = {
                     val nombreLimpio = nombre.trim()
@@ -381,37 +364,26 @@ fun RegistroNuevoUsuario(
                     val passLimpia = password.trim()
                     val confirmPassLimpia = confirmPassword.trim()
 
-                    // 1. Validar campos obligatorios vacíos
                     if (nombreLimpio.isEmpty() || !viviendaValida || emailLimpio.isEmpty() || passLimpia.isEmpty() || confirmPassLimpia.isEmpty()) {
                         Toast.makeText(context, "Por favor, rellena todos los campos obligatorios", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-
-                    // 2. Validar comunidad seleccionada o configurada según tipo de cuenta
                     if (!datosComunidad.estaConfigurada(esAdministrador)) {
                         Toast.makeText(context, "Por favor, selecciona o configura tu comunidad", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-
-                    // 3. Validar aceptación de las normas
                     if (!aceptoNormas) {
                         Toast.makeText(context, "Debes aceptar las normas de la comunidad", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-
-                    // 4. Validar formato de correo electrónico
                     if (!emailLimpio.contains("@")) {
                         Toast.makeText(context, "Por favor, introduce un correo electrónico válido", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-
-                    // 5. Validar longitud de la contraseña
                     if (passLimpia.length < 6) {
                         Toast.makeText(context, "La contraseña debe tener al menos 6 caracteres", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-
-                    // 6. Validar que ambas contraseñas coincidan exactamente
                     if (passLimpia != confirmPassLimpia) {
                         Toast.makeText(context, "Las contraseñas no coinciden", Toast.LENGTH_SHORT).show()
                         return@Button
@@ -427,15 +399,14 @@ fun RegistroNuevoUsuario(
                         else -> ""
                     }
 
-                    onRegisterClick(
-                        nombreLimpio,
-                        apellidosLimpios,
-                        viviendaFinal,
-                        emailLimpio,
-                        passLimpia,
-                        photoUri,
-                        esAdministrador,
-                        datosComunidad
+                    viewModel.registrarNuevoUsuario(
+                        nombre = nombreLimpio,
+                        apellidos = apellidosLimpios,
+                        vivienda = viviendaFinal,
+                        email = emailLimpio,
+                        pass = passLimpia,
+                        photoUri = photoUri,
+                        onExito = onRegistroExitoso
                     )
                 },
                 enabled = !cargando,
@@ -750,22 +721,4 @@ private fun CampoEntradaTexto(
             .clip(RoundedCornerShape(25.dp))
             .border(1.dp, bordeGris, RoundedCornerShape(25.dp))
     )
-}
-
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun RegistroNuevoUsuarioPreview() {
-    RadioPatioTheme {
-        RegistroNuevoUsuario(
-            datosComunidad = DatosRegistroComunidad(
-                comunidadExistente = Comunidad(
-                    id = "com_1",
-                    nombre = "Urbanización Montecerrao",
-                    direccion = "Calle Fuertes Acevedo, 42",
-                    ciudad = "Oviedo",
-                    tipo = Comunidad.TIPO_URBANIZACION
-                )
-            )
-        )
-    }
 }

@@ -12,7 +12,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,61 +23,67 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.radiopatio.comunidad.ComunidadRepository
+import com.example.radiopatio.ui.theme.AzulPrincipal
+import com.example.radiopatio.ui.theme.RadioPatioTheme
+import com.example.radiopatio.ui.theme.TextoPrincipal
+import com.example.radiopatio.ui.theme.TextoSecundario
+import com.example.radiopatio.ui.theme.VerdePrincipal
 import com.example.radiopatio.usuarios.UserRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalCoroutinesApi::class)
 @Composable
 fun PerfilUsuarioScreen(
     onVolver: () -> Unit = {},
     onCerrarSesion: () -> Unit = {},
     onIrAMisProductos: () -> Unit = {}
 ) {
-    val azulPrincipal = Color(0xFF133E54)
-    val verdeBoton = Color(0xFF0F8A5F)
-    val textoSecundario = Color(0xFF64748B)
-
-    val userRepository = remember { UserRepository() }
     val comunidadRepository = remember { ComunidadRepository() }
+    val userRepository = remember { UserRepository(comunidadRepository) }
 
-    var usuario by remember { mutableStateOf<Usuario?>(null) }
-    var nombreComunidad by remember { mutableStateOf("") }
-    var cargando by remember { mutableStateOf(true) }
+    val viewModel: PerfilUsuarioViewModel = viewModel(
+        factory = PerfilUsuarioViewModelFactory(
+            userRepository = userRepository,
+            comunidadRepository = comunidadRepository
+        )
+    )
 
-    LaunchedEffect(Unit) {
-        userRepository.observarUsuarioActual()
-            .flatMapLatest { user ->
-                val comId = user?.comunidadId.orEmpty()
-                if (comId.isBlank()) {
-                    flowOf(Pair(user, ""))
-                } else {
-                    comunidadRepository.observarComunidadPorId(comId).map { comunidad ->
-                        val nombre = comunidad?.nombre?.takeIf { it.isNotBlank() }
-                            ?: user?.comunidadNombre
-                            ?: comId
-                        Pair(user, nombre)
-                    }
-                }
-            }
-            .collect { (user, comNombre) ->
-                usuario = user
-                nombreComunidad = comNombre
-                cargando = false
-            }
-    }
+    val uiState = viewModel.uiState
 
+    PerfilUsuarioContent(
+        usuario = uiState.usuario,
+        nombreComunidad = uiState.nombreComunidad,
+        cargando = uiState.cargando,
+        onVolver = onVolver,
+        onCerrarSesion = {
+            viewModel.cerrarSesion(onCerrarSesion)
+        },
+        onIrAMisProductos = onIrAMisProductos
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PerfilUsuarioContent(
+    usuario: Usuario?,
+    nombreComunidad: String,
+    cargando: Boolean,
+    onVolver: () -> Unit = {},
+    onCerrarSesion: () -> Unit = {},
+    onIrAMisProductos: () -> Unit = {}
+) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Mi Perfil", fontWeight = FontWeight.Bold, color = azulPrincipal) },
+                title = { Text("Mi Perfil", fontWeight = FontWeight.Bold, color = AzulPrincipal) },
                 navigationIcon = {
                     IconButton(onClick = onVolver) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = azulPrincipal)
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = AzulPrincipal
+                        )
                     }
                 }
             )
@@ -92,7 +99,7 @@ fun PerfilUsuarioScreen(
             if (cargando) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center),
-                    color = verdeBoton
+                    color = VerdePrincipal
                 )
             } else {
                 val usuarioActual = usuario ?: Usuario(
@@ -114,7 +121,7 @@ fun PerfilUsuarioScreen(
                         modifier = Modifier
                             .size(100.dp)
                             .clip(CircleShape)
-                            .background(azulPrincipal),
+                            .background(AzulPrincipal),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -139,12 +146,12 @@ fun PerfilUsuarioScreen(
                         text = usuarioActual.nombre,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = azulPrincipal
+                        color = AzulPrincipal
                     )
                     Text(
                         text = usuarioActual.email,
                         fontSize = 14.sp,
-                        color = textoSecundario
+                        color = TextoSecundario
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -165,7 +172,7 @@ fun PerfilUsuarioScreen(
                                 text = "Información de la Comunidad",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = verdeBoton
+                                color = VerdePrincipal
                             )
 
                             HorizontalDivider(color = Color(0xFFF1F5F9))
@@ -177,13 +184,13 @@ fun PerfilUsuarioScreen(
                                 Text(
                                     text = if (usuarioActual.esAdministradorFincas) "Comunidad activa" else "Comunidad",
                                     fontSize = 13.sp,
-                                    color = textoSecundario
+                                    color = TextoSecundario
                                 )
                                 Text(
                                     text = nombreComunidad.ifBlank { "Sin comunidad" },
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = azulPrincipal
+                                    color = AzulPrincipal
                                 )
                             }
 
@@ -192,12 +199,12 @@ fun PerfilUsuarioScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text("Comunidades gestionadas", fontSize = 13.sp, color = textoSecundario)
+                                    Text("Comunidades gestionadas", fontSize = 13.sp, color = TextoSecundario)
                                     Text(
                                         text = "${usuarioActual.comunidadesIds.size}",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = verdeBoton
+                                        color = VerdePrincipal
                                     )
                                 }
                             }
@@ -206,31 +213,46 @@ fun PerfilUsuarioScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Piso / Vivienda", fontSize = 13.sp, color = textoSecundario)
-                                Text(usuarioActual.vivienda, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = azulPrincipal)
+                                Text("Piso / Vivienda", fontSize = 13.sp, color = TextoSecundario)
+                                Text(
+                                    text = usuarioActual.vivienda,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AzulPrincipal
+                                )
                             }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Rol", fontSize = 13.sp, color = textoSecundario)
-                                Text(usuarioActual.rol, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = azulPrincipal)
+                                Text("Rol", fontSize = 13.sp, color = TextoSecundario)
+                                Text(
+                                    text = usuarioActual.rol,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AzulPrincipal
+                                )
                             }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Miembro desde", fontSize = 13.sp, color = textoSecundario)
-                                Text(usuarioActual.fechaAlta, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = azulPrincipal)
+                                Text("Miembro desde", fontSize = 13.sp, color = TextoSecundario)
+                                Text(
+                                    text = usuarioActual.fechaAlta,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AzulPrincipal
+                                )
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Botón estilo Vinted: "Mis Artículos" (feature/marketplace-ui)
+                    // Botón: "Mis Artículos"
                     Card(
                         onClick = onIrAMisProductos,
                         modifier = Modifier.fillMaxWidth(),
@@ -252,26 +274,26 @@ fun PerfilUsuarioScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.Inventory2,
                                     contentDescription = null,
-                                    tint = verdeBoton
+                                    tint = VerdePrincipal
                                 )
                                 Column {
                                     Text(
                                         text = "Mis Artículos",
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0F172A)
+                                        color = TextoPrincipal
                                     )
                                     Text(
                                         text = "Gestiona tus ventas y préstamos",
                                         fontSize = 12.sp,
-                                        color = textoSecundario
+                                        color = TextoSecundario
                                     )
                                 }
                             }
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                                 contentDescription = "Ir a mis artículos",
-                                tint = textoSecundario,
+                                tint = TextoSecundario,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -279,7 +301,7 @@ fun PerfilUsuarioScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Botón Cerrar Sesión (master)
+                    // Botón Cerrar Sesión
                     OutlinedButton(
                         onClick = onCerrarSesion,
                         shape = RoundedCornerShape(24.dp),
@@ -307,5 +329,17 @@ fun PerfilUsuarioScreen(
 @Preview(showBackground = true)
 @Composable
 fun PerfilUsuarioContentPreview() {
-    PerfilUsuarioScreen()
+    RadioPatioTheme {
+        PerfilUsuarioContent(
+            usuario = Usuario(
+                nombre = "Laura Gómez",
+                inicial = "L",
+                vivienda = "Portal 2, 3ºB",
+                email = "laura.gomez@email.com",
+                telefono = "600123456"
+            ),
+            nombreComunidad = "Residencial Montecerrao",
+            cargando = false
+        )
+    }
 }
