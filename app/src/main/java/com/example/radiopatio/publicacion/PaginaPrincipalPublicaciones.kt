@@ -43,12 +43,15 @@ import com.example.radiopatio.TablonUiState
 import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.ui.theme.RadioPatioTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
 fun PaginaPrincipal(
     modifier: Modifier = Modifier,
     onIrACrearPublicacion: () -> Unit = {},
     onIrAComunidad: () -> Unit = {},
+    onIrANotificaciones: () -> Unit = {},
     viewModel: RadioPatioViewModel = viewModel(
         factory = RadioPatioViewModelFactory(
             publicacionDao = (LocalContext.current.applicationContext as RadioPatioApplication).database.publicacionDao(),
@@ -57,6 +60,26 @@ fun PaginaPrincipal(
     )
 ) {
     val context = LocalContext.current
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    var notificacionesNoLeidas by remember { mutableIntStateOf(0) }
+
+    DisposableEffect(currentUser?.uid) {
+        val uid = currentUser?.uid
+        if (uid.isNullOrBlank()) {
+            return@DisposableEffect onDispose {}
+        }
+        val registration = FirebaseFirestore.getInstance()
+            .collection("notificaciones")
+            .whereEqualTo("destinatarioUid", uid)
+            .whereEqualTo("leida", false)
+            .addSnapshotListener { snapshot, _ ->
+                notificacionesNoLeidas = snapshot?.size() ?: 0
+            }
+        onDispose {
+            registration.remove()
+        }
+    }
+
     val errorMsg = viewModel.uiState.errorMensaje
     LaunchedEffect(errorMsg) {
         errorMsg?.let { msg ->
@@ -71,6 +94,8 @@ fun PaginaPrincipal(
         onTextoBusquedaChange = viewModel::onTextoBusquedaChange,
         onIrACrearPublicacion = onIrACrearPublicacion,
         onIrAComunidad = onIrAComunidad,
+        onIrANotificaciones = onIrANotificaciones,
+        notificacionesNoLeidas = notificacionesNoLeidas,
         onEliminarPublicacion = viewModel::eliminarPublicacion
     )
 }
@@ -83,6 +108,8 @@ fun PaginaPrincipalContent(
     onTextoBusquedaChange: (String) -> Unit = {},
     onIrACrearPublicacion: () -> Unit = {},
     onIrAComunidad: () -> Unit = {},
+    onIrANotificaciones: () -> Unit = {},
+    notificacionesNoLeidas: Int = 0,
     onEliminarPublicacion: (PublicacionEntidad) -> Unit = {}
 ) {
     var mostrarBuscador by remember { mutableStateOf(false) }
@@ -102,7 +129,9 @@ fun PaginaPrincipalContent(
                 onToggleBuscador = {
                     mostrarBuscador = !mostrarBuscador
                     if (!mostrarBuscador) onTextoBusquedaChange("")
-                }
+                },
+                onIrANotificaciones = onIrANotificaciones,
+                notificacionesNoLeidas = notificacionesNoLeidas
             )
         },
         floatingActionButton = {
@@ -179,11 +208,9 @@ fun PaginaPrincipalContent(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
                             ) {
-                                CampoCrearPublicacion(
-                                    onCrearClick = onIrACrearPublicacion
-                                )
+                                CampoCrearPublicacion(onCrearClick = onIrACrearPublicacion)
                             }
                         }
 
@@ -274,7 +301,9 @@ fun PaginaPrincipalContent(
 private fun BarraSuperior(
     nombreComunidad: String,
     buscadorActivo: Boolean,
-    onToggleBuscador: () -> Unit
+    onToggleBuscador: () -> Unit,
+    onIrANotificaciones: () -> Unit = {},
+    notificacionesNoLeidas: Int = 0
 ) {
     Surface(shadowElevation = 2.dp) {
         Row(
@@ -321,8 +350,30 @@ private fun BarraSuperior(
                     tint = Color(0xFF133E54)
                 )
             }
-            IconButton(onClick = {}) {
-                Icon(Icons.Outlined.Notifications, contentDescription = "Avisos", tint = Color(0xFF133E54))
+
+            // Notificaciones con Badge (tu rama)
+            BadgedBox(
+                badge = {
+                    if (notificacionesNoLeidas > 0) {
+                        Badge(
+                            containerColor = Color(0xFFEF4444),
+                            contentColor = Color.White
+                        ) {
+                            Text(
+                                text = if (notificacionesNoLeidas > 99) "+99" else notificacionesNoLeidas.toString(),
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            ) {
+                IconButton(onClick = onIrANotificaciones) {
+                    Icon(
+                        Icons.Outlined.Notifications,
+                        contentDescription = "Avisos",
+                        tint = Color(0xFF133E54)
+                    )
+                }
             }
         }
     }

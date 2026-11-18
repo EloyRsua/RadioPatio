@@ -4,10 +4,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,10 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 
 /**
@@ -42,9 +40,7 @@ import com.example.radiopatio.ui.theme.RadioPatioTheme
 fun TarjetaProducto(
     producto: Producto,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    esMiProducto: Boolean = false,
-    onEliminarClick: () -> Unit = {}
+    modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
@@ -63,15 +59,24 @@ fun TarjetaProducto(
                 .background(Color(0xFFF0F4F7)),
             contentAlignment = Alignment.Center
         ) {
-            if (producto.imagenRes != null) {
+            // 1. Foto subida por usuario (tu rama)
+            if (!producto.imagenUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = producto.imagenUrl,
+                    contentDescription = producto.titulo,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            // 2. Foto local drawable (de master)
+            } else if (producto.imagenRes != null) {
                 Image(
                     painter = painterResource(id = producto.imagenRes),
                     contentDescription = producto.titulo,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+            // 3. Icono por defecto
             } else {
-                // Icono por defecto mientras no tengamos imagen real
                 Icon(
                     imageVector = Icons.Outlined.ShoppingBag,
                     contentDescription = null,
@@ -79,37 +84,51 @@ fun TarjetaProducto(
                     modifier = Modifier.size(36.dp)
                 )
             }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
 
-        // Título y acción eliminar si es del usuario
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = producto.titulo,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = Color(0xFF133E54),
-                maxLines = 1,
-                modifier = Modifier.weight(1f)
-            )
-            if (esMiProducto) {
-                IconButton(
-                    onClick = onEliminarClick,
-                    modifier = Modifier.size(24.dp)
+            // Insignia si está en proceso de entrega o préstamo
+            if (producto.estado == EstadoProducto.EN_ENTREGA) {
+                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                val esMiCompra = producto.compradorUid.isNotBlank() && producto.compradorUid == currentUid
+
+                Surface(
+                    color = if (esMiCompra) Color(0xFF0F8A5F) else Color(0xD9B45309),
+                    shape = RoundedCornerShape(bottomEnd = 8.dp),
+                    modifier = Modifier.align(Alignment.TopStart)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Delete,
-                        contentDescription = "Eliminar artículo",
-                        tint = Color(0xFFE53935),
-                        modifier = Modifier.size(16.dp)
+                    Text(
+                        text = if (esMiCompra) "RESERVADO POR TI" else "RESERVADO",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            } else if (producto.estado == EstadoProducto.PRESTADO) {
+                Surface(
+                    color = Color(0xFF1E40AF),
+                    shape = RoundedCornerShape(bottomEnd = 8.dp),
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Text(
+                        text = "EN PRÉSTAMO",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
             }
         }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Título del artículo (sin papelera)
+        Text(
+            text = producto.titulo,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = Color(0xFF133E54),
+            maxLines = 1
+        )
 
         // Precio en verde
         Text(

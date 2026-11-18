@@ -2,11 +2,15 @@ package com.example.radiopatio.informacionUsuario
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -29,7 +34,8 @@ import kotlinx.coroutines.flow.map
 @Composable
 fun PerfilUsuarioScreen(
     onVolver: () -> Unit = {},
-    onCerrarSesion: () -> Unit = {}
+    onCerrarSesion: () -> Unit = {},
+    onIrAMisProductos: () -> Unit = {}
 ) {
     val azulPrincipal = Color(0xFF133E54)
     val verdeBoton = Color(0xFF0F8A5F)
@@ -100,6 +106,7 @@ fun PerfilUsuarioScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -132,11 +139,8 @@ fun PerfilUsuarioScreen(
                         text = usuarioActual.nombre,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = azulPrincipal
                     )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
                     Text(
                         text = usuarioActual.email,
                         fontSize = 14.sp,
@@ -224,8 +228,58 @@ fun PerfilUsuarioScreen(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Botón estilo Vinted: "Mis Artículos" (feature/marketplace-ui)
+                    Card(
+                        onClick = onIrAMisProductos,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 18.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Inventory2,
+                                    contentDescription = null,
+                                    tint = verdeBoton
+                                )
+                                Column {
+                                    Text(
+                                        text = "Mis Artículos",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0F172A)
+                                    )
+                                    Text(
+                                        text = "Gestiona tus ventas y préstamos",
+                                        fontSize = 12.sp,
+                                        color = textoSecundario
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                contentDescription = "Ir a mis artículos",
+                                tint = textoSecundario,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    // Botón Cerrar Sesión (master)
                     OutlinedButton(
                         onClick = onCerrarSesion,
                         shape = RoundedCornerShape(24.dp),
@@ -248,4 +302,10 @@ fun PerfilUsuarioScreen(
             }
         }
     }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PerfilUsuarioContentPreview() {
+    PerfilUsuarioScreen()
 }

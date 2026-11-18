@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 object Inicio
 
-// Segun se vayan haciendo descomentarlas
 // Pantalla del mercadillo
 @Serializable
 object Mercadillo
@@ -22,7 +21,6 @@ object Eventos
 @Serializable
 object Publicar
 
-
 @Serializable
 object Perfil
 
@@ -31,6 +29,18 @@ object InicioSesion
 
 @Serializable
 object RegistroNuevo
+
+@Serializable
+object MisProductos
+
+@Serializable
+object CrearProducto
+
+@Serializable
+data class DetalleProducto(val firestoreId: String)
+
+@Serializable
+object Notificaciones
 
 @Serializable
 data class BuscarComunidad(

@@ -17,8 +17,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
-import com.example.radiopatio.eventos.CalendarioEventosScreen
-import com.example.radiopatio.publicacion.PaginaPrincipal
 import com.example.radiopatio.RadioPatioApplication
 import com.example.radiopatio.RadioPatioViewModel
 import com.example.radiopatio.RadioPatioViewModelFactory
@@ -26,11 +24,19 @@ import com.example.radiopatio.comunidad.BuscadorComunidadesScreen
 import com.example.radiopatio.comunidad.Comunidad
 import com.example.radiopatio.comunidad.ComunidadRepository
 import com.example.radiopatio.comunidad.CrearComunidadScreen
+import com.example.radiopatio.eventos.CalendarioEventosScreen
 import com.example.radiopatio.informacionUsuario.PerfilUsuarioScreen
 import com.example.radiopatio.informacionUsuario.ROL_ADMINISTRADOR_FINCAS
 import com.example.radiopatio.informacionUsuario.ROL_VECINO
 import com.example.radiopatio.informacionUsuario.Usuario
+import com.example.radiopatio.marketplace.CrearProductoScreen
+import com.example.radiopatio.marketplace.DetalleProductoScreen
 import com.example.radiopatio.marketplace.MercadilloScreen
+import com.example.radiopatio.marketplace.MercadilloViewModel
+import com.example.radiopatio.marketplace.MercadilloViewModelFactory
+import com.example.radiopatio.misProductos.MisProductosScreen
+import com.example.radiopatio.notificacion.NotificacionesScreen
+import com.example.radiopatio.publicacion.PaginaPrincipal
 import com.example.radiopatio.publicacion.PantallaCrearPublicacion
 import com.example.radiopatio.registroInicio.DatosRegistroComunidad
 import com.example.radiopatio.registroInicio.RegistroNuevoUsuario
@@ -449,6 +455,9 @@ fun AppNavHost(
                 onIrACrearPublicacion = {
                     navController.navigate(Publicar)
                 },
+                onIrANotificaciones = {
+                    navController.navigate(Notificaciones)
+                },
                 onIrAComunidad = {
                     navController.navigate(Vecinos) {
                         launchSingleTop = true
@@ -458,11 +467,70 @@ fun AppNavHost(
             )
         }
 
+        composable<Notificaciones> {
+            NotificacionesScreen(
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onProductoClick = { firestoreId ->
+                    navController.navigate(DetalleProducto(firestoreId))
+                }
+            )
+        }
+
         composable<Mercadillo> {
             MercadilloScreen(
+                onProductoClick = { firestoreId ->
+                    navController.navigate(DetalleProducto(firestoreId))
+                },
+                onIrACrearProducto = {
+                    navController.navigate(CrearProducto)
+                },
                 onIrAComunidad = {
                     navController.navigate(Vecinos) {
                         launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        // Pantalla de Detalle de Producto
+        composable<DetalleProducto> { backStackEntry ->
+            val ruta = backStackEntry.toRoute<DetalleProducto>()
+            DetalleProductoScreen(
+                firestoreId = ruta.firestoreId,
+                onVolver = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Pantalla para la creación de productos
+        composable<CrearProducto> {
+            val userRepo = remember { UserRepository() }
+            val mercadilloViewModel: MercadilloViewModel = viewModel(
+                factory = MercadilloViewModelFactory(app.database.productoDao(), userRepo)
+            )
+
+            CrearProductoScreen(
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onPublicar = { titulo, descripcion, precio, esParaComprar, categoria, marca, color, estadoUso, fotosUris, plazoDias ->
+                    mercadilloViewModel.publicarNuevoProducto(
+                        titulo = titulo,
+                        descripcion = descripcion,
+                        precio = precio,
+                        esParaComprar = esParaComprar,
+                        categoria = categoria,
+                        marca = marca,
+                        color = color,
+                        estadoUso = estadoUso,
+                        fotosUris = fotosUris,
+                        plazoDias = plazoDias
+                    ) {
+                        Toast.makeText(context, "¡Artículo publicado con éxito!", Toast.LENGTH_SHORT).show()
+                        navController.popBackStack()
                     }
                 }
             )
@@ -525,14 +593,25 @@ fun AppNavHost(
 
         composable<Perfil> {
             PerfilUsuarioScreen(
-                onVolver = {
-                    navController.popBackStack()
-                },
                 onCerrarSesion = {
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate(InicioSesion) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onIrAMisProductos = {
+                    navController.navigate(MisProductos)
+                }
+            )
+        }
+
+        composable<MisProductos> {
+            MisProductosScreen(
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onProductoClick = { firestoreId ->
+                    navController.navigate(DetalleProducto(firestoreId))
                 }
             )
         }

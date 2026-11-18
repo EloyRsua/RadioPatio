@@ -39,19 +39,42 @@ class MercadilloRepository {
         val numericId = (doc.getLong("id")?.toInt())
             ?: abs(doc.id.hashCode())
 
+        val estadoStr = doc.getString("estado") ?: EstadoProducto.DISPONIBLE.name
+        val estado = try {
+            EstadoProducto.valueOf(estadoStr)
+        } catch (e: Exception) {
+            EstadoProducto.DISPONIBLE
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val fotos = doc.get("fotos") as? List<String> ?: emptyList()
+        val autorUid = doc.getString("autorUid") ?: doc.getString("vendedorUid") ?: ""
+
         return Producto(
             id = numericId,
             titulo = doc.getString("titulo") ?: "",
+            descripcion = doc.getString("descripcion") ?: "",
             precio = doc.getString("precio") ?: "",
-            ubicacionYTiempo = doc.getString("ubicacionYTiempo") ?: "Comunidad",
+            ubicacionYTiempo = doc.getString("ubicacionYTiempo") ?: doc.getString("ubicacion") ?: "Comunidad",
             categoriaProducto = categoria,
             esParaComprar = doc.getBoolean("esParaComprar") ?: true,
             imagenRes = null,
+            imagenUrl = fotos.firstOrNull() ?: doc.getString("imagenUrl"),
             firestoreId = doc.id,
             comunidadId = comunidadId,
-            vendedorUid = doc.getString("vendedorUid") ?: "",
+            vendedorUid = doc.getString("vendedorUid") ?: autorUid,
             vendedorNombre = doc.getString("vendedorNombre") ?: "",
-            timestamp = doc.getLong("timestamp") ?: 0L
+            timestamp = doc.getLong("timestamp") ?: doc.getLong("fechaCreacion") ?: 0L,
+            autorUid = autorUid,
+            compradorUid = doc.getString("compradorUid") ?: "",
+            marca = doc.getString("marca") ?: "",
+            color = doc.getString("color") ?: "",
+            estadoUso = doc.getString("estadoUso") ?: "",
+            fotos = fotos,
+            estado = estado,
+            plazoDiasEntrega = doc.getLong("plazoDiasEntrega")?.toInt() ?: 7,
+            diasPrestamo = doc.getLong("diasPrestamo")?.toInt() ?: 7,
+            fechaDevolucion = doc.getString("fechaDevolucion") ?: ""
         )
     }
 
@@ -143,6 +166,7 @@ class MercadilloRepository {
                 firestoreId = docRef.id,
                 comunidadId = comunidadId,
                 vendedorUid = vendedorUid,
+                autorUid = producto.autorUid.ifBlank { vendedorUid },
                 vendedorNombre = vendedorNombre,
                 timestamp = timestamp
             )
@@ -152,13 +176,23 @@ class MercadilloRepository {
                 "firestoreId" to creado.firestoreId,
                 "comunidadId" to creado.comunidadId,
                 "titulo" to creado.titulo,
+                "descripcion" to creado.descripcion,
                 "precio" to creado.precio,
                 "ubicacionYTiempo" to creado.ubicacionYTiempo,
                 "categoria" to creado.categoriaProducto.name,
                 "esParaComprar" to creado.esParaComprar,
                 "vendedorUid" to creado.vendedorUid,
+                "autorUid" to creado.autorUid,
                 "vendedorNombre" to creado.vendedorNombre,
-                "timestamp" to creado.timestamp
+                "timestamp" to creado.timestamp,
+                "fechaCreacion" to creado.timestamp,
+                "marca" to creado.marca,
+                "color" to creado.color,
+                "estadoUso" to creado.estadoUso,
+                "fotos" to creado.fotos,
+                "plazoDiasEntrega" to creado.plazoDiasEntrega,
+                "diasPrestamo" to creado.diasPrestamo,
+                "estado" to creado.estado.name
             )
 
             docRef.set(payload).await()
