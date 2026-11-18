@@ -91,4 +91,7 @@ dependencies {
 
     // Soporte para corrutinas .await() con Firebase
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.0")
+
+    //Mensajería
+    //implementation("com.google.firebase:firebase-messaging-ktx")
 }
