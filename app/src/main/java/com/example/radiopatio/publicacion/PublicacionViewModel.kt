@@ -1,4 +1,4 @@
-package com.example.radiopatio
+package com.example.radiopatio.publicacion
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,7 +13,6 @@ import com.example.radiopatio.data.PublicacionDao
 import com.example.radiopatio.data.PublicacionEntidad
 import com.example.radiopatio.data.toEntidad
 import com.example.radiopatio.informacionUsuario.Usuario
-import com.example.radiopatio.publicacion.PublicacionRepository
 import com.example.radiopatio.usuarios.UserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,7 +28,7 @@ import kotlinx.coroutines.withContext
 /**
  * Estado inmutable del Tablón principal con aislamiento multi-inquilino por `comunidadIdActual`.
  */
-data class TablonUiState(
+data class PublicacionUiState(
     val comunidadIdActual: String = "",
     val comunidadNombre: String = "",
     val usuarioActual: Usuario? = null,
@@ -44,15 +43,15 @@ data class TablonUiState(
                 val coincideComunidad = comunidadIdActual.isNotBlank() && pub.comunidadId == comunidadIdActual
                 val consulta = textoBusqueda.trim()
                 val coincideTexto = consulta.isBlank() ||
-                    pub.contenido.contains(consulta, ignoreCase = true) ||
-                    pub.autor.contains(consulta, ignoreCase = true) ||
-                    pub.tiempoYUbica.contains(consulta, ignoreCase = true)
+                        pub.contenido.contains(consulta, ignoreCase = true) ||
+                        pub.autor.contains(consulta, ignoreCase = true) ||
+                        pub.tiempoYUbica.contains(consulta, ignoreCase = true)
                 coincideComunidad && coincideTexto
             }
             .distinctBy { it.firestoreId.ifBlank { "local-${it.id}" } }
 }
 
-class RadioPatioViewModelFactory(
+class PublicacionViewModelFactory(
     private val publicacionDao: PublicacionDao,
     private val comunidadDao: ComunidadDao? = null,
     private val userRepository: UserRepository = UserRepository(),
@@ -61,8 +60,8 @@ class RadioPatioViewModelFactory(
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(RadioPatioViewModel::class.java)) {
-            return RadioPatioViewModel(
+        if (modelClass.isAssignableFrom(PublicacionViewModel::class.java)) {
+            return PublicacionViewModel(
                 publicacionDao = publicacionDao,
                 comunidadDao = comunidadDao,
                 userRepository = userRepository,
@@ -70,12 +69,12 @@ class RadioPatioViewModelFactory(
                 comunidadRepository = comunidadRepository
             ) as T
         }
-        throw IllegalArgumentException("Clase ViewModel desconocida")
+        throw IllegalArgumentException("Clase ViewModel desconocida: ${modelClass.name}")
     }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class RadioPatioViewModel(
+class PublicacionViewModel(
     private val publicacionDao: PublicacionDao,
     private val comunidadDao: ComunidadDao? = null,
     private val userRepository: UserRepository = UserRepository(),
@@ -83,7 +82,7 @@ class RadioPatioViewModel(
     private val comunidadRepository: ComunidadRepository = ComunidadRepository()
 ) : ViewModel() {
 
-    var uiState by mutableStateOf(TablonUiState())
+    var uiState by mutableStateOf(PublicacionUiState())
         private set
 
     val publicaciones: List<PublicacionEntidad>
@@ -242,9 +241,6 @@ class RadioPatioViewModel(
         }
     }
 
-    /**
-     * Elimina una publicación de Firestore y Room validando el aislamiento por comunidad.
-     */
     fun eliminarPublicacion(publicacion: PublicacionEntidad) {
         val comId = uiState.comunidadIdActual
         if (comId.isBlank() || publicacion.comunidadId != comId) {

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +50,7 @@ fun MercadilloScreen(
 
     val uiState = viewModel.uiState
 
-    androidx.compose.runtime.LaunchedEffect(uiState.errorMensaje) {
+    LaunchedEffect(uiState.errorMensaje) {
         uiState.errorMensaje?.let { msg ->
             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             viewModel.onLimpiarError()
@@ -65,6 +66,10 @@ fun MercadilloScreen(
         categoriaSeleccionada = uiState.categoriaSeleccionada,
         onCategoriaChange = { viewModel.onCategoriaSeleccionada(it) },
         onProductoClick = onProductoClick,
+        onEliminarProducto = { producto ->
+            viewModel.onEliminarProducto(producto)
+            Toast.makeText(context, "Artículo eliminado", Toast.LENGTH_SHORT).show()
+        },
         onSubirProducto = onIrACrearProducto,
         nombreComunidad = uiState.comunidadNombre,
         tieneComunidad = uiState.comunidadActualId.isNotBlank(),
@@ -88,6 +93,7 @@ fun MercadilloContent(
     categoriaSeleccionada: CategoriaProducto,
     onCategoriaChange: (CategoriaProducto) -> Unit,
     onProductoClick: (String) -> Unit,
+    onEliminarProducto: (Producto) -> Unit = {},
     onSubirProducto: () -> Unit = {},
     nombreComunidad: String = "",
     tieneComunidad: Boolean = true,
@@ -168,7 +174,7 @@ fun MercadilloContent(
 
                         if (productos.isEmpty()) {
                             val hayFiltros = textoBusqueda.isNotBlank() ||
-                                categoriaSeleccionada != CategoriaProducto.TODOS
+                                    categoriaSeleccionada != CategoriaProducto.TODOS
                             item {
                                 EstadoMercadilloVacio(
                                     esModoComprar = esModoComprar,
@@ -197,6 +203,7 @@ fun MercadilloContent(
                                                 val idDestino = producto.firestoreId.ifBlank { producto.id.toString() }
                                                 onProductoClick(idDestino)
                                             },
+                                            onEliminarClick = { onEliminarProducto(producto) },
                                             modifier = Modifier.weight(1f)
                                         )
                                     }

@@ -54,19 +54,14 @@ data class MercadilloUiState(
     val productosFiltrados: List<Producto>
         get() = productosTotales.filter { producto ->
             val coincideComunidad = comunidadActualId.isBlank() ||
-                producto.comunidadId.isBlank() ||
-                producto.comunidadId == comunidadActualId
+                    producto.comunidadId.isBlank() ||
+                    producto.comunidadId == comunidadActualId
             val coincideTexto = producto.titulo.contains(textoBusqueda, ignoreCase = true)
             val coincideModo = producto.esParaComprar == esModoComprar
             val coincideCategoria = categoriaSeleccionada == CategoriaProducto.TODOS ||
-                producto.categoriaProducto == categoriaSeleccionada
+                    producto.categoriaProducto == categoriaSeleccionada
 
-            val miUid = usuarioActual?.uid.orEmpty().ifBlank {
-                FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-            }
-            val noEsMio = miUid.isBlank() || (producto.autorUid != miUid && producto.vendedorUid != miUid)
-
-            coincideComunidad && coincideTexto && coincideModo && coincideCategoria && noEsMio
+            coincideComunidad && coincideTexto && coincideModo && coincideCategoria
         }
 }
 
@@ -518,6 +513,13 @@ class MercadilloViewModel(
             viewModelScope.launch {
                 try {
                     db.subcoleccionComunidad(comId, "productos").document(firestoreId).delete()
+                    if (productoDao != null) {
+                        withContext(Dispatchers.IO) {
+                            productoDao.obtenerProductos()
+                                .find { it.firestoreId == firestoreId }
+                                ?.let { productoDao.eliminar(it) }
+                        }
+                    }
                 } catch (e: Exception) {
                     uiState = uiState.copy(
                         errorMensaje = e.localizedMessage ?: "Error al eliminar el artículo."

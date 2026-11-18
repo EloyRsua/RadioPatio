@@ -190,4 +190,47 @@ class MisProductosViewModel : ViewModel() {
             cargarMisProductos()
         }
     }
+
+    fun eliminarProducto(producto: Producto, onSuccess: () -> Unit = {}) {
+        val productoId = producto.firestoreId
+        if (productoId.isBlank()) return
+
+        viewModelScope.launch {
+            val uid = auth.currentUser?.uid.orEmpty()
+            val comId = producto.comunidadId.ifBlank {
+                try {
+                    val userSnap = db.collection("users").document(uid).get().await()
+                    userSnap.getString("comunidadId").orEmpty()
+                } catch (e: Exception) {
+                    ""
+                }
+            }
+
+            // 1. Intentar borrar en la subcolección de la comunidad
+            if (comId.isNotBlank()) {
+                try {
+                    db.subcoleccionComunidad(comId, "productos").document(productoId)
+                        .delete()
+                        .await()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+
+            // 2. Fallback por si estaba en la colección raíz
+            try {
+                db.collection("productos").document(productoId)
+                    .delete()
+                    .await()
+            } catch (e: Exception) {
+                // ignore
+            }
+
+            // 3. Actualizar la lista local en pantalla de inmediato
+            uiState = uiState.copy(
+                productos = uiState.productos.filterNot { it.firestoreId == productoId }
+            )
+            onSuccess()
+        }
+    }
 }
