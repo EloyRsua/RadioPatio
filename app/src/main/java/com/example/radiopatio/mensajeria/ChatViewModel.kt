@@ -8,8 +8,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.usuarios.UserRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -26,7 +24,6 @@ class ChatViewModelFactory(
     private val chatRepository: ChatRepository = ChatRepository(),
     private val userRepository: UserRepository = UserRepository()
 ) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             return ChatViewModel(chatRepository, userRepository) as T
@@ -35,7 +32,6 @@ class ChatViewModelFactory(
     }
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(
     private val chatRepository: ChatRepository = ChatRepository(),
     private val userRepository: UserRepository = UserRepository()
@@ -43,8 +39,6 @@ class ChatViewModel(
 
     var uiState by mutableStateOf(ChatUiState())
         private set
-
-    private var mensajesJob: Job? = null
 
     init {
         observarUsuario()
@@ -136,15 +130,12 @@ class ChatViewModel(
 
         uiState = uiState.copy(
             comunidadId = comId,
-            conversacionActiva = conversacion
+            conversacionActiva = conversacion,
+            mensajesActivos = emptyList()
         )
 
         viewModelScope.launch {
             chatRepository.marcarConversacionComoLeida(comId, conversacion, miUid)
-        }
-
-        mensajesJob?.cancel()
-        mensajesJob = viewModelScope.launch {
             chatRepository.observarMensajes(comId, conversacion.id).collectLatest { mensajes ->
                 uiState = uiState.copy(mensajesActivos = mensajes)
             }
@@ -156,10 +147,14 @@ class ChatViewModel(
      */
     fun enviarMensaje(texto: String) {
         val conv = uiState.conversacionActiva ?: return
-        val comId = uiState.comunidadId.ifBlank { conv.comunidadId }
+        val comId = uiState.comunidadId.ifBlank {
+            conv.comunidadId
+        }
         val usuario = uiState.usuarioActual ?: return
         val remitenteUid = usuario.uid
-        val remitenteNombre = usuario.nombre.ifBlank { "Vecino" }
+        val remitenteNombre = usuario.nombre.ifBlank {
+            "Vecino"
+        }
 
         viewModelScope.launch {
             val resultado = chatRepository.enviarMensaje(

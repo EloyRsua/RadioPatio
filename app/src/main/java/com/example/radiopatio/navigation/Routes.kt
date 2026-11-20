@@ -17,7 +17,6 @@ object Vecinos
 // Pantalla eventos
 @Serializable
 object Eventos
-
 @Serializable
 object Publicar
 
@@ -54,3 +53,6 @@ data class CrearComunidad(
     val esAdministradorRegistro: Boolean = false,
     val nombreInicial: String = ""
 )
+
+@Serializable
+object ChatDirecto

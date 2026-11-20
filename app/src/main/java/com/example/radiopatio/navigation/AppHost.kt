@@ -26,6 +26,9 @@ import com.example.radiopatio.marketplace.DetalleProductoScreen
 import com.example.radiopatio.marketplace.MercadilloScreen
 import com.example.radiopatio.marketplace.MercadilloViewModel
 import com.example.radiopatio.marketplace.MercadilloViewModelFactory
+import com.example.radiopatio.mensajeria.ChatScreen
+import com.example.radiopatio.mensajeria.ChatViewModel
+import com.example.radiopatio.mensajeria.ChatViewModelFactory
 import com.example.radiopatio.misProductos.MisProductosScreen
 import com.example.radiopatio.notificacion.NotificacionesScreen
 import com.example.radiopatio.publicacion.PaginaPrincipal
@@ -71,6 +74,12 @@ fun AppNavHost(
     val destinoInicial = remember {
         if (FirebaseAuth.getInstance().currentUser != null) Inicio else InicioSesion
     }
+
+    val chatViewModel: ChatViewModel = viewModel(
+        factory = ChatViewModelFactory(
+            userRepository = userRepository
+        )
+    )
 
     NavHost(
         navController = navController,
@@ -261,6 +270,19 @@ fun AppNavHost(
             val ruta = backStackEntry.toRoute<DetalleProducto>()
             DetalleProductoScreen(
                 firestoreId = ruta.firestoreId,
+                chatViewModel = chatViewModel,
+                onIrAChat = {
+                    navController.navigate(ChatDirecto)
+                },
+                onVolver = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<ChatDirecto> {
+            ChatScreen(
+                viewModel = chatViewModel,
                 onVolver = {
                     navController.popBackStack()
                 }

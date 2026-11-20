@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.radiopatio.mensajeria.ChatViewModel
 
 // Colores de RadioPatio
 private val AzulPrincipal = Color(0xFF133E54)
@@ -42,6 +44,8 @@ private val FondoApp = Color(0xFFF8FAFC)
 @Composable
 fun DetalleProductoScreen(
     firestoreId: String,
+    chatViewModel: ChatViewModel,
+    onIrAChat: () -> Unit,
     onVolver: () -> Unit,
     viewModel: DetalleProductoViewModel = viewModel(
         factory = DetalleProductoViewModelFactory(firestoreId)
@@ -55,7 +59,24 @@ fun DetalleProductoScreen(
         onComprarOPrestar = { viewModel.onComprarOPrestar() },
         onConfirmarEntregaVendedor = { viewModel.onConfirmarEntregaVendedor() },
         onConfirmarRecepcionComprador = { viewModel.onConfirmarRecepcionComprador() },
-        onReportarConflicto = { motivo -> viewModel.onReportarConflicto(motivo) }
+        onReportarConflicto = { motivo -> viewModel.onReportarConflicto(motivo) },
+        onContactarVendedor = {
+            val prod = uiState.producto ?: return@DetalleProductoContent
+            val precioTexto = if (prod.esParaComprar) prod.precio else "Préstamo (${prod.diasPrestamo} días)"
+            val imagenUrl = prod.fotos.firstOrNull().orEmpty()
+
+            chatViewModel.abrirChatConProducto(
+                productoId = prod.firestoreId.ifBlank { firestoreId },
+                productoTitulo = prod.titulo,
+                productoPrecio = precioTexto,
+                productoImagenUrl = imagenUrl,
+                vendedorUid = prod.vendedorUid,
+                vendedorNombre = prod.vendedorNombre.ifBlank { "Vecino" },
+                onChatListo = {
+                    onIrAChat()
+                }
+            )
+        }
     )
 }
 
@@ -70,7 +91,8 @@ fun DetalleProductoContent(
     onComprarOPrestar: () -> Unit,
     onConfirmarEntregaVendedor: () -> Unit,
     onConfirmarRecepcionComprador: () -> Unit,
-    onReportarConflicto: (String) -> Unit
+    onReportarConflicto: (String) -> Unit,
+    onContactarVendedor: () -> Unit = {}
 ) {
     var mostrarDialogoConfirmarCompra by remember { mutableStateOf(false) }
     var mostrarDialogoConflicto by remember { mutableStateOf(false) }
@@ -304,7 +326,6 @@ fun DetalleProductoContent(
 
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // Ficha destacada con el vecino comprador y su puerta
                                     val compradorTexto = producto.compradorNombre.ifBlank { "Un vecino" }
                                     val pisoTexto = if (producto.compradorPiso.isNotBlank()) " · ${producto.compradorPiso}" else ""
 
@@ -425,6 +446,31 @@ fun DetalleProductoContent(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // Botón de mensajería directa con vendedor/prestador
+                    if (!uiState.esPropietario && (producto.estado == EstadoProducto.DISPONIBLE || producto.estado == EstadoProducto.EN_ENTREGA)) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = onContactarVendedor,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.5.dp, AzulPrincipal),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AzulPrincipal)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ChatBubbleOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (producto.esParaComprar) "Contactar con el vendedor" else "Contactar con el prestador",
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
