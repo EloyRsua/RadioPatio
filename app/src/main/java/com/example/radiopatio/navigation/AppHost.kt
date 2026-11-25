@@ -26,6 +26,7 @@ import com.example.radiopatio.marketplace.DetalleProductoScreen
 import com.example.radiopatio.marketplace.MercadilloScreen
 import com.example.radiopatio.marketplace.MercadilloViewModel
 import com.example.radiopatio.marketplace.MercadilloViewModelFactory
+import com.example.radiopatio.marketplace.MisFavoritosScreen
 import com.example.radiopatio.misProductos.MisProductosScreen
 import com.example.radiopatio.notificacion.NotificacionesScreen
 import com.example.radiopatio.publicacion.PaginaPrincipal
@@ -362,6 +363,9 @@ fun AppNavHost(
                 },
                 onIrAMisProductos = {
                     navController.navigate(MisProductos)
+                },
+                onIrAMisFavoritos = {
+                    navController.navigate(MisFavoritos)
                 }
             )
         }
@@ -371,6 +375,15 @@ fun AppNavHost(
                 onVolver = {
                     navController.popBackStack()
                 },
+                onProductoClick = { firestoreId ->
+                    navController.navigate(DetalleProducto(firestoreId))
+                }
+            )
+        }
+
+        composable<MisFavoritos> {
+            MisFavoritosScreen(
+                onVolver = { navController.popBackStack() },
                 onProductoClick = { firestoreId ->
                     navController.navigate(DetalleProducto(firestoreId))
                 }

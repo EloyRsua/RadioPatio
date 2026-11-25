@@ -30,7 +30,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import com.google.firebase.auth.FirebaseAuth
 
 // Colores de RadioPatio
 private val AzulPrincipal = Color(0xFF133E54)
@@ -95,17 +94,13 @@ fun DetalleProductoContent(
                     }
                 },
                 actions = {
-                    val currentUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
                     val producto = uiState.producto
                     
                     if (producto != null) {
-                        val esMiProducto = currentUid.isNotBlank() && 
-                                (producto.autorUid == currentUid || producto.vendedorUid == currentUid)
-                        val esFavorito = producto.esFavoritoDe(currentUid)
                         val totalLikes = producto.likes.size
 
-                        if (esMiProducto) {
-                            // Tu propio artículo: mostramos solo el contador informativo
+                        if (uiState.esPropietario) {
+                            // Tu propio artículo: mostramos solo el contador informativo sin click
                             if (totalLikes > 0) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -127,7 +122,7 @@ fun DetalleProductoContent(
                                 }
                             }
                         } else {
-                            // Artículo de otro vecino: botón para dar/quitar Me Gusta
+                            // Artículo de otro vecino: botón interactivo
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(end = 8.dp)
@@ -137,15 +132,15 @@ fun DetalleProductoContent(
                                         text = "$totalLikes",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
-                                        color = if (esFavorito) Color(0xFFE53935) else AzulPrincipal
+                                        color = if (uiState.esFavorito) Color(0xFFE53935) else AzulPrincipal
                                     )
                                     Spacer(modifier = Modifier.width(2.dp))
                                 }
                                 IconButton(onClick = onToggleFavorito) {
                                     Icon(
-                                        imageVector = if (esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                        contentDescription = if (esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
-                                        tint = if (esFavorito) Color(0xFFE53935) else AzulPrincipal
+                                        imageVector = if (uiState.esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                        contentDescription = if (uiState.esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
+                                        tint = if (uiState.esFavorito) Color(0xFFE53935) else AzulPrincipal
                                     )
                                 }
                             }

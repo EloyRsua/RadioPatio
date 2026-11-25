@@ -54,3 +54,6 @@ data class CrearComunidad(
     val esAdministradorRegistro: Boolean = false,
     val nombreInicial: String = ""
 )
+
+@Serializable
+object MisFavoritos

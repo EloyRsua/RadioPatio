@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.example.radiopatio.notificacion.NotificacionesHelper
 
 /**
  * Repositorio para gestionar las publicaciones del tablón en tiempo real con Cloud Firestore
@@ -218,7 +219,8 @@ class PublicacionRepository {
 
             val snapshot = docRef.get().await()
             val autorUid = snapshot.getString("autorUid") ?: ""
-            val titulo = snapshot.getString("titulo") ?: "tu publicación"
+            val contenido = snapshot.getString("contenido").orEmpty().take(30)
+            val resumen = if (contenido.length == 30) "$contenido..." else contenido
 
             // Si es el propio autor, no permitir darse auto-like
             if (autorUid == usuarioUid) {
@@ -249,10 +251,15 @@ class PublicacionRepository {
                 ).await()
 
                 if (autorUid.isNotBlank()) {
-                    com.example.radiopatio.notificacion.NotificacionesHelper.enviarNotificacion(
+                    NotificacionesHelper.enviarNotificacion(
                         destinatarioUid = autorUid,
                         titulo = "Nuevo me gusta en tu publicación",
-                        mensaje = "A un vecino le ha gustado tu publicación: \"$titulo\"."
+                        mensaje = 
+                        if (resumen.isNotBlank()) {
+                            "A un vecino le ha gustado tu aviso: \"$resumen\"."
+                        } else {
+                            "A un vecino le ha gustado tu publicación en el tablón."
+                        }
                     )
                 }
 

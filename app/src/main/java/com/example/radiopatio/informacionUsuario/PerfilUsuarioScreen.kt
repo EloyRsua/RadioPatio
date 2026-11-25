@@ -32,12 +32,14 @@ import com.example.radiopatio.ui.theme.TextoPrincipal
 import com.example.radiopatio.ui.theme.TextoSecundario
 import com.example.radiopatio.ui.theme.VerdePrincipal
 import com.example.radiopatio.usuarios.UserRepository
+import androidx.compose.material.icons.filled.Favorite
 
 @Composable
 fun PerfilUsuarioScreen(
     onVolver: () -> Unit = {},
     onCerrarSesion: () -> Unit = {},
-    onIrAMisProductos: () -> Unit = {}
+    onIrAMisProductos: () -> Unit = {},
+    onIrAMisFavoritos: () -> Unit = {}
 ) {
     val comunidadRepository = remember { ComunidadRepository() }
     val userRepository = remember { UserRepository(comunidadRepository) }
@@ -59,7 +61,8 @@ fun PerfilUsuarioScreen(
         onCerrarSesion = {
             viewModel.cerrarSesion(onCerrarSesion)
         },
-        onIrAMisProductos = onIrAMisProductos
+        onIrAMisProductos = onIrAMisProductos,
+        onIrAMisFavoritos = onIrAMisFavoritos
     )
 }
 
@@ -71,7 +74,8 @@ fun PerfilUsuarioContent(
     cargando: Boolean,
     onVolver: () -> Unit = {},
     onCerrarSesion: () -> Unit = {},
-    onIrAMisProductos: () -> Unit = {}
+    onIrAMisProductos: () -> Unit = {},
+    onIrAMisFavoritos: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -293,6 +297,55 @@ fun PerfilUsuarioContent(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                                 contentDescription = "Ir a mis artículos",
+                                tint = TextoSecundario,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Botón: "Mis Favoritos"
+                    Card(
+                        onClick = onIrAMisFavoritos,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 18.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Favorite,
+                                    contentDescription = null,
+                                    tint = Color(0xFFE53935)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Mis Favoritos",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextoPrincipal
+                                    )
+                                    Text(
+                                        text = "Artículos guardados del mercadillo",
+                                        fontSize = 12.sp,
+                                        color = TextoSecundario
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                contentDescription = "Ir a mis favoritos",
                                 tint = TextoSecundario,
                                 modifier = Modifier.size(16.dp)
                             )

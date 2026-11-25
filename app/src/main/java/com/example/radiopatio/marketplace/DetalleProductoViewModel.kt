@@ -20,6 +20,7 @@ data class DetalleProductoUiState(
     val producto: Producto? = null,
     val esPropietario: Boolean = false,
     val esComprador: Boolean = false,
+    val esFavorito: Boolean = false,
     val diasRestantes: Long = 0L,
     val mensaje: String? = null
 )
@@ -206,6 +207,7 @@ class DetalleProductoViewModel(
                     producto = prod,
                     esPropietario = (autorUid == currentUid),
                     esComprador = (compradorUid == currentUid),
+                    esFavorito = prod.esFavoritoDe(currentUid),
                     diasRestantes = diasRestantes
                 )
             }
