@@ -217,6 +217,15 @@ class PublicacionRepository {
                 .document(publicacionFirestoreId)
 
             val snapshot = docRef.get().await()
+            val autorUid = snapshot.getString("autorUid") ?: ""
+            val titulo = snapshot.getString("titulo") ?: "tu publicación"
+
+            // Si es el propio autor, no permitir darse auto-like
+            if (autorUid == usuarioUid) {
+                return Result.success(false)
+            }
+
+
             @Suppress("UNCHECKED_CAST")
             val likes = snapshot.get("likes") as? List<String> ?: emptyList()
             val yaLeGusta = likes.contains(usuarioUid)
@@ -238,6 +247,15 @@ class PublicacionRepository {
                         "meGusta" to FieldValue.increment(1)
                     )
                 ).await()
+
+                if (autorUid.isNotBlank()) {
+                    com.example.radiopatio.notificacion.NotificacionesHelper.enviarNotificacion(
+                        destinatarioUid = autorUid,
+                        titulo = "Nuevo me gusta en tu publicación",
+                        mensaje = "A un vecino le ha gustado tu publicación: \"$titulo\"."
+                    )
+                }
+
                 Result.success(true)
             }
         } catch (e: Exception) {

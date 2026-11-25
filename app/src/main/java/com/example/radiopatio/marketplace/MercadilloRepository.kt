@@ -266,6 +266,14 @@ class MercadilloRepository {
                 .document(productoFirestoreId)
 
             val snapshot = docRef.get().await()
+
+            val autorUid = snapshot.getString("autorUid") ?: snapshot.getString("vendedorUid") ?: ""
+            val titulo = snapshot.getString("titulo") ?: "tu artículo"
+
+            if (autorUid == usuarioUid) {
+                return Result.success(false)
+            }
+
             @Suppress("UNCHECKED_CAST")
             val likes = snapshot.get("likes") as? List<String> ?: emptyList()
             val yaEsFavorito = likes.contains(usuarioUid)
@@ -277,6 +285,17 @@ class MercadilloRepository {
             } else {
                 // Añadir a favoritos
                 docRef.update("likes", FieldValue.arrayUnion(usuarioUid)).await()
+
+                // Enviar notificacion
+                if (autorUid.isNotBlank()) {
+                    com.example.radiopatio.notificacion.NotificacionesHelper.enviarNotificacion(
+                        destinatarioUid = autorUid,
+                        titulo = "¡A alguien le gusta tu artículo!",
+                        mensaje = "A un vecino le ha gustado tu artículo \"$titulo\".",
+                        productoId = productoFirestoreId
+                    )
+                }
+
                 Result.success(true) // Ahora es favorito
             }
         } catch (e: Exception) {
