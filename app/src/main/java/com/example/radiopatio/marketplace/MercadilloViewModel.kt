@@ -7,25 +7,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.radiopatio.comunidad.ComunidadRepository
-import com.example.radiopatio.comunidad.migrarDocumentosRaizAComunidad
-import com.example.radiopatio.comunidad.subcoleccionComunidad
 import com.example.radiopatio.data.producto.ProductoDao
 import com.example.radiopatio.data.producto.ProductoEntidad
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.usuarios.UserRepository
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 
 /**
  * UiState inmutable para la pantalla del Mercadillo.
@@ -39,7 +32,6 @@ data class MercadilloUiState(
     val comunidadNombre: String = "",
     val usuarioActual: Usuario? = null,
     val productosTotales: List<Producto> = emptyList(),
-    val mostrarDialogoNuevoProducto: Boolean = false,
     val cargando: Boolean = true,
     val errorMensaje: String? = null
 ) {
@@ -83,13 +75,6 @@ class MercadilloViewModelFactory(
         comunidadRepository = ComunidadRepository()
     )
 
-    constructor() : this(
-        productoDao = null,
-        userRepository = UserRepository(),
-        mercadilloRepository = MercadilloRepository(),
-        comunidadRepository = ComunidadRepository()
-    )
-
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MercadilloViewModel::class.java)) {
@@ -118,8 +103,7 @@ class MercadilloViewModel(
 
     var uiState by mutableStateOf(MercadilloUiState())
         private set
-
-    private val db = FirebaseFirestore.getInstance()
+        
     private val auth = FirebaseAuth.getInstance()
 
     init {
@@ -149,14 +133,9 @@ class MercadilloViewModel(
                     if (comId.isBlank()) {
                         flowOf(Triple(usuario, "", emptyList<Producto>()))
                     } else {
-                        // Migra de forma transparente cualquier producto raíz previo a la subcolección de la comunidad
-                        launch {
-                            db.migrarDocumentosRaizAComunidad(comId, "productos")
-                        }
-
                         combine(
                             comunidadRepository.observarComunidadPorId(comId),
-                            observarProductosFirestore(comId)
+                            mercadilloRepository.observarProductosDeComunidad(comId)
                         ) { comunidad, productos ->
                             val nombreCom = comunidad?.nombre?.takeIf { it.isNotBlank() }
                                 ?: usuario?.comunidadNombre
@@ -174,183 +153,44 @@ class MercadilloViewModel(
                         productosTotales = productos,
                         cargando = false
                     )
-                }
-        }
-    }
 
-    private fun observarProductosFirestore(comunidadId: String): Flow<List<Producto>> = callbackFlow {
-        // Escucha en tiempo real la subcolección comunidades/{comunidadId}/productos
-        val subcoleccionRef = db.subcoleccionComunidad(comunidadId, "productos")
-        val listener = subcoleccionRef
-            .addSnapshotListener { documentos, error ->
-                if (error != null || documentos == null) {
-                    trySend(emptyList())
-                    return@addSnapshotListener
-                }
-
-                val listaNuevosProductos = mutableListOf<Producto>()
-                val listaEntidadesParaRoom = mutableListOf<ProductoEntidad>()
-
-                for (documento in documentos) {
-                    val autorUid = documento.getString("autorUid") ?: documento.getString("vendedorUid") ?: ""
-                    val vendedorUid = documento.getString("vendedorUid") ?: autorUid
-
-                    val estadoStr = documento.getString("estado") ?: EstadoProducto.DISPONIBLE.name
-                    val estado = try {
-                        EstadoProducto.valueOf(estadoStr)
-                    } catch (e: Exception) {
-                        EstadoProducto.DISPONIBLE
-                    }
-
-                    // Omitimos productos ya completados en el mercadillo público
-                    if (estado == EstadoProducto.VENDIDO || estado == EstadoProducto.DEVUELTO) {
-                        continue
-                    }
-
-                    val titulo = documento.getString("titulo") ?: ""
-                    val descripcion = documento.getString("descripcion") ?: ""
-                    val precio = documento.getString("precio") ?: ""
-                    val ubicacion = documento.getString("ubicacion") ?: documento.getString("ubicacionYTiempo") ?: "Comunidad"
-                    val fechaCreacion = documento.getLong("fechaCreacion") ?: documento.getLong("timestamp") ?: System.currentTimeMillis()
-                    val categoria = documento.getString("categoria") ?: CategoriaProducto.TODOS.name
-                    val esParaComprar = documento.getBoolean("esParaComprar") ?: true
-                    val marca = documento.getString("marca") ?: ""
-                    val color = documento.getString("color") ?: ""
-                    val estadoUso = documento.getString("estadoUso") ?: ""
-                    val compradorUid = documento.getString("compradorUid") ?: ""
-                    val plazoDias = documento.getLong("plazoDiasEntrega")?.toInt() ?: 7
-                    val diasPrestamo = documento.getLong("diasPrestamo")?.toInt() ?: 7
-                    val vendedorNombre = documento.getString("vendedorNombre") ?: ""
-
-                    @Suppress("UNCHECKED_CAST")
-                    val fotos = documento.get("fotos") as? List<String> ?: emptyList()
-                    val fotoPortada = fotos.firstOrNull() ?: documento.getString("imagenUrl")
-
-                    val tiempoString = calcularTiempoTranscurrido(fechaCreacion)
-                    val ubicacionYTiempo = if (ubicacion.contains("·") || ubicacion.contains("-")) ubicacion else "$ubicacion · $tiempoString"
-                    val numericId = documento.getLong("id")?.toInt() ?: abs(documento.id.hashCode())
-
-                    val prod = Producto(
-                        id = numericId,
-                        titulo = titulo,
-                        precio = precio,
-                        ubicacionYTiempo = ubicacionYTiempo,
-                        categoriaProducto = try {
-                            CategoriaProducto.valueOf(categoria)
-                        } catch (e: Exception) {
-                            CategoriaProducto.TODOS
-                        },
-                        esParaComprar = esParaComprar,
-                        imagenRes = null,
-                        imagenUrl = fotoPortada,
-                        firestoreId = documento.id,
-                        comunidadId = comunidadId,
-                        vendedorUid = vendedorUid,
-                        vendedorNombre = vendedorNombre,
-                        timestamp = fechaCreacion,
-                        autorUid = autorUid,
-                        descripcion = descripcion,
-                        marca = marca,
-                        color = color,
-                        estadoUso = estadoUso,
-                        fotos = if (fotos.isNotEmpty()) fotos else if (!fotoPortada.isNullOrBlank()) listOf(fotoPortada) else emptyList(),
-                        estado = estado,
-                        plazoDiasEntrega = plazoDias,
-                        diasPrestamo = diasPrestamo,
-                        compradorUid = compradorUid
-                    )
-
-                    listaNuevosProductos.add(prod)
-
-                    if (productoDao != null) {
-                        listaEntidadesParaRoom.add(
-                            ProductoEntidad(
-                                firestoreId = documento.id,
-                                autorUid = autorUid,
-                                titulo = titulo,
-                                descripcion = descripcion,
-                                precio = precio,
-                                ubicacion = ubicacion,
-                                fechaCreacion = fechaCreacion,
-                                categoria = categoria,
-                                esParaComprar = esParaComprar,
-                                marca = marca,
-                                color = color,
-                                estadoUso = estadoUso,
-                                estado = estadoStr,
-                                imagenUrl = fotoPortada
-                            )
-                        )
-                    }
-                }
-
-                trySend(listaNuevosProductos)
-
-                if (productoDao != null && listaEntidadesParaRoom.isNotEmpty()) {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        try {
-                            productoDao.obtenerProductos().forEach { productoDao.eliminar(it) }
-                            listaEntidadesParaRoom.forEach { productoDao.insertar(it) }
-                        } catch (e: Exception) {
-                            // Ignorar errores menores de caché Room
+                    // Sincronizamos la caché local Room en segundo plano
+                    if (productoDao != null && productos.isNotEmpty()) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            try {
+                                productoDao.obtenerProductos().forEach { productoDao.eliminar(it) }
+                                productos.forEach { prod ->
+                                    productoDao.insertar(
+                                        ProductoEntidad(
+                                            firestoreId = prod.firestoreId,
+                                            autorUid = prod.autorUid,
+                                            titulo = prod.titulo,
+                                            descripcion = prod.descripcion,
+                                            precio = prod.precio,
+                                            ubicacion = prod.ubicacionYTiempo.substringBefore("·").trim(),
+                                            fechaCreacion = prod.timestamp,
+                                            categoria = prod.categoriaProducto.name,
+                                            esParaComprar = prod.esParaComprar,
+                                            marca = prod.marca,
+                                            color = prod.color,
+                                            estadoUso = prod.estadoUso,
+                                            estado = prod.estado.name,
+                                            imagenUrl = prod.imagenUrl
+                                        )
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                // Ignorar errores menores de caché
+                            }
                         }
                     }
                 }
-            }
-
-        awaitClose { listener.remove() }
+        }
     }
-
+    
     private fun actualizarUiStateConEntidades(listaEntidades: List<ProductoEntidad>) {
-        val listaProductos = listaEntidades.map { entidad ->
-            val tiempoString = calcularTiempoTranscurrido(entidad.fechaCreacion)
-
-            Producto(
-                id = entidad.id,
-                titulo = entidad.titulo,
-                precio = entidad.precio,
-                ubicacionYTiempo = "${entidad.ubicacion} · $tiempoString",
-                categoriaProducto = try {
-                    CategoriaProducto.valueOf(entidad.categoria)
-                } catch (e: Exception) {
-                    CategoriaProducto.TODOS
-                },
-                esParaComprar = entidad.esParaComprar,
-                imagenUrl = entidad.imagenUrl,
-                firestoreId = entidad.firestoreId,
-                autorUid = entidad.autorUid,
-                vendedorUid = entidad.autorUid,
-                descripcion = entidad.descripcion,
-                marca = entidad.marca,
-                color = entidad.color,
-                estadoUso = entidad.estadoUso,
-                fotos = if (!entidad.imagenUrl.isNullOrBlank()) listOf(entidad.imagenUrl) else emptyList(),
-                estado = try {
-                    EstadoProducto.valueOf(entidad.estado)
-                } catch (e: Exception) {
-                    EstadoProducto.DISPONIBLE
-                }
-            )
-        }
+        val listaProductos = listaEntidades.map { mercadilloRepository.entidadToProducto(it) }
         uiState = uiState.copy(productosTotales = listaProductos)
-    }
-
-    private fun calcularTiempoTranscurrido(tiempoMilisegundos: Long): String {
-        val ahora = System.currentTimeMillis()
-        val diferencia = ahora - tiempoMilisegundos
-
-        val segundos = diferencia / 1000
-        val minutos = segundos / 60
-        val horas = minutos / 60
-        val dias = horas / 24
-
-        return when {
-            segundos < 60 -> "Ahora mismo"
-            minutos < 60 -> "Hace $minutos min"
-            horas < 24 -> "Hace $horas h"
-            dias == 1L -> "Ayer"
-            else -> "Hace $dias d"
-        }
     }
 
     fun onTextoBusquedaChange(nuevoTexto: String) {
@@ -363,14 +203,6 @@ class MercadilloViewModel(
 
     fun onCategoriaSeleccionada(categoria: CategoriaProducto) {
         uiState = uiState.copy(categoriaSeleccionada = categoria)
-    }
-
-    fun onAbrirDialogoNuevoProducto() {
-        uiState = uiState.copy(mostrarDialogoNuevoProducto = true, errorMensaje = null)
-    }
-
-    fun onCerrarDialogoNuevoProducto() {
-        uiState = uiState.copy(mostrarDialogoNuevoProducto = false, errorMensaje = null)
     }
 
     fun onLimpiarError() {
@@ -404,128 +236,91 @@ class MercadilloViewModel(
             }
 
             val ubicacionReal = usuario?.vivienda?.ifBlank { "Mi portal" } ?: "Mi portal"
-            val fechaActual = System.currentTimeMillis()
             val uid = auth.currentUser?.uid.orEmpty()
             val nombreVendedor = usuario?.nombre.orEmpty()
 
-            val docRef = db.subcoleccionComunidad(comId, "productos").document()
-            val numericId = abs(docRef.id.hashCode())
-
-            val productoMap = hashMapOf(
-                "id" to numericId,
-                "firestoreId" to docRef.id,
-                "comunidadId" to comId,
-                "autorUid" to uid,
-                "vendedorUid" to uid,
-                "vendedorNombre" to nombreVendedor,
-                "titulo" to titulo,
-                "descripcion" to descripcion,
-                "precio" to precio,
-                "ubicacion" to ubicacionReal,
-                "ubicacionYTiempo" to "$ubicacionReal · Ahora mismo",
-                "fechaCreacion" to fechaActual,
-                "timestamp" to fechaActual,
-                "categoria" to categoria.name,
-                "esParaComprar" to esParaComprar,
-                "marca" to marca,
-                "color" to color,
-                "estadoUso" to estadoUso,
-                "fotos" to fotosUris,
-                "plazoDiasEntrega" to 7,        // 7 días para entrega presencial
-                "diasPrestamo" to plazoDias,    // Duración acordada del préstamo
-                "estado" to EstadoProducto.DISPONIBLE.name
+            val nuevoProducto = Producto(
+                id = 0,
+                titulo = titulo,
+                descripcion = descripcion,
+                precio = precio,
+                ubicacionYTiempo = ubicacionReal,
+                categoriaProducto = categoria,
+                esParaComprar = esParaComprar,
+                imagenRes = null,
+                imagenUrl = fotosUris.firstOrNull(),
+                firestoreId = "",
+                comunidadId = comId,
+                vendedorUid = uid,
+                vendedorNombre = nombreVendedor,
+                autorUid = uid,
+                marca = marca,
+                color = color,
+                estadoUso = estadoUso,
+                fotos = fotosUris,
+                estado = EstadoProducto.DISPONIBLE,
+                plazoDiasEntrega = 7,
+                diasPrestamo = plazoDias,
+                likes = emptyList()
             )
 
-            docRef.set(productoMap)
-                .addOnSuccessListener {
-                    onSuccess()
-                }
-                .addOnFailureListener { e ->
-                    uiState = uiState.copy(
-                        errorMensaje = e.localizedMessage ?: "Error al publicar el producto"
-                    )
-                }
+            val resultado = mercadilloRepository.crearProducto(
+                producto = nuevoProducto,
+                comunidadId = comId,
+                vendedorUid = uid,
+                vendedorNombre = nombreVendedor
+
+            )
+
+            resultado.onSuccess {
+                onSuccess()
+            }.onFailure { e ->
+                uiState = uiState.copy(
+                    errorMensaje = e.localizedMessage ?: "Error al publicar el producto"
+                )
+            }
         }
     }
 
     /**
-     * Publicación directa a partir de un objeto Producto (usada por diálogos rápidos).
+     * Elimina un producto delegando en el repositorio y limpiando la caché de Room si existe.
      */
-    fun onCrearProducto(nuevoProducto: Producto) {
-        val comId = uiState.comunidadActualId
-        if (comId.isBlank()) {
-            uiState = uiState.copy(
-                errorMensaje = "Debes unirte a una comunidad antes de subir artículos."
-            )
-            return
-        }
-
-        viewModelScope.launch {
-            val uid = uiState.usuarioActual?.uid.orEmpty().ifBlank { auth.currentUser?.uid.orEmpty() }
-            val nombreVendedor = uiState.usuarioActual?.nombre.orEmpty()
-            val vivienda = uiState.usuarioActual?.vivienda?.takeIf { it.isNotBlank() } ?: "Mi portal"
-            val fechaActual = System.currentTimeMillis()
-
-            val docRef = db.subcoleccionComunidad(comId, "productos").document()
-            val numericId = abs(docRef.id.hashCode())
-
-            val productoMap = hashMapOf(
-                "id" to numericId,
-                "firestoreId" to docRef.id,
-                "comunidadId" to comId,
-                "autorUid" to uid,
-                "vendedorUid" to uid,
-                "vendedorNombre" to nombreVendedor,
-                "titulo" to nuevoProducto.titulo,
-                "descripcion" to nuevoProducto.descripcion,
-                "precio" to nuevoProducto.precio,
-                "ubicacion" to vivienda,
-                "ubicacionYTiempo" to "$vivienda · Ahora mismo",
-                "fechaCreacion" to fechaActual,
-                "timestamp" to fechaActual,
-                "categoria" to nuevoProducto.categoriaProducto.name,
-                "esParaComprar" to nuevoProducto.esParaComprar,
-                "marca" to nuevoProducto.marca,
-                "color" to nuevoProducto.color,
-                "estadoUso" to nuevoProducto.estadoUso,
-                "fotos" to nuevoProducto.fotos,
-                "plazoDiasEntrega" to nuevoProducto.plazoDiasEntrega,
-                "diasPrestamo" to nuevoProducto.diasPrestamo,
-                "estado" to nuevoProducto.estado.name
-            )
-
-            docRef.set(productoMap)
-                .addOnSuccessListener {
-                    uiState = uiState.copy(mostrarDialogoNuevoProducto = false, errorMensaje = null)
-                }
-                .addOnFailureListener { e ->
-                    uiState = uiState.copy(
-                        errorMensaje = e.localizedMessage ?: "Error al publicar el artículo."
-                    )
-                }
-        }
-    }
-
     fun onEliminarProducto(producto: Producto) {
         val comId = producto.comunidadId.ifBlank { uiState.comunidadActualId }
         val firestoreId = producto.firestoreId
-        if (comId.isNotBlank() && firestoreId.isNotBlank()) {
-            viewModelScope.launch {
-                try {
-                    db.subcoleccionComunidad(comId, "productos").document(firestoreId).delete()
-                    if (productoDao != null) {
-                        withContext(Dispatchers.IO) {
-                            productoDao.obtenerProductos()
-                                .find { it.firestoreId == firestoreId }
-                                ?.let { productoDao.eliminar(it) }
-                        }
+        if (comId.isBlank() || firestoreId.isBlank()) return
+        viewModelScope.launch {
+            val resultado = mercadilloRepository.eliminarProducto(producto, comId)
+            
+            resultado.onSuccess {
+                if (productoDao != null) {
+                    withContext(Dispatchers.IO) {
+                        productoDao.obtenerProductos()
+                            .find { it.firestoreId == firestoreId }
+                            ?.let { productoDao.eliminar(it) }
                     }
-                } catch (e: Exception) {
-                    uiState = uiState.copy(
-                        errorMensaje = e.localizedMessage ?: "Error al eliminar el artículo."
-                    )
                 }
+            }.onFailure { e ->
+                uiState = uiState.copy(
+                    errorMensaje = e.localizedMessage ?: "Error al eliminar el producto"
+                )
             }
+        }
+    }
+
+    /**
+     * Añade o quita un producto de favoritos
+     */
+    fun toggleFavorito(producto: Producto) {
+        val comId = producto.comunidadId.ifBlank { uiState.comunidadActualId }
+        val uid = auth.currentUser?.uid.orEmpty()
+        if (comId.isBlank() || producto.firestoreId.isBlank() || uid.isBlank()) return
+        viewModelScope.launch {
+            mercadilloRepository.toggleMeGustaProducto(
+                comunidadId = comId,
+                productoFirestoreId = producto.firestoreId,
+                usuarioUid = uid
+            )
         }
     }
 }

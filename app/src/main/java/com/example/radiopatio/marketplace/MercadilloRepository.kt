@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlin.math.abs
+import com.google.firebase.firestore.FieldValue
 
 /**
  * Repositorio de Cloud Firestore para el módulo de Mercadillo dentro de la subcolección
@@ -50,12 +51,21 @@ class MercadilloRepository {
         val fotos = doc.get("fotos") as? List<String> ?: emptyList()
         val autorUid = doc.getString("autorUid") ?: doc.getString("vendedorUid") ?: ""
 
+        @Suppress("UNCHECKED_CAST")
+        val likes = doc.get("likes") as? List<String> ?: emptyList()
+
+        val ubicacionRaw = doc.getString("ubicacion") ?: doc.getString("ubicacionYTiempo") ?: "Comunidad"
+        val ubicacionLimpia = ubicacionRaw.substringBefore("·").trim().ifBlank { "Comunidad" }
+        val timestamp = doc.getLong("timestamp") ?: doc.getLong("fechaCreacion") ?: 0L
+        val tiempoString = calcularTiempoTranscurrido(timestamp)
+        val ubicacionYTiempo = "$ubicacionLimpia · $tiempoString"
+
         return Producto(
             id = numericId,
             titulo = doc.getString("titulo") ?: "",
             descripcion = doc.getString("descripcion") ?: "",
             precio = doc.getString("precio") ?: "",
-            ubicacionYTiempo = doc.getString("ubicacionYTiempo") ?: doc.getString("ubicacion") ?: "Comunidad",
+            ubicacionYTiempo = ubicacionYTiempo,
             categoriaProducto = categoria,
             esParaComprar = doc.getBoolean("esParaComprar") ?: true,
             imagenRes = null,
@@ -74,7 +84,8 @@ class MercadilloRepository {
             estado = estado,
             plazoDiasEntrega = doc.getLong("plazoDiasEntrega")?.toInt() ?: 7,
             diasPrestamo = doc.getLong("diasPrestamo")?.toInt() ?: 7,
-            fechaDevolucion = doc.getString("fechaDevolucion") ?: ""
+            fechaDevolucion = doc.getString("fechaDevolucion") ?: "",
+            likes = likes
         )
     }
 
@@ -116,7 +127,11 @@ class MercadilloRepository {
 
                     val lista = snapshot?.documents
                         ?.mapNotNull { documentToProducto(it) }
-                        ?.filter { it.comunidadId == comunidadId }
+                        ?.filter { 
+                            it.comunidadId == comunidadId &&
+                            it.estado != EstadoProducto.VENDIDO &&
+                            it.estado != EstadoProducto.DEVUELTO
+                        }
                         ?.sortedByDescending { it.timestamp }
                         ?: emptyList()
 
@@ -171,6 +186,8 @@ class MercadilloRepository {
                 timestamp = timestamp
             )
 
+            val ubicacionLimpia = creado.ubicacionYTiempo.substringBefore("·").trim().ifBlank { "Mi portal" }
+
             val payload = mapOf(
                 "id" to creado.id,
                 "firestoreId" to creado.firestoreId,
@@ -178,7 +195,8 @@ class MercadilloRepository {
                 "titulo" to creado.titulo,
                 "descripcion" to creado.descripcion,
                 "precio" to creado.precio,
-                "ubicacionYTiempo" to creado.ubicacionYTiempo,
+                "ubicacion" to ubicacionLimpia,
+                "ubicacionYTiempo" to ubicacionLimpia,
                 "categoria" to creado.categoriaProducto.name,
                 "esParaComprar" to creado.esParaComprar,
                 "vendedorUid" to creado.vendedorUid,
@@ -192,7 +210,8 @@ class MercadilloRepository {
                 "fotos" to creado.fotos,
                 "plazoDiasEntrega" to creado.plazoDiasEntrega,
                 "diasPrestamo" to creado.diasPrestamo,
-                "estado" to creado.estado.name
+                "estado" to creado.estado.name,
+                "likes" to emptyList<String>()
             )
 
             docRef.set(payload).await()
@@ -228,6 +247,94 @@ class MercadilloRepository {
             Log.e("MercadilloRepository", "Error eliminando producto en Firestore", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * Añade o quita el producto de los favoritos del usuario en la BD
+     */
+    suspend fun toggleMeGustaProducto(
+        comunidadId: String,
+        productoFirestoreId: String,
+        usuarioUid: String
+    ): Result<Boolean> {
+        if (comunidadId.isBlank() || productoFirestoreId.isBlank() || usuarioUid.isBlank()) {
+            return Result.failure(IllegalArgumentException("Faltan datos para reaccionar al producto."))
+        }
+
+        return try {
+            val docRef = db.subcoleccionComunidad(comunidadId, COLECCION_PRODUCTOS)
+                .document(productoFirestoreId)
+
+            val snapshot = docRef.get().await()
+            @Suppress("UNCHECKED_CAST")
+            val likes = snapshot.get("likes") as? List<String> ?: emptyList()
+            val yaEsFavorito = likes.contains(usuarioUid)
+
+            if (yaEsFavorito) {
+                // Quitar de favoritos
+                docRef.update("likes", FieldValue.arrayRemove(usuarioUid)).await()
+                Result.success(false) // Ya no es favorito
+            } else {
+                // Añadir a favoritos
+                docRef.update("likes", FieldValue.arrayUnion(usuarioUid)).await()
+                Result.success(true) // Ahora es favorito
+            }
+        } catch (e: Exception) {
+            Log.e("MercadilloRepository", "Error en toggleMeGustaProducto", e)
+            Result.failure(e)
+        }
+    }
+
+    fun calcularTiempoTranscurrido(tiempoMilisegundos: Long): String {
+        val ahora = System.currentTimeMillis()
+        val diferencia = ahora - tiempoMilisegundos
+
+        val segundos = diferencia / 1000
+        val minutos = segundos / 60
+        val horas = minutos / 60
+        val dias = horas / 24
+
+        return when {
+            segundos < 60 -> "Ahora mismo"
+            minutos < 60 -> "Hace $minutos min"
+            horas < 24 -> "Hace $horas h"
+            dias == 1L -> "Ayer"
+            else -> "Hace $dias d"
+        }
+    }
+
+    /**
+     * Mapea una entidad local de Room [ProductoEntidad] a [Producto].
+     */
+    fun entidadToProducto(entidad: com.example.radiopatio.data.producto.ProductoEntidad): Producto {
+        val tiempoString = calcularTiempoTranscurrido(entidad.fechaCreacion)
+        return Producto(
+            id = entidad.id,
+            titulo = entidad.titulo,
+            precio = entidad.precio,
+            ubicacionYTiempo = "${entidad.ubicacion} · $tiempoString",
+            categoriaProducto = try {
+                CategoriaProducto.valueOf(entidad.categoria)
+            } catch (e: Exception) {
+                CategoriaProducto.TODOS
+            },
+            esParaComprar = entidad.esParaComprar,
+            imagenUrl = entidad.imagenUrl,
+            firestoreId = entidad.firestoreId,
+            autorUid = entidad.autorUid,
+            vendedorUid = entidad.autorUid,
+            descripcion = entidad.descripcion,
+            timestamp = entidad.fechaCreacion,
+            marca = entidad.marca,
+            color = entidad.color,
+            estadoUso = entidad.estadoUso,
+            fotos = if (!entidad.imagenUrl.isNullOrBlank()) listOf(entidad.imagenUrl) else emptyList(),
+            estado = try {
+                EstadoProducto.valueOf(entidad.estado)
+            } catch (e: Exception) {
+                EstadoProducto.DISPONIBLE
+            }
+        )
     }
 
     companion object {

@@ -274,9 +274,9 @@ fun PaginaPrincipalContent(
                                             comentarios = entidad.comentarios
                                         ),
                                         esMiPublicacion = esMiPublicacion,
-                                        leGusta = leGusta, // <-- NUEVO
+                                        leGusta = leGusta,
                                         onMeGustaClick = {
-                                            onToggleMeGusta(entidad) // <-- NUEVO
+                                            onToggleMeGusta(entidad)
                                         },
                                         onEliminarClick = {
                                             onEliminarPublicacion(entidad)
@@ -297,9 +297,9 @@ fun PaginaPrincipalContent(
         publicacionSeleccionada?.let { entidad ->
             PublicacionDetalleDialog(
                 publicacion = entidad,
-                usuarioUidActual = uidActual, // <-- NUEVO
+                usuarioUidActual = uidActual,
                 onMeGustaClick = {
-                    onToggleMeGusta(entidad) // <-- NUEVO
+                    onToggleMeGusta(entidad)
                 },
                 onDismiss = {
                     publicacionSeleccionadaId = null
@@ -465,9 +465,9 @@ private fun CampoCrearPublicacion(
 
 @Composable
 private fun SinComunidadTablonCard(
-    tieneSolicitudPendiente: Boolean = false,
     onIrAComunidad: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tieneSolicitudPendiente: Boolean = false,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),

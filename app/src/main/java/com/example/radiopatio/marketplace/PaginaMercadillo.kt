@@ -71,6 +71,9 @@ fun MercadilloScreen(
             Toast.makeText(context, "Artículo eliminado", Toast.LENGTH_SHORT).show()
         },
         onSubirProducto = onIrACrearProducto,
+        onToggleFavorito = { producto ->
+            viewModel.toggleFavorito(producto)
+        },
         nombreComunidad = uiState.comunidadNombre,
         tieneComunidad = uiState.comunidadActualId.isNotBlank(),
         cargando = uiState.cargando,
@@ -95,6 +98,7 @@ fun MercadilloContent(
     onProductoClick: (String) -> Unit,
     onEliminarProducto: (Producto) -> Unit = {},
     onSubirProducto: () -> Unit = {},
+    onToggleFavorito: (Producto) -> Unit = {},
     nombreComunidad: String = "",
     tieneComunidad: Boolean = true,
     cargando: Boolean = false,
@@ -204,6 +208,7 @@ fun MercadilloContent(
                                                 onProductoClick(idDestino)
                                             },
                                             onEliminarClick = { onEliminarProducto(producto) },
+                                            onFavoritoClick = { onToggleFavorito(producto)},
                                             modifier = Modifier.weight(1f)
                                         )
                                     }

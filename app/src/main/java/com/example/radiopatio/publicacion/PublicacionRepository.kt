@@ -48,7 +48,7 @@ class PublicacionRepository {
             tiempoYUbica = doc.getString("tiempoYUbica") ?: "Comunidad",
             contenido = doc.getString("contenido") ?: "",
             meGusta = (doc.getLong("meGusta") ?: 0L).toInt(),
-            likesUids = listaLikes.joinToString(","),
+            likesUids = listaLikes.joinToString(","),       // empaquetamos los uids de los usuarios que dieron like
             comentarios = (doc.getLong("comentarios") ?: 0L).toInt(),
             timestamp = doc.getLong("timestamp") ?: 0L
         )

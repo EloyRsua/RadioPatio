@@ -52,6 +52,8 @@ import com.example.radiopatio.ui.theme.VerdePrecio
 import com.example.radiopatio.ui.theme.VerdePrincipal
 import com.example.radiopatio.ui.theme.VerdeSecundario
 import com.google.firebase.auth.FirebaseAuth
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 
 /**
  * Componente visual para la tarjeta de un producto en el mercadillo
@@ -59,14 +61,16 @@ import com.google.firebase.auth.FirebaseAuth
 @Composable
 fun TarjetaProducto(
     producto: Producto,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onEliminarClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onFavoritoClick: () -> Unit = {},
 ) {
     val currentUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     val esMiProducto = currentUid.isNotBlank() &&
             (producto.autorUid == currentUid || producto.vendedorUid == currentUid)
 
+    val esFavorito = producto.esFavoritoDe(currentUid)
     var mostrarDialogoEliminar by remember { mutableStateOf(false) }
 
     val colorBorde = if (esMiProducto) VerdeSecundario else BordeGris
@@ -161,6 +165,25 @@ fun TarjetaProducto(
                         )
                     }
                 }
+            }
+
+            // Botón de Favorito (corazón)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.85f))
+                    .clickable { onFavoritoClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = if (esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
+                    tint = if (esFavorito) Color(0xFFE53935) else Color.Gray,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
 

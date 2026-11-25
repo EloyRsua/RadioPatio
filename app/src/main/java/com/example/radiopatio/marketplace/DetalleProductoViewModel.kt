@@ -34,7 +34,8 @@ class DetalleProductoViewModelFactory(
 }
 
 class DetalleProductoViewModel(
-    private val firestoreId: String
+    private val firestoreId: String,
+    private val mercadilloRepository: MercadilloRepository = MercadilloRepository()
 ) : ViewModel() {
 
     var uiState by mutableStateOf(DetalleProductoUiState())
@@ -158,6 +159,10 @@ class DetalleProductoViewModel(
 
                 @Suppress("UNCHECKED_CAST")
                 val fotos = snapshot.get("fotos") as? List<String> ?: emptyList()
+
+                @Suppress("UNCHECKED_CAST")
+                val likes = snapshot.get("likes") as? List<String> ?: emptyList()
+
                 val prod = Producto(
                     firestoreId = snapshot.id,
                     comunidadId = snapshot.getString("comunidadId") ?: userComId,
@@ -189,7 +194,8 @@ class DetalleProductoViewModel(
                     vendedorConfirmoEntrega = vendedorOk,
                     compradorConfirmoRecepcion = compradorOk,
                     motivoConflicto = motivoConflicto,
-                    fechaDevolucion = snapshot.getString("fechaDevolucion") ?: ""
+                    fechaDevolucion = snapshot.getString("fechaDevolucion") ?: "",
+                    likes = likes
                 )
 
                 val diffMilis = fechaLimite - ahora
@@ -313,13 +319,27 @@ class DetalleProductoViewModel(
 
     // Reportar conflicto al Administrador
     fun onReportarConflicto(motivo: String) {
-        val prod = uiState.producto ?: return
+        if(uiState.producto == null) return
         viewModelScope.launch {
             val updates = mapOf(
                 "estado" to EstadoProducto.EN_CONFLICTO.name,
                 "motivoConflicto" to motivo
             )
             targetDocRef?.update(updates)
+        }
+    }
+    
+    fun toggleFavorito() {
+        val prod = uiState.producto ?: return
+        val uid = currentUid.ifBlank { return }
+        val comId = prod.comunidadId.ifBlank { return }
+
+        viewModelScope.launch {
+            mercadilloRepository.toggleMeGustaProducto(
+                comunidadId = comId,
+                productoFirestoreId = prod.firestoreId,
+                usuarioUid = uid
+            )
         }
     }
 

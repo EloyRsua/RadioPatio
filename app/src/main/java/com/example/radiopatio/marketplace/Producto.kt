@@ -52,5 +52,11 @@ data class Producto(
     val vendedorConfirmoEntrega: Boolean = false,
     val compradorConfirmoRecepcion: Boolean = false,
     val motivoConflicto: String = "",
-    val fechaDevolucion: String = ""
-)
+    val fechaDevolucion: String = "",
+    val likes: List<String> = emptyList() // uids de los usuarios que han dado like
+) {
+    fun esFavoritoDe(uid: String): Boolean {
+        if(uid.isBlank()) return false
+        return likes.contains(uid)
+    }
+}

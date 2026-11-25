@@ -28,6 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import com.google.firebase.auth.FirebaseAuth
 
 // Colores de RadioPatio
 private val AzulPrincipal = Color(0xFF133E54)
@@ -55,7 +58,8 @@ fun DetalleProductoScreen(
         onComprarOPrestar = { viewModel.onComprarOPrestar() },
         onConfirmarEntregaVendedor = { viewModel.onConfirmarEntregaVendedor() },
         onConfirmarRecepcionComprador = { viewModel.onConfirmarRecepcionComprador() },
-        onReportarConflicto = { motivo -> viewModel.onReportarConflicto(motivo) }
+        onReportarConflicto = { motivo -> viewModel.onReportarConflicto(motivo) },
+        onToggleFavorito = { viewModel.toggleFavorito() }
     )
 }
 
@@ -70,7 +74,8 @@ fun DetalleProductoContent(
     onComprarOPrestar: () -> Unit,
     onConfirmarEntregaVendedor: () -> Unit,
     onConfirmarRecepcionComprador: () -> Unit,
-    onReportarConflicto: (String) -> Unit
+    onReportarConflicto: (String) -> Unit,
+    onToggleFavorito: () -> Unit
 ) {
     var mostrarDialogoConfirmarCompra by remember { mutableStateOf(false) }
     var mostrarDialogoConflicto by remember { mutableStateOf(false) }
@@ -87,6 +92,20 @@ fun DetalleProductoContent(
                             contentDescription = "Volver",
                             tint = AzulPrincipal
                         )
+                    }
+                },
+                actions = {
+                    val currentUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+                    val esFavorito = uiState.producto?.esFavoritoDe(currentUid) == true
+                    
+                    if (uiState.producto != null) {
+                        IconButton(onClick = onToggleFavorito) {
+                            Icon(
+                                imageVector = if (esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = if (esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
+                                tint = if (esFavorito) Color(0xFFE53935) else AzulPrincipal
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -560,6 +579,7 @@ fun DetalleProductoContentPreview() {
         onComprarOPrestar = {},
         onConfirmarEntregaVendedor = {},
         onConfirmarRecepcionComprador = {},
+        onToggleFavorito = {},
         onReportarConflicto = {}
     )
 }

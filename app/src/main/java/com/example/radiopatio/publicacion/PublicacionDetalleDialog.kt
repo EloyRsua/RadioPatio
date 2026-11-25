@@ -32,8 +32,6 @@ fun PublicacionDetalleDialog(
     onMeGustaClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-//    var meGustaState by remember { mutableStateOf(publicacion.meGusta) }
-//    var haDadoMeGusta by remember { mutableStateOf(false) }
 
     // Calculamos si el usuario actual ya le dio me gusta
     val haDadoMeGusta = usuarioUidActual.isNotBlank() &&
