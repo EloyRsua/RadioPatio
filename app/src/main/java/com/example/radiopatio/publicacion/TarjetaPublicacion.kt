@@ -23,12 +23,12 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun TarjetaPublicacion(
+    modifier: Modifier = Modifier,
     publicacion: Publicacion,
     esMiPublicacion: Boolean = false,
     leGusta: Boolean =  false,
     onMeGustaClick: () -> Unit = {},
     onEliminarClick: () -> Unit = {},
-    modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -108,7 +108,9 @@ fun TarjetaPublicacion(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { onMeGustaClick() }
+                        .then(
+                            if (!esMiPublicacion) Modifier.clickable { onMeGustaClick() } else Modifier
+                        )
                         .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
                     Icon(

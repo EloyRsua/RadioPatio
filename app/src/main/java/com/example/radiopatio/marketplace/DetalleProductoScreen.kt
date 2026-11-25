@@ -96,15 +96,59 @@ fun DetalleProductoContent(
                 },
                 actions = {
                     val currentUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-                    val esFavorito = uiState.producto?.esFavoritoDe(currentUid) == true
+                    val producto = uiState.producto
                     
-                    if (uiState.producto != null) {
-                        IconButton(onClick = onToggleFavorito) {
-                            Icon(
-                                imageVector = if (esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
-                                tint = if (esFavorito) Color(0xFFE53935) else AzulPrincipal
-                            )
+                    if (producto != null) {
+                        val esMiProducto = currentUid.isNotBlank() && 
+                                (producto.autorUid == currentUid || producto.vendedorUid == currentUid)
+                        val esFavorito = producto.esFavoritoDe(currentUid)
+                        val totalLikes = producto.likes.size
+
+                        if (esMiProducto) {
+                            // Tu propio artículo: mostramos solo el contador informativo
+                            if (totalLikes > 0) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(end = 16.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Favorite,
+                                        contentDescription = null,
+                                        tint = Color(0xFFE53935),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "$totalLikes",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = AzulPrincipal
+                                    )
+                                }
+                            }
+                        } else {
+                            // Artículo de otro vecino: botón para dar/quitar Me Gusta
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                if (totalLikes > 0) {
+                                    Text(
+                                        text = "$totalLikes",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = if (esFavorito) Color(0xFFE53935) else AzulPrincipal
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                }
+                                IconButton(onClick = onToggleFavorito) {
+                                    Icon(
+                                        imageVector = if (esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                        contentDescription = if (esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
+                                        tint = if (esFavorito) Color(0xFFE53935) else AzulPrincipal
+                                    )
+                                }
+                            }
                         }
                     }
                 },

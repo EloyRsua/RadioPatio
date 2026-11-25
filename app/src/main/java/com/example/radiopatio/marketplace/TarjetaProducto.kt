@@ -167,23 +167,69 @@ fun TarjetaProducto(
                 }
             }
 
-            // Botón de Favorito (corazón)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.85f))
-                    .clickable { onFavoritoClick() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = if (esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
-                    tint = if (esFavorito) Color(0xFFE53935) else Color.Gray,
-                    modifier = Modifier.size(16.dp)
-                )
+            // Contador y Botón de Favorito en la esquina superior derecha
+            val totalLikes = producto.likes.size
+
+            if (esMiProducto) {
+                // Si es mi producto, solo muestro los likes que lleva (si tiene alguno), sin botón de click
+                if (totalLikes > 0) {
+                    Surface(
+                        color = Color.White.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Favorite,
+                                contentDescription = null,
+                                tint = Color(0xFFE53935),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "$totalLikes",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AzulPrincipal
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Si es producto de otro vecino, es un botón interactivo con icono + contador
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.9f))
+                        .clickable { onFavoritoClick() }
+                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = if (esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
+                            tint = if (esFavorito) Color(0xFFE53935) else Color.Gray,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        if (totalLikes > 0) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "$totalLikes",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (esFavorito) Color(0xFFE53935) else Color.DarkGray
+                            )
+                        }
+                    }
+                }
             }
         }
 
