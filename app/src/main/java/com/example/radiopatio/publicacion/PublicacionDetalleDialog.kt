@@ -28,10 +28,16 @@ import com.example.radiopatio.data.PublicacionEntidad
 @Composable
 fun PublicacionDetalleDialog(
     publicacion: PublicacionEntidad,
+    usuarioUidActual: String = "",
+    onMeGustaClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    var meGustaState by remember { mutableStateOf(publicacion.meGusta) }
-    var haDadoMeGusta by remember { mutableStateOf(false) }
+//    var meGustaState by remember { mutableStateOf(publicacion.meGusta) }
+//    var haDadoMeGusta by remember { mutableStateOf(false) }
+
+    // Calculamos si el usuario actual ya le dio me gusta
+    val haDadoMeGusta = usuarioUidActual.isNotBlank() &&
+            publicacion.likesUids.split(",").contains(usuarioUidActual)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -137,15 +143,7 @@ fun PublicacionDetalleDialog(
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .clickable {
-                                if (haDadoMeGusta) {
-                                    meGustaState--
-                                    haDadoMeGusta = false
-                                } else {
-                                    meGustaState++
-                                    haDadoMeGusta = true
-                                }
-                            }
+                            .clickable { onMeGustaClick() }
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -156,10 +154,10 @@ fun PublicacionDetalleDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "$meGustaState Me gusta",
+                            text = "${publicacion.meGusta} Me gusta",
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF64748B)
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (haDadoMeGusta) Color.Red else Color(0xFF64748B)
                         )
                     }
 

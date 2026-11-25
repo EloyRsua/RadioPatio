@@ -267,4 +267,32 @@ class PublicacionViewModel(
             }
         }
     }
+
+    fun toggleMeGusta(publicacion: PublicacionEntidad) {
+        val comId = uiState.comunidadIdActual
+        val uid = uiState.usuarioActual?.uid.orEmpty()
+
+        if (comId.isBlank() || uid.isBlank()) {
+            uiState = uiState.copy(errorMensaje = "Debes iniciar sesión y pertenecer a una comunidad para reaccionar.")
+            return
+        }
+
+        if (publicacion.firestoreId.isBlank()) {
+            uiState = uiState.copy(errorMensaje = "No se puede reaccionar a esta publicación todavía.")
+            return
+        }
+
+        viewModelScope.launch {
+            val resultado = publicacionRepository.toggleMeGusta(
+                comunidadId = comId,
+                publicacionFirestoreId = publicacion.firestoreId,
+                usuarioUid = uid
+            )
+            resultado.onFailure { error ->
+                uiState = uiState.copy(
+                    errorMensaje = error.localizedMessage ?: "No se pudo actualizar el me gusta."
+                )
+            }
+        }
+    }
 }

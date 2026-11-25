@@ -1,6 +1,7 @@
 package com.example.radiopatio.publicacion
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -16,15 +18,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.radiopatio.ui.theme.RadioPatioTheme
 
 @Composable
 fun TarjetaPublicacion(
     publicacion: Publicacion,
     esMiPublicacion: Boolean = false,
+    leGusta: Boolean =  false,
+    onMeGustaClick: () -> Unit = {},
     onEliminarClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -102,18 +104,25 @@ fun TarjetaPublicacion(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onMeGustaClick() }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
                     Icon(
-                        imageVector = Icons.Filled.Favorite,
+                        imageVector = if (leGusta) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                         contentDescription = "Me gusta",
-                        tint = Color(0xFFE53935),
-                        modifier = Modifier.size(16.dp)
+                        tint = if (leGusta) Color(0xFFE53935) else Color.Gray,
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "${publicacion.meGusta}",
                         fontSize = 12.sp,
-                        color = Color.DarkGray
+                        color = if (leGusta) Color(0xFFE53935) else Color.DarkGray,
+                        fontWeight = if (leGusta) FontWeight.Bold else FontWeight.Normal
                     )
                 }
 
