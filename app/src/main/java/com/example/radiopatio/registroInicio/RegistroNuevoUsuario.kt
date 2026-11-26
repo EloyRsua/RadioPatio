@@ -50,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.radiopatio.R
 import com.example.radiopatio.comunidad.Comunidad
+import com.example.radiopatio.ui.SelectorAvatarDiceBear
 
 data class DatosRegistroComunidad(
     val crearNueva: Boolean = false,
@@ -124,6 +125,7 @@ fun RegistroNuevoUsuario(
     var confirmPasswordVisible by rememberSaveable { mutableStateOf(false) }
     var aceptoNormas by rememberSaveable { mutableStateOf(true) }
     var photoUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    var mostrarSelectorAvatar by rememberSaveable { mutableStateOf(false) }
     val photoUri = photoUriString?.let { Uri.parse(it) }
 
     val viviendaValida = when {
@@ -192,39 +194,63 @@ fun RegistroNuevoUsuario(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .border(2.dp, verdeBoton, CircleShape)
-                        .background(fondoGrisClaro)
-                        .clickable { galleryLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (photoUri != null) {
-                        AsyncImage(
-                            model = photoUri,
-                            contentDescription = "Foto de perfil",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.AddAPhoto,
-                                contentDescription = "Añadir foto",
-                                tint = verdeBoton,
-                                modifier = Modifier.size(20.dp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, verdeBoton, CircleShape)
+                            .background(fondoGrisClaro)
+                            .clickable { galleryLauncher.launch("image/*") },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (photoUri != null) {
+                            AsyncImage(
+                                model = photoUri,
+                                contentDescription = "Foto de perfil",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
                             )
-                            Text(
-                                text = "Foto",
-                                fontSize = 9.sp,
-                                color = textoSecundario,
-                                fontWeight = FontWeight.Bold
-                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.AddAPhoto,
+                                    contentDescription = "Añadir foto",
+                                    tint = verdeBoton,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Foto",
+                                    fontSize = 9.sp,
+                                    color = textoSecundario,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
+                    TextButton(
+                        onClick = { mostrarSelectorAvatar = !mostrarSelectorAvatar },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text(
+                            text = if (mostrarSelectorAvatar) "Ocultar avatar" else "Usar avatar",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = verdeBoton
+                        )
+                    }
                 }
+            }
+
+            if (mostrarSelectorAvatar) {
+                Spacer(modifier = Modifier.height(8.dp))
+                SelectorAvatarDiceBear(
+                    semillaBase = nombre.ifBlank { apellidos.ifBlank { email.ifBlank { "vecino" } } },
+                    urlActual = photoUriString.orEmpty(),
+                    onSeleccionarUrl = { nuevaUrl -> photoUriString = nuevaUrl },
+                    onAbrirGaleria = { galleryLauncher.launch("image/*") }
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))

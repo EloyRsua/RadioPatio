@@ -9,16 +9,19 @@ import androidx.lifecycle.viewModelScope
 import com.example.radiopatio.comunidad.ComunidadRepository
 import com.example.radiopatio.usuarios.UserRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 data class PerfilUsuarioUiState(
     val usuario: Usuario? = null,
     val nombreComunidad: String = "",
     val cargando: Boolean = true,
+    val guardandoFoto: Boolean = false,
     val errorMensaje: String? = null
 )
 
@@ -72,6 +75,36 @@ class PerfilUsuarioViewModel(
                     )
                 }
         }
+    }
+
+    fun actualizarFotoPerfil(nuevaFotoUrl: String, onExito: () -> Unit = {}) {
+        val uid = uiState.usuario?.uid?.ifBlank {
+            FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+        }.orEmpty()
+        if (uid.isBlank() || nuevaFotoUrl.isBlank()) return
+
+        viewModelScope.launch {
+            uiState = uiState.copy(guardandoFoto = true, errorMensaje = null)
+            try {
+                FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(uid)
+                    .update("photoUrl", nuevaFotoUrl)
+                    .await()
+
+                uiState = uiState.copy(guardandoFoto = false)
+                onExito()
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    guardandoFoto = false,
+                    errorMensaje = e.message ?: "No se pudo actualizar la foto de perfil."
+                )
+            }
+        }
+    }
+
+    fun limpiarError() {
+        uiState = uiState.copy(errorMensaje = null)
     }
 
     fun cerrarSesion(onSesionCerrada: () -> Unit) {
