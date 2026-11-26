@@ -15,19 +15,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.radiopatio.ui.theme.RadioPatioTheme
+import coil.compose.AsyncImage
+import com.example.radiopatio.ui.DiceBearAvatars
 
 @Composable
 fun TarjetaPublicacion(
     publicacion: Publicacion,
+    avatarUrl: String = "",
+    seedAvatar: String = "",
     esMiPublicacion: Boolean = false,
     onEliminarClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val modeloAvatar = avatarUrl.trim().ifBlank {
+        DiceBearAvatars.construirUrl(
+            seed = seedAvatar.trim().ifBlank { publicacion.autor.ifBlank { publicacion.inicial } },
+            estilo = "avataaars",
+            tamanoPx = 128
+        )
+    }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -43,7 +54,7 @@ fun TarjetaPublicacion(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF133E54)),
                     contentAlignment = Alignment.Center
@@ -53,6 +64,12 @@ fun TarjetaPublicacion(
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
+                    )
+                    AsyncImage(
+                        model = modeloAvatar,
+                        contentDescription = "Avatar de ${publicacion.autor}",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
 
