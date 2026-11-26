@@ -6,60 +6,90 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.usuarios.UserRepository
-import kotlinx.coroutines.flow.collectLatest
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 data class ChatUiState(
     val cargando: Boolean = false,
+    val enviando: Boolean = false,
+    val usuarioActualUid: String = "",
+    val usuarioActualNombre: String = "Vecino",
     val comunidadId: String = "",
-    val usuarioActual: Usuario? = null,
-    val conversacionActiva: Conversacion? = null,
-    val mensajesActivos: List<Mensaje> = emptyList(),
+    val conversacion: Conversacion? = null,
+    val mensajes: List<Mensaje> = emptyList(),
     val errorMensaje: String? = null
 )
 
 class ChatViewModelFactory(
-    private val chatRepository: ChatRepository = ChatRepository(),
-    private val userRepository: UserRepository = UserRepository()
+    private val userRepository: UserRepository
 ) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
-            return ChatViewModel(chatRepository, userRepository) as T
-        }
-        throw IllegalArgumentException("Clase ViewModel desconocida: ${modelClass.name}")
+        return ChatViewModel(userRepository) as T
     }
 }
 
 class ChatViewModel(
+    private val userRepository: UserRepository,
     private val chatRepository: ChatRepository = ChatRepository(),
-    private val userRepository: UserRepository = UserRepository()
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : ViewModel() {
 
     var uiState by mutableStateOf(ChatUiState())
         private set
 
+    private var mensajesListener: ListenerRegistration? = null
+
     init {
-        observarUsuario()
+        cargarUsuarioActual()
     }
 
-    private fun observarUsuario() {
+    private fun cargarUsuarioActual() {
+        val uid = auth.currentUser?.uid.orEmpty()
+        if (uid.isBlank()) return
+
         viewModelScope.launch {
-            userRepository.observarUsuarioActual().collect { usuario ->
-                val comId = usuario?.comunidadId.orEmpty()
-                uiState = uiState.copy(
-                    usuarioActual = usuario,
-                    comunidadId = comId
-                )
+            val nombreReal = resolverNombreUsuario(uid)
+            val comId = try {
+                db.collection("users").document(uid).get().await()
+                    .getString("comunidadId").orEmpty()
+            } catch (_: Exception) {
+                ""
             }
+
+            uiState = uiState.copy(
+                usuarioActualUid = uid,
+                usuarioActualNombre = nombreReal,
+                comunidadId = uiState.comunidadId.ifBlank { comId }
+            )
         }
     }
 
-    /**
-     * Abre o crea la conversación directa entre el usuario actual (comprador/prestatario)
-     * y el vendedor/prestador de un artículo, y comienza a escuchar los mensajes.
-     */
+    private suspend fun resolverNombreUsuario(uid: String): String {
+        if (uid.isBlank()) return "Vecino"
+        return try {
+            val doc = db.collection("users").document(uid).get().await()
+            val nombre = doc.getString("nombre").orEmpty().trim()
+            val apellidos = doc.getString("apellidos").orEmpty().trim()
+            val nombreCompleto = "$nombre $apellidos".trim()
+            when {
+                nombreCompleto.isNotBlank() -> nombreCompleto
+                !auth.currentUser?.displayName.isNullOrBlank() -> auth.currentUser?.displayName!!.trim()
+                !auth.currentUser?.email.isNullOrBlank() -> auth.currentUser!!.email!!.substringBefore("@")
+                else -> "Vecino"
+            }
+        } catch (_: Exception) {
+            auth.currentUser?.displayName?.trim()?.takeIf { it.isNotBlank() }
+                ?: auth.currentUser?.email?.substringBefore("@")
+                ?: "Vecino"
+        }
+    }
+
     fun abrirChatConProducto(
         productoId: String,
         productoTitulo: String,
@@ -67,112 +97,176 @@ class ChatViewModel(
         productoImagenUrl: String,
         vendedorUid: String,
         vendedorNombre: String,
-        onChatListo: (Conversacion) -> Unit = {}
+        compradorUid: String = "",
+        compradorNombre: String = "",
+        comunidadId: String = "",
+        onChatListo: () -> Unit = {}
     ) {
-        val usuario = uiState.usuarioActual
-        val comId = uiState.comunidadId.ifBlank { usuario?.comunidadId.orEmpty() }
-        val compradorUid = usuario?.uid.orEmpty()
-        val compradorNombre = usuario?.nombre.orEmpty().ifBlank { "Vecino" }
-
-        if (comId.isBlank() || compradorUid.isBlank()) {
-            uiState = uiState.copy(
-                errorMensaje = "Debes iniciar sesión y pertenecer a una comunidad para chatear."
-            )
+        val miUid = auth.currentUser?.uid.orEmpty().ifBlank { uiState.usuarioActualUid }
+        if (miUid.isBlank() || productoId.isBlank()) {
+            uiState = uiState.copy(errorMensaje = "No se ha podido abrir el chat.")
             return
         }
 
-        if (compradorUid == vendedorUid) {
-            uiState = uiState.copy(
-                errorMensaje = "No puedes iniciar un chat contigo mismo sobre tu propio artículo."
-            )
-            return
-        }
-
-        uiState = uiState.copy(cargando = true, errorMensaje = null)
-
-        viewModelScope.launch {
-            val resultado = chatRepository.abrirOCrearConversacion(
-                comunidadId = comId,
-                productoId = productoId,
-                productoTitulo = productoTitulo,
-                productoPrecio = productoPrecio,
-                productoImagenUrl = productoImagenUrl,
-                vendedorUid = vendedorUid,
-                vendedorNombre = vendedorNombre,
-                compradorUid = compradorUid,
-                compradorNombre = compradorNombre
-            )
-
-            resultado.onSuccess { conversacion ->
-                seleccionarConversacion(conversacion, comId)
-                uiState = uiState.copy(cargando = false)
-                onChatListo(conversacion)
-            }.onFailure { e ->
-                uiState = uiState.copy(
-                    cargando = false,
-                    errorMensaje = e.localizedMessage ?: "Error al abrir el chat."
-                )
-            }
-        }
-    }
-
-    /**
-     * Asigna la conversación activa, marca sus mensajes como leídos y escucha cambios en tiempo real.
-     */
-    fun seleccionarConversacion(
-        conversacion: Conversacion,
-        comunidadIdOverride: String = ""
-    ) {
-        val comId = comunidadIdOverride.ifBlank {
-            conversacion.comunidadId.ifBlank { uiState.comunidadId }
-        }
-        val miUid = uiState.usuarioActual?.uid.orEmpty()
-
+        mensajesListener?.remove()
         uiState = uiState.copy(
-            comunidadId = comId,
-            conversacionActiva = conversacion,
-            mensajesActivos = emptyList()
+            cargando = true,
+            usuarioActualUid = miUid,
+            mensajes = emptyList(),
+            errorMensaje = null
         )
 
         viewModelScope.launch {
-            chatRepository.marcarConversacionComoLeida(comId, conversacion, miUid)
-            chatRepository.observarMensajes(comId, conversacion.id).collectLatest { mensajes ->
-                uiState = uiState.copy(mensajesActivos = mensajes)
-            }
-        }
-    }
+            try {
+                val miNombreReal = resolverNombreUsuario(miUid)
+                val soyVendedor = miUid == vendedorUid
+                val compradorFinalUid = if (soyVendedor) compradorUid else miUid
+                val compradorFinalNombre = if (soyVendedor) {
+                    compradorNombre.ifBlank { "Vecino" }
+                } else {
+                    miNombreReal
+                }
 
-    /**
-     * Envía un mensaje dentro de la conversación activa.
-     */
-    fun enviarMensaje(texto: String) {
-        val conv = uiState.conversacionActiva ?: return
-        val comId = uiState.comunidadId.ifBlank {
-            conv.comunidadId
-        }
-        val usuario = uiState.usuarioActual ?: return
-        val remitenteUid = usuario.uid
-        val remitenteNombre = usuario.nombre.ifBlank {
-            "Vecino"
-        }
+                if (compradorFinalUid.isBlank() || vendedorUid.isBlank()) {
+                    uiState = uiState.copy(
+                        cargando = false,
+                        errorMensaje = "Faltan datos del participante para iniciar el chat."
+                    )
+                    return@launch
+                }
 
-        viewModelScope.launch {
-            val resultado = chatRepository.enviarMensaje(
-                comunidadId = comId,
-                conversacion = conv,
-                remitenteUid = remitenteUid,
-                remitenteNombre = remitenteNombre,
-                texto = texto
-            )
-            resultado.onFailure { e ->
+                val comIdResuelta = resolverComunidadId(
+                    comunidadParam = comunidadId,
+                    uid = miUid,
+                    productoId = productoId
+                )
+
+                val conversacion = chatRepository.obtenerOCrearConversacion(
+                    comunidadId = comIdResuelta,
+                    productoId = productoId,
+                    productoTitulo = productoTitulo,
+                    productoPrecio = productoPrecio,
+                    productoImagenUrl = productoImagenUrl,
+                    vendedorUid = vendedorUid,
+                    vendedorNombre = if (soyVendedor) miNombreReal else vendedorNombre.ifBlank { "Vendedor" },
+                    compradorUid = compradorFinalUid,
+                    compradorNombre = compradorFinalNombre
+                )
+
                 uiState = uiState.copy(
-                    errorMensaje = e.localizedMessage ?: "No se pudo enviar el mensaje."
+                    cargando = false,
+                    comunidadId = comIdResuelta,
+                    usuarioActualUid = miUid,
+                    usuarioActualNombre = miNombreReal,
+                    conversacion = conversacion
+                )
+
+                mensajesListener = chatRepository.observarMensajes(
+                    comunidadId = comIdResuelta,
+                    conversacionId = conversacion.id,
+                    onMensajes = { lista ->
+                        uiState = uiState.copy(mensajes = lista)
+                    },
+                    onError = { msg ->
+                        uiState = uiState.copy(errorMensaje = msg)
+                    }
+                )
+
+                onChatListo()
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    cargando = false,
+                    errorMensaje = e.message ?: "No se pudo abrir la conversación."
                 )
             }
         }
     }
 
-    fun onLimpiarError() {
+    fun enviarMensaje(texto: String) {
+        val limpio = texto.trim()
+        if (limpio.isEmpty()) return
+
+        val conv = uiState.conversacion ?: return
+        val miUid = auth.currentUser?.uid.orEmpty().ifBlank { uiState.usuarioActualUid }
+        if (miUid.isBlank() || conv.comunidadId.isBlank()) return
+
+        val destinatarioUid = if (miUid == conv.vendedorUid) conv.compradorUid else conv.vendedorUid
+
+        uiState = uiState.copy(enviando = true, errorMensaje = null)
+
+        viewModelScope.launch {
+            try {
+                val miNombreReal = resolverNombreUsuario(miUid)
+                uiState = uiState.copy(
+                    usuarioActualUid = miUid,
+                    usuarioActualNombre = miNombreReal
+                )
+
+                chatRepository.enviarMensaje(
+                    comunidadId = conv.comunidadId,
+                    conversacionId = conv.id,
+                    productoId = conv.productoId,
+                    productoTitulo = conv.productoTitulo,
+                    remitenteUid = miUid,
+                    remitenteNombre = miNombreReal,
+                    destinatarioUid = destinatarioUid,
+                    texto = limpio
+                )
+                uiState = uiState.copy(enviando = false)
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    enviando = false,
+                    errorMensaje = e.message ?: "No se pudo enviar el mensaje."
+                )
+            }
+        }
+    }
+
+    fun limpiarConversacion() {
+        mensajesListener?.remove()
+        mensajesListener = null
+        uiState = uiState.copy(
+            conversacion = null,
+            mensajes = emptyList(),
+            errorMensaje = null
+        )
+    }
+
+    fun limpiarError() {
         uiState = uiState.copy(errorMensaje = null)
+    }
+
+    private suspend fun resolverComunidadId(
+        comunidadParam: String,
+        uid: String,
+        productoId: String
+    ): String {
+        if (comunidadParam.isNotBlank()) return comunidadParam
+        if (uiState.comunidadId.isNotBlank()) return uiState.comunidadId
+
+        try {
+            val userDoc = db.collection("users").document(uid).get().await()
+            val userCom = userDoc.getString("comunidadId").orEmpty()
+            if (userCom.isNotBlank()) return userCom
+        } catch (_: Exception) {
+        }
+
+        try {
+            val prodSnap = db.collectionGroup("productos")
+                .whereEqualTo("firestoreId", productoId)
+                .limit(1)
+                .get()
+                .await()
+            val prodCom = prodSnap.documents.firstOrNull()?.getString("comunidadId").orEmpty()
+            if (prodCom.isNotBlank()) return prodCom
+        } catch (_: Exception) {
+        }
+
+        return "general"
+    }
+
+    override fun onCleared() {
+        mensajesListener?.remove()
+        super.onCleared()
     }
 }

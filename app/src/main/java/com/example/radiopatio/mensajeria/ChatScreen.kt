@@ -1,32 +1,37 @@
 package com.example.radiopatio.mensajeria
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.radiopatio.ui.theme.AzulPrincipal
-import com.example.radiopatio.ui.theme.TextoSecundario
-import com.example.radiopatio.ui.theme.VerdePrincipal
+import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val AzulPrincipal = Color(0xFF133E54)
+private val VerdeBoton = Color(0xFF0F8A5F)
+private val TextoPrincipal = Color(0xFF0F172A)
+private val TextoSecundario = Color(0xFF64748B)
+private val FondoApp = Color(0xFFF8FAFC)
+private val BurbujaOtro = Color(0xFFE2E8F0)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,111 +39,165 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     onVolver: () -> Unit
 ) {
-    val context = LocalContext.current
     val uiState = viewModel.uiState
-    val conversacion = uiState.conversacionActiva
-    val miUid = uiState.usuarioActual?.uid.orEmpty()
-    val interlocutor = conversacion?.obtenerNombreInterlocutor(miUid) ?: "Chat"
-
-    var textoMensaje by remember { mutableStateOf("") }
+    var textoInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(uiState.errorMensaje) {
-        uiState.errorMensaje?.let { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            viewModel.onLimpiarError()
+    LaunchedEffect(uiState.mensajes.size) {
+        if (uiState.mensajes.isNotEmpty()) {
+            listState.animateScrollToItem(uiState.mensajes.lastIndex)
         }
     }
 
-    LaunchedEffect(uiState.mensajesActivos.size) {
-        if (uiState.mensajesActivos.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.mensajesActivos.size - 1)
-        }
+    uiState.errorMensaje?.let { error ->
+        AlertDialog(
+            onDismissRequest = { viewModel.limpiarError() },
+            title = { Text("Aviso", fontWeight = FontWeight.Bold, color = AzulPrincipal) },
+            text = { Text(error, color = TextoPrincipal) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.limpiarError() }) {
+                    Text("Aceptar", color = VerdeBoton, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = Color.White
+        )
     }
+
+    val conv = uiState.conversacion
+    val nombreInterlocutor = conv?.obtenerNombreInterlocutor(uiState.usuarioActualUid) ?: "Vecino"
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = interlocutor,
-                            fontWeight = FontWeight.Bold,
-                            color = AzulPrincipal,
-                            fontSize = 16.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        conversacion?.let {
-                            val subtitulo = if (it.productoPrecio.isNotBlank()) {
-                                "${it.productoTitulo} · ${it.productoPrecio}"
-                            } else {
-                                it.productoTitulo
-                            }
+            Column(modifier = Modifier.background(Color.White)) {
+                TopAppBar(
+                    title = {
+                        Column {
                             Text(
-                                text = subtitulo,
-                                fontSize = 11.sp,
-                                color = VerdePrincipal,
+                                text = nombreInterlocutor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = AzulPrincipal,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            Text(
+                                text = "Chat directo del artículo",
+                                fontSize = 12.sp,
+                                color = TextoSecundario
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onVolver) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Volver",
+                                tint = AzulPrincipal
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                )
+
+                if (conv != null && conv.productoTitulo.isNotBlank()) {
+                    Surface(
+                        color = FondoApp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (conv.productoImagenUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = conv.productoImagenUrl,
+                                    contentDescription = conv.productoTitulo,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFE2E8F0)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ShoppingBag,
+                                        contentDescription = null,
+                                        tint = TextoSecundario,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = conv.productoTitulo,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    color = TextoPrincipal,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (conv.productoPrecio.isNotBlank()) {
+                                    Text(
+                                        text = conv.productoPrecio,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = VerdeBoton
+                                    )
+                                }
+                            }
                         }
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onVolver) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = AzulPrincipal
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-            )
+                    HorizontalDivider(color = Color(0xFFE2E8F0))
+                }
+            }
         },
         bottomBar = {
             Surface(
-                shadowElevation = 8.dp,
-                color = Color.White
+                color = Color.White,
+                shadowElevation = 6.dp
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .imePadding()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
-                        value = textoMensaje,
-                        onValueChange = { textoMensaje = it },
-                        placeholder = { Text("Escribe un mensaje...", fontSize = 13.sp) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 50.dp),
+                        value = textoInput,
+                        onValueChange = { textoInput = it },
+                        placeholder = { Text("Escribe un mensaje...", color = TextoSecundario) },
+                        modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(24.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color(0xFFF8FAFC),
-                            unfocusedContainerColor = Color(0xFFF8FAFC)
-                        )
+                        maxLines = 4
                     )
 
                     Spacer(modifier = Modifier.width(8.dp))
 
                     IconButton(
                         onClick = {
-                            if (textoMensaje.isNotBlank()) {
-                                viewModel.enviarMensaje(textoMensaje)
-                                textoMensaje = ""
-                            }
+                            val enviar = textoInput
+                            textoInput = ""
+                            viewModel.enviarMensaje(enviar)
                         },
-                        enabled = textoMensaje.isNotBlank() && conversacion != null,
+                        enabled = textoInput.isNotBlank() && !uiState.enviando,
                         modifier = Modifier
                             .size(48.dp)
+                            .clip(RoundedCornerShape(24.dp))
                             .background(
-                                color = if (textoMensaje.isNotBlank()) VerdePrincipal else Color(0xFFCBD5E1),
-                                shape = CircleShape
+                                if (textoInput.isNotBlank() && !uiState.enviando) VerdeBoton
+                                else Color(0xFFCBD5E1)
                             )
                     ) {
                         Icon(
@@ -150,87 +209,100 @@ fun ChatScreen(
                     }
                 }
             }
-        }
+        },
+        containerColor = FondoApp
     ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(Color(0xFFF1F5F9))
-        ) {
-            if (uiState.cargando) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = VerdePrincipal
+        if (uiState.cargando) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = VerdeBoton)
+            }
+        } else if (uiState.mensajes.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Aún no hay mensajes en este chat. Escribe para coordinar la entrega o resolver dudas.",
+                    color = TextoSecundario,
+                    fontSize = 14.sp
                 )
-            } else if (uiState.mensajesActivos.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(24.dp)
-                ) {
-                    Text(
-                        text = "Envía el primer mensaje para coordinar la compra o el préstamo.",
-                        fontSize = 13.sp,
-                        color = TextoSecundario
-                    )
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp)
-                ) {
-                    items(
-                        items = uiState.mensajesActivos,
-                        key = { it.id.ifBlank { "${it.timestamp}_${it.remitenteUid}_${it.texto.hashCode()}" } }
-                    ) { mensaje ->
-                        val esMio = mensaje.remitenteUid == miUid
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (esMio) Arrangement.End else Arrangement.Start
-                        ) {
-                            Surface(
-                                color = if (esMio) VerdePrincipal else Color.White,
-                                shape = RoundedCornerShape(
-                                    topStart = 16.dp,
-                                    topEnd = 16.dp,
-                                    bottomStart = if (esMio) 16.dp else 4.dp,
-                                    bottomEnd = if (esMio) 4.dp else 16.dp
-                                ),
-                                shadowElevation = 1.dp,
-                                modifier = Modifier.widthIn(max = 280.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
-                                    Text(
-                                        text = mensaje.texto,
-                                        color = if (esMio) Color.White else AzulPrincipal,
-                                        fontSize = 14.sp
-                                    )
-                                    if (mensaje.timestamp > 0L) {
-                                        Spacer(modifier = Modifier.height(3.dp))
-                                        Text(
-                                            text = formatearHoraMensaje(mensaje.timestamp),
-                                            color = if (esMio) Color.White.copy(alpha = 0.8f) else TextoSecundario,
-                                            fontSize = 10.sp,
-                                            modifier = Modifier.align(Alignment.End)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(uiState.mensajes, key = { it.id.ifBlank { "${it.remitenteUid}_${it.timestamp}" } }) { msg ->
+                    val esMio = msg.remitenteUid == uiState.usuarioActualUid
+                    BurbujaMensaje(mensaje = msg, esMio = esMio)
                 }
             }
         }
     }
 }
 
-private fun formatearHoraMensaje(timestamp: Long): String {
-    val formato = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return formato.format(Date(timestamp))
+@Composable
+private fun BurbujaMensaje(
+    mensaje: Mensaje,
+    esMio: Boolean
+) {
+    val horaFormateada = remember(mensaje.timestamp) {
+        if (mensaje.timestamp <= 0L) ""
+        else SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(mensaje.timestamp))
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (esMio) Alignment.End else Alignment.Start
+    ) {
+        Surface(
+            color = if (esMio) AzulPrincipal else BurbujaOtro,
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (esMio) 16.dp else 4.dp,
+                bottomEnd = if (esMio) 4.dp else 16.dp
+            ),
+            modifier = Modifier.widthIn(max = 290.dp)
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                if (!esMio && mensaje.remitenteNombre.isNotBlank()) {
+                    Text(
+                        text = mensaje.remitenteNombre,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AzulPrincipal
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+                Text(
+                    text = mensaje.texto,
+                    fontSize = 14.sp,
+                    color = if (esMio) Color.White else TextoPrincipal
+                )
+                if (horaFormateada.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = horaFormateada,
+                        fontSize = 10.sp,
+                        color = if (esMio) Color(0xFFCBD5E1) else TextoSecundario,
+                        modifier = Modifier.align(Alignment.End)
+                    )
+                }
+            }
+        }
+    }
 }

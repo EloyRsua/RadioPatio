@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.radiopatio.comunidad.subcoleccionComunidad
+import com.example.radiopatio.mensajeria.Conversacion
 import com.example.radiopatio.notificacion.NotificacionesHelper
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentReference
@@ -21,6 +22,7 @@ data class DetalleProductoUiState(
     val esPropietario: Boolean = false,
     val esComprador: Boolean = false,
     val diasRestantes: Long = 0L,
+    val conversacionesProducto: List<Conversacion> = emptyList(),
     val mensaje: String? = null
 )
 
@@ -46,6 +48,7 @@ class DetalleProductoViewModel(
 
     private var targetDocRef: DocumentReference? = null
     private var docListener: ListenerRegistration? = null
+    private var conversacionesListener: ListenerRegistration? = null
 
     init {
         cargarYEscucharProducto()
@@ -58,13 +61,11 @@ class DetalleProductoViewModel(
         }
 
         viewModelScope.launch {
-            // Buscamos la referencia adecuada (primero en la comunidad activa del usuario, o collectionGroup)
             var userComId = ""
             try {
                 val userDoc = db.collection("users").document(currentUid).get().await()
                 userComId = userDoc.getString("comunidadId").orEmpty()
-            } catch (e: Exception) {
-                // ignore
+            } catch (_: Exception) {
             }
 
             var ref: DocumentReference? = null
@@ -77,8 +78,7 @@ class DetalleProductoViewModel(
                     if (candidateSnap.exists()) {
                         ref = candidate
                     }
-                } catch (e: Exception) {
-                    // ignore
+                } catch (_: Exception) {
                 }
             }
 
@@ -90,8 +90,7 @@ class DetalleProductoViewModel(
                     if (rootSnap.exists()) {
                         ref = candidateRoot
                     }
-                } catch (e: Exception) {
-                    // ignore
+                } catch (_: Exception) {
                 }
             }
 
@@ -104,8 +103,7 @@ class DetalleProductoViewModel(
                         .get()
                         .await()
                     ref = groupSnap.documents.firstOrNull()?.reference
-                } catch (e: Exception) {
-                    // ignore
+                } catch (_: Exception) {
                 }
             }
 
@@ -132,7 +130,7 @@ class DetalleProductoViewModel(
 
                 var estado = try {
                     EstadoProducto.valueOf(snapshot.getString("estado") ?: EstadoProducto.DISPONIBLE.name)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     EstadoProducto.DISPONIBLE
                 }
 
@@ -155,12 +153,13 @@ class DetalleProductoViewModel(
 
                 val compradorNombre = snapshot.getString("compradorNombre") ?: ""
                 val compradorPiso = snapshot.getString("compradorPiso") ?: ""
+                val comIdProducto = snapshot.getString("comunidadId") ?: userComId
 
                 @Suppress("UNCHECKED_CAST")
                 val fotos = snapshot.get("fotos") as? List<String> ?: emptyList()
                 val prod = Producto(
                     firestoreId = snapshot.id,
-                    comunidadId = snapshot.getString("comunidadId") ?: userComId,
+                    comunidadId = comIdProducto,
                     autorUid = autorUid,
                     vendedorUid = snapshot.getString("vendedorUid") ?: autorUid,
                     compradorUid = compradorUid,
@@ -172,7 +171,7 @@ class DetalleProductoViewModel(
                     ubicacionYTiempo = snapshot.getString("ubicacion") ?: snapshot.getString("ubicacionYTiempo") ?: "",
                     categoriaProducto = try {
                         CategoriaProducto.valueOf(snapshot.getString("categoria") ?: CategoriaProducto.TODOS.name)
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         CategoriaProducto.TODOS
                     },
                     esParaComprar = snapshot.getBoolean("esParaComprar") ?: true,
@@ -194,16 +193,65 @@ class DetalleProductoViewModel(
 
                 val diffMilis = fechaLimite - ahora
                 val diasRestantes = if (diffMilis > 0) (diffMilis / (24 * 60 * 60 * 1000L)) + 1 else 0L
+                val esProp = (autorUid == currentUid)
 
                 uiState = uiState.copy(
                     cargando = false,
                     producto = prod,
-                    esPropietario = (autorUid == currentUid),
+                    esPropietario = esProp,
                     esComprador = (compradorUid == currentUid),
                     diasRestantes = diasRestantes
                 )
+
+                observarConversacionesProducto(
+                    comunidadId = comIdProducto,
+                    productoId = snapshot.id,
+                    esPropietario = esProp
+                )
             }
         }
+    }
+
+    private fun observarConversacionesProducto(
+        comunidadId: String,
+        productoId: String,
+        esPropietario: Boolean
+    ) {
+        conversacionesListener?.remove()
+        conversacionesListener = null
+
+        if (!esPropietario || currentUid.isBlank() || productoId.isBlank()) {
+            uiState = uiState.copy(conversacionesProducto = emptyList())
+            return
+        }
+
+        val comIdBusqueda = comunidadId.ifBlank { "general" }
+        conversacionesListener = db.collection("comunidades")
+            .document(comIdBusqueda)
+            .collection("conversaciones")
+            .whereEqualTo("productoId", productoId)
+            .addSnapshotListener { snap, _ ->
+                val lista = snap?.documents?.mapNotNull { doc ->
+                    doc.toObject(Conversacion::class.java)?.copy(id = doc.id)
+                }?.sortedByDescending { it.ultimoMensajeTimestamp }.orEmpty()
+
+                val compradorActualVacio = uiState.producto?.compradorUid.isNullOrBlank()
+                val primeraConv = lista.firstOrNull()
+                val prodActualizado = if (compradorActualVacio && primeraConv != null && primeraConv.compradorUid.isNotBlank()) {
+                    uiState.producto?.copy(
+                        compradorUid = primeraConv.compradorUid,
+                        compradorNombre = uiState.producto?.compradorNombre?.ifBlank { primeraConv.compradorNombre }
+                            ?: primeraConv.compradorNombre
+                    )
+                } else {
+                    uiState.producto
+                }
+
+                uiState = uiState.copy(
+                    producto = prodActualizado,
+                    conversacionesProducto = lista
+                )
+            }
     }
 
     // Acción de comprar / tomar prestado
@@ -224,7 +272,7 @@ class DetalleProductoViewModel(
                     pisoComprador = userDoc.getString("piso")
                         ?: userDoc.getString("vivienda") ?: ""
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 nombreComprador = auth.currentUser?.email?.substringBefore("@") ?: "Un vecino"
             }
 
@@ -245,7 +293,6 @@ class DetalleProductoViewModel(
 
             targetDocRef?.update(updates)
 
-            // Notificación para el vendedor
             val datosVecino = if (pisoComprador.isNotBlank()) "$nombreComprador ($pisoComprador)" else nombreComprador
             val titulo = if (prod.esParaComprar) "¡Artículo vendido!" else "¡Préstamo solicitado!"
             val mensaje = if (prod.esParaComprar) {
@@ -275,7 +322,6 @@ class DetalleProductoViewModel(
         )
         targetDocRef?.update(updates)
 
-        // Enviar aviso al comprador
         NotificacionesHelper.enviarNotificacion(
             destinatarioUid = prod.compradorUid,
             titulo = "Producto entregado por el vendedor",
@@ -302,7 +348,6 @@ class DetalleProductoViewModel(
 
         targetDocRef?.update(updates)
 
-        // Enviar aviso al vendedor
         NotificacionesHelper.enviarNotificacion(
             destinatarioUid = prod.autorUid,
             titulo = "Entrega completada",
@@ -326,5 +371,6 @@ class DetalleProductoViewModel(
     override fun onCleared() {
         super.onCleared()
         docListener?.remove()
+        conversacionesListener?.remove()
     }
 }

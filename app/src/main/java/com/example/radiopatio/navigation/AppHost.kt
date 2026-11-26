@@ -272,10 +272,16 @@ fun AppNavHost(
                 firestoreId = ruta.firestoreId,
                 chatViewModel = chatViewModel,
                 onIrAChat = {
-                    navController.navigate(ChatDirecto)
+                    if (navController.currentBackStackEntry?.destination?.hasRoute<DetalleProducto>() == true) {
+                        navController.navigate(ChatDirecto) {
+                            launchSingleTop = true
+                        }
+                    }
                 },
                 onVolver = {
-                    navController.popBackStack()
+                    if (navController.currentBackStackEntry?.destination?.hasRoute<DetalleProducto>() == true) {
+                        navController.popBackStack()
+                    }
                 }
             )
         }
@@ -284,7 +290,10 @@ fun AppNavHost(
             ChatScreen(
                 viewModel = chatViewModel,
                 onVolver = {
-                    navController.popBackStack()
+                    if (navController.currentBackStackEntry?.destination?.hasRoute<ChatDirecto>() == true) {
+                        chatViewModel.limpiarConversacion()
+                        navController.popBackStack()
+                    }
                 }
             )
         }
