@@ -62,7 +62,7 @@ class MisFavoritosViewModel(
         viewModelScope.launch {
             mercadilloRepository.toggleMeGustaProducto(
                 comunidadId = producto.comunidadId,
-                productoFirestoreId = producto.firestoreId,
+                productoId = producto.firestoreId,
                 usuarioUid = uid
             )
         }

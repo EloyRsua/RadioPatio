@@ -21,28 +21,27 @@ enum class EstadoProducto(val etiqueta: String) {
 }
 
 data class Producto(
-    val id: Int = 0,
+    // Identificadores
+    val id: String = "",
+    val comunidadId: String = "",
+    val vendedorUid: String = "",
+    val compradorUid: String = "",
+
+    // valores del producto
     val titulo: String = "",
+    val descripcion: String = "",
     val precio: String = "",
-    val ubicacionYTiempo: String = "",
+    val ubicacion: String = "",
+    val fechaCreacion: Long = 0L,
     val categoriaProducto: CategoriaProducto = CategoriaProducto.TODOS,
     val esParaComprar: Boolean = true,
-    val imagenRes: Int? = null,
-    val imagenUrl: String? = null,
-    val firestoreId: String = "",
-    val comunidadId: String = "",
-    val autorUid: String = "",
-    val vendedorUid: String = "",
-    val vendedorNombre: String = "",
-    val timestamp: Long = 0L,
-    val descripcion: String = "",
     val marca: String = "",
     val color: String = "",
     val estadoUso: String = "",
     val fotos: List<String> = emptyList(),
     val estado: EstadoProducto = EstadoProducto.DISPONIBLE,
 
-    val compradorUid: String = "",
+    // valores de la compra y venta
     val compradorNombre: String = "",
     val compradorPiso: String = "",
     val fechaCompra: Long = 0L,
@@ -53,10 +52,34 @@ data class Producto(
     val compradorConfirmoRecepcion: Boolean = false,
     val motivoConflicto: String = "",
     val fechaDevolucion: String = "",
-    val likes: List<String> = emptyList() // uids de los usuarios que han dado like
+    val likes: List<String> = emptyList(), // uids de los usuarios que han dado like
+
+    val vendedorNombre: String = ""
 ) {
+    val imagenUrl: String?
+        get() = fotos.firstOrNull()
+
     fun esFavoritoDe(uid: String): Boolean {
         if(uid.isBlank()) return false
         return likes.contains(uid)
     }
+
+    val ubicacionYTiempo: String
+        get() {
+            val base = ubicacion.ifBlank { "Comunidad" }
+            if (fechaCreacion <= 0L) return base
+            val diferencia = System.currentTimeMillis() - fechaCreacion
+            val segundos = diferencia / 1000
+            val minutos = segundos / 60
+            val horas = minutos / 60
+            val dias = horas / 24
+            val tiempo = when {
+                segundos < 60 -> "Ahora mismo"
+                minutos < 60 -> "Hace $minutos min"
+                horas < 24 -> "Hace $horas h"
+                dias == 1L -> "Ayer"
+                else -> "Hace $dias d"
+            }
+            return "$base · $tiempo"
+        }
 }

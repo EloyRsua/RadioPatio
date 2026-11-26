@@ -61,15 +61,13 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 @Composable
 fun TarjetaProducto(
     producto: Producto,
+    currentUid: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onEliminarClick: () -> Unit = {},
     onFavoritoClick: () -> Unit = {},
 ) {
-    val currentUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-    val esMiProducto = currentUid.isNotBlank() &&
-            (producto.autorUid == currentUid || producto.vendedorUid == currentUid)
-
+    val esMiProducto = currentUid.isNotBlank() && (producto.vendedorUid == currentUid)
     val esFavorito = producto.esFavoritoDe(currentUid)
     var mostrarDialogoEliminar by remember { mutableStateOf(false) }
 
@@ -97,13 +95,6 @@ fun TarjetaProducto(
             if (!producto.imagenUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = producto.imagenUrl,
-                    contentDescription = producto.titulo,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else if (producto.imagenRes != null) {
-                Image(
-                    painter = painterResource(id = producto.imagenRes),
                     contentDescription = producto.titulo,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -327,7 +318,16 @@ fun TarjetaProducto(
 fun TarjetaProductoPreview() {
     RadioPatioTheme {
         TarjetaProducto(
-            producto = Producto(1, "Mesa auxiliar", "15€", "1ºA - Hace 1h", CategoriaProducto.MUEBLES, true),
+            producto = Producto(
+                id = "1",
+                titulo = "Mesa auxiliar",
+                precio = "15€",
+                ubicacion = "1ºA",
+                fechaCreacion = System.currentTimeMillis() - 3600_000L,
+                categoriaProducto = CategoriaProducto.MUEBLES,
+                esParaComprar = true
+            ),
+            currentUid = "",
             onClick = {},
             modifier = Modifier
                 .padding(16.dp)

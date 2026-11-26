@@ -6,15 +6,25 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "productos")
 data class ProductoEntidad (
-    @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
 
-    @ColumnInfo(name = "firestore_id")
-    val firestoreId: String = "",
+    // Identificadores
+    @PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String,
 
-    @ColumnInfo(name = "autor_uid")
-    val autorUid: String = "",
+    @ColumnInfo(name = "comunidad_id")
+    val comunidadId: String = "",
 
+    @ColumnInfo(name = "vendedor_uid")
+    val vendedorUid: String = "",
+
+    @ColumnInfo(name = "vendedor_nombre")
+    val vendedorNombre: String = "",
+
+    @ColumnInfo(name = "comprador_uid")
+    val compradorUid: String = "",
+
+    // Valores del producto
     @ColumnInfo(name = "titulo")
     val titulo: String,
 
@@ -45,14 +55,45 @@ data class ProductoEntidad (
     @ColumnInfo(name = "estado_uso")
     val estadoUso: String = "",
 
+    @ColumnInfo(name = "fotos")
+    val fotosSerializadas: String = "",
+
     @ColumnInfo(name = "estado")
     val estado: String = "DISPONIBLE",
 
-//    @ColumnInfo(name = "image_res")
-//    val imagenRes: Int? = null,
+    // Valores de compra y préstamo
+    @ColumnInfo(name = "comprador_nombre")
+    val compradorNombre: String = "",
 
-    @ColumnInfo(name = "imagen_url")
-    val imagenUrl: String? = null
+    @ColumnInfo(name = "comprador_piso")
+    val compradorPiso: String = "",
+
+    @ColumnInfo(name = "fecha_compra")
+    val fechaCompra: Long = 0L,
+
+    @ColumnInfo(name = "plazo_dias_entrega")
+    val plazoDiasEntrega: Int = 7,
+
+    @ColumnInfo(name = "dias_prestamo")
+    val diasPrestamo: Int = 7,
+
+    @ColumnInfo(name = "fecha_limite_entrega")
+    val fechaLimiteEntrega: Long = 0L,
+
+    @ColumnInfo(name = "vendedor_confirmo_entrega")
+    val vendedorConfirmoEntrega: Boolean = false,
+
+    @ColumnInfo(name = "comprador_confirmo_recepcion")
+    val compradorConfirmoRecepcion: Boolean = false,
+
+    @ColumnInfo(name = "motivo_conflicto")
+    val motivoConflicto: String = "",
+
+    @ColumnInfo(name = "fecha_devolucion")
+    val fechaDevolucion: String = "",
+
+    @ColumnInfo(name = "likes")
+    val likesSerializados: String = ""
 
 
 )

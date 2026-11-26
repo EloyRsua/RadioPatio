@@ -7,18 +7,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.radiopatio.comunidad.ComunidadRepository
-import com.example.radiopatio.data.producto.ProductoDao
-import com.example.radiopatio.data.producto.ProductoEntidad
 import com.example.radiopatio.informacionUsuario.Usuario
 import com.example.radiopatio.usuarios.UserRepository
 import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
+/**
+ * Estados posibles de la sincronización con Firestore (interfaz sellada).
+ */
+sealed interface EstadoActualizacion {
+    data object Inactivo : EstadoActualizacion
+    data object Actualizando : EstadoActualizacion
+    data class Error(val mensaje: String) : EstadoActualizacion
+}
 
 /**
  * UiState inmutable para la pantalla del Mercadillo.
@@ -31,9 +36,9 @@ data class MercadilloUiState(
     val comunidadActualId: String = "",
     val comunidadNombre: String = "",
     val usuarioActual: Usuario? = null,
+    val currentUid: String = "",
     val productosTotales: List<Producto> = emptyList(),
-    val cargando: Boolean = true,
-    val errorMensaje: String? = null
+    val actualizacion: EstadoActualizacion = EstadoActualizacion.Inactivo
 ) {
     /**
      * Se recalcula automáticamente y aplica:
@@ -45,6 +50,8 @@ data class MercadilloUiState(
      */
     val productosFiltrados: List<Producto>
         get() = productosTotales.filter { producto ->
+            val activoEnFeed = producto.estado != EstadoProducto.VENDIDO &&
+                    producto.estado != EstadoProducto.DEVUELTO
             val coincideComunidad = comunidadActualId.isBlank() ||
                     producto.comunidadId.isBlank() ||
                     producto.comunidadId == comunidadActualId
@@ -53,7 +60,7 @@ data class MercadilloUiState(
             val coincideCategoria = categoriaSeleccionada == CategoriaProducto.TODOS ||
                     producto.categoriaProducto == categoriaSeleccionada
 
-            coincideComunidad && coincideTexto && coincideModo && coincideCategoria
+            activoEnFeed && coincideComunidad && coincideTexto && coincideModo && coincideCategoria
         }
 }
 
@@ -62,26 +69,18 @@ data class MercadilloUiState(
  * como con repositorios de Firestore y Comunidad.
  */
 class MercadilloViewModelFactory(
-    private val productoDao: ProductoDao? = null,
-    private val userRepository: UserRepository = UserRepository(),
-    private val mercadilloRepository: MercadilloRepository = MercadilloRepository(),
-    private val comunidadRepository: ComunidadRepository = ComunidadRepository()
+    private val mercadilloRepository: MercadilloRepository,
+    private val userRepository: UserRepository,
+    private val comunidadRepository: ComunidadRepository
 ) : ViewModelProvider.Factory {
 
-    constructor(productoDao: ProductoDao, userRepository: UserRepository) : this(
-        productoDao = productoDao,
-        userRepository = userRepository,
-        mercadilloRepository = MercadilloRepository(),
-        comunidadRepository = ComunidadRepository()
-    )
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MercadilloViewModel::class.java)) {
             return MercadilloViewModel(
-                productoDao = productoDao,
-                userRepository = userRepository,
                 mercadilloRepository = mercadilloRepository,
+                userRepository = userRepository,
                 comunidadRepository = comunidadRepository
             ) as T
         }
@@ -95,102 +94,80 @@ class MercadilloViewModelFactory(
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MercadilloViewModel(
-    private val productoDao: ProductoDao? = null,
-    private val userRepository: UserRepository = UserRepository(),
-    private val mercadilloRepository: MercadilloRepository = MercadilloRepository(),
-    private val comunidadRepository: ComunidadRepository = ComunidadRepository()
+    private val mercadilloRepository: MercadilloRepository,
+    private val userRepository: UserRepository,
+    private val comunidadRepository: ComunidadRepository
 ) : ViewModel() {
 
-    var uiState by mutableStateOf(MercadilloUiState())
-        private set
-        
     private val auth = FirebaseAuth.getInstance()
 
+    var uiState by mutableStateOf(
+        MercadilloUiState(currentUid = auth.currentUser?.uid.orEmpty())
+    )
+        private set
+
     init {
-        if (productoDao != null) {
-            cargarProductosDesdeRoom()
-        }
-        observarMercadilloEnTiempoReal()
+        observarProductosDesdeRoom()
+        observarUsuarioYComunidad()
     }
 
-    private fun cargarProductosDesdeRoom() {
-        if (productoDao == null) return
+    private fun observarProductosDesdeRoom(){
         viewModelScope.launch {
-            val listaEntidades = withContext(Dispatchers.IO) {
-                productoDao.obtenerProductos()
-            }
-            if (uiState.productosTotales.isEmpty() && listaEntidades.isNotEmpty()) {
-                actualizarUiStateConEntidades(listaEntidades)
+            mercadilloRepository.observarProductos().collect { productos ->
+                uiState = uiState.copy(productosTotales = productos)
             }
         }
     }
 
-    private fun observarMercadilloEnTiempoReal() {
+    private fun observarUsuarioYComunidad() {
         viewModelScope.launch {
             userRepository.observarUsuarioActual()
                 .flatMapLatest { usuario ->
                     val comId = usuario?.comunidadId.orEmpty()
                     if (comId.isBlank()) {
-                        flowOf(Triple(usuario, "", emptyList<Producto>()))
+                        flowOf(Pair(usuario, ""))
                     } else {
-                        combine(
-                            comunidadRepository.observarComunidadPorId(comId),
-                            mercadilloRepository.observarProductosDeComunidad(comId)
-                        ) { comunidad, productos ->
+                        comunidadRepository.observarComunidadPorId(comId).map { comunidad ->
                             val nombreCom = comunidad?.nombre?.takeIf { it.isNotBlank() }
                                 ?: usuario?.comunidadNombre
                                 ?: ""
-                            Triple(usuario, nombreCom, productos)
+                            Pair(usuario, nombreCom)
                         }
                     }
                 }
-                .collect { (usuario, nombreCom, productos) ->
+                .collect { (usuario, nombreCom) ->
                     val comId = usuario?.comunidadId.orEmpty()
+                    val cambioComunidad = comId != uiState.comunidadActualId
+
                     uiState = uiState.copy(
+                        usuarioActual = usuario,
                         comunidadActualId = comId,
                         comunidadNombre = nombreCom,
-                        usuarioActual = usuario,
-                        productosTotales = productos,
-                        cargando = false
+                        currentUid = auth.currentUser?.uid.orEmpty()
                     )
 
-                    // Sincronizamos la caché local Room en segundo plano
-                    if (productoDao != null && productos.isNotEmpty()) {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            try {
-                                productoDao.obtenerProductos().forEach { productoDao.eliminar(it) }
-                                productos.forEach { prod ->
-                                    productoDao.insertar(
-                                        ProductoEntidad(
-                                            firestoreId = prod.firestoreId,
-                                            autorUid = prod.autorUid,
-                                            titulo = prod.titulo,
-                                            descripcion = prod.descripcion,
-                                            precio = prod.precio,
-                                            ubicacion = prod.ubicacionYTiempo.substringBefore("·").trim(),
-                                            fechaCreacion = prod.timestamp,
-                                            categoria = prod.categoriaProducto.name,
-                                            esParaComprar = prod.esParaComprar,
-                                            marca = prod.marca,
-                                            color = prod.color,
-                                            estadoUso = prod.estadoUso,
-                                            estado = prod.estado.name,
-                                            imagenUrl = prod.imagenUrl
-                                        )
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                // Ignorar errores menores de caché
-                            }
-                        }
+                    if (cambioComunidad || uiState.productosTotales.isEmpty()) {
+                        actualizarProductos()
                     }
                 }
         }
     }
-    
-    private fun actualizarUiStateConEntidades(listaEntidades: List<ProductoEntidad>) {
-        val listaProductos = listaEntidades.map { mercadilloRepository.entidadToProducto(it) }
-        uiState = uiState.copy(productosTotales = listaProductos)
+
+    fun actualizarProductos() {
+        val comId = uiState.comunidadActualId
+        viewModelScope.launch {
+            uiState = uiState.copy(actualizacion = EstadoActualizacion.Actualizando)
+            try {
+                mercadilloRepository.actualizarProductos(comId)
+                uiState = uiState.copy(actualizacion = EstadoActualizacion.Inactivo)
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    actualizacion = EstadoActualizacion.Error(
+                        e.localizedMessage ?: "Error al actualizar el mercadillo"
+                    )
+                )
+            }
+        }
     }
 
     fun onTextoBusquedaChange(nuevoTexto: String) {
@@ -206,7 +183,9 @@ class MercadilloViewModel(
     }
 
     fun onLimpiarError() {
-        uiState = uiState.copy(errorMensaje = null)
+        if(uiState.actualizacion is EstadoActualizacion.Error){
+            uiState = uiState.copy(actualizacion = EstadoActualizacion.Inactivo)
+        }
     }
 
     /**
@@ -227,11 +206,15 @@ class MercadilloViewModel(
         onSuccess: () -> Unit
     ) {
         viewModelScope.launch {
-            val resultadoUsuario = userRepository.getCurrentUserData()
-            val usuario = resultadoUsuario.getOrNull()
+            val usuario = userRepository.getCurrentUserData().getOrNull() ?: uiState.usuarioActual
             val comId = usuario?.comunidadId.orEmpty().ifBlank { uiState.comunidadActualId }
+
             if (comId.isBlank()) {
-                uiState = uiState.copy(errorMensaje = "Debes pertenecer a una comunidad para publicar anuncios.")
+                uiState = uiState.copy(
+                    actualizacion = EstadoActualizacion.Error(
+                        "Debes pertenecer a una comunidad para publicar anuncios."
+                    )
+                )
                 return@launch
             }
 
@@ -240,20 +223,15 @@ class MercadilloViewModel(
             val nombreVendedor = usuario?.nombre.orEmpty()
 
             val nuevoProducto = Producto(
-                id = 0,
                 titulo = titulo,
                 descripcion = descripcion,
                 precio = precio,
-                ubicacionYTiempo = ubicacionReal,
+                ubicacion = ubicacionReal,
                 categoriaProducto = categoria,
                 esParaComprar = esParaComprar,
-                imagenRes = null,
-                imagenUrl = fotosUris.firstOrNull(),
-                firestoreId = "",
                 comunidadId = comId,
                 vendedorUid = uid,
                 vendedorNombre = nombreVendedor,
-                autorUid = uid,
                 marca = marca,
                 color = color,
                 estadoUso = estadoUso,
@@ -264,19 +242,18 @@ class MercadilloViewModel(
                 likes = emptyList()
             )
 
-            val resultado = mercadilloRepository.crearProducto(
+            mercadilloRepository.crearProducto(
                 producto = nuevoProducto,
                 comunidadId = comId,
                 vendedorUid = uid,
                 vendedorNombre = nombreVendedor
-
-            )
-
-            resultado.onSuccess {
+            ).onSuccess {
                 onSuccess()
             }.onFailure { e ->
                 uiState = uiState.copy(
-                    errorMensaje = e.localizedMessage ?: "Error al publicar el producto"
+                    actualizacion = EstadoActualizacion.Error(
+                        e.localizedMessage ?: "Error al publicar el producto"
+                    )
                 )
             }
         }
@@ -287,24 +264,17 @@ class MercadilloViewModel(
      */
     fun onEliminarProducto(producto: Producto) {
         val comId = producto.comunidadId.ifBlank { uiState.comunidadActualId }
-        val firestoreId = producto.firestoreId
-        if (comId.isBlank() || firestoreId.isBlank()) return
+
+        if (comId.isBlank() || producto.id.isBlank()) return
         viewModelScope.launch {
-            val resultado = mercadilloRepository.eliminarProducto(producto, comId)
-            
-            resultado.onSuccess {
-                if (productoDao != null) {
-                    withContext(Dispatchers.IO) {
-                        productoDao.obtenerProductos()
-                            .find { it.firestoreId == firestoreId }
-                            ?.let { productoDao.eliminar(it) }
-                    }
+            mercadilloRepository.eliminarProducto(producto, comId)
+                .onFailure { e ->
+                    uiState = uiState.copy(
+                        actualizacion = EstadoActualizacion.Error(
+                            e.localizedMessage ?: "Error al eliminar el producto"
+                        )
+                    )
                 }
-            }.onFailure { e ->
-                uiState = uiState.copy(
-                    errorMensaje = e.localizedMessage ?: "Error al eliminar el producto"
-                )
-            }
         }
     }
 
@@ -314,11 +284,11 @@ class MercadilloViewModel(
     fun toggleFavorito(producto: Producto) {
         val comId = producto.comunidadId.ifBlank { uiState.comunidadActualId }
         val uid = auth.currentUser?.uid.orEmpty()
-        if (comId.isBlank() || producto.firestoreId.isBlank() || uid.isBlank()) return
+        if (comId.isBlank() || producto.id.isBlank() || uid.isBlank()) return
         viewModelScope.launch {
             mercadilloRepository.toggleMeGustaProducto(
                 comunidadId = comId,
-                productoFirestoreId = producto.firestoreId,
+                productoId = producto.id,
                 usuarioUid = uid
             )
         }

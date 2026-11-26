@@ -339,7 +339,7 @@ class DetalleProductoViewModel(
         viewModelScope.launch {
             mercadilloRepository.toggleMeGustaProducto(
                 comunidadId = comId,
-                productoFirestoreId = prod.firestoreId,
+                productoId = prod.firestoreId,
                 usuarioUid = uid
             )
         }
