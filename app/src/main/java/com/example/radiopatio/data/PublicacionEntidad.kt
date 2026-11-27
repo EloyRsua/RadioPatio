@@ -49,6 +49,9 @@ data class PublicacionEntidad(
     @ColumnInfo(name = "me_gusta")
     val meGusta: Int,
 
+    @ColumnInfo(name = "likes_uids", defaultValue = "")
+    val likesUids: String = "",     // Ids de los vecinos que han dado me gusta
+
     @ColumnInfo(name = "comentarios")
     val comentarios: Int,
 

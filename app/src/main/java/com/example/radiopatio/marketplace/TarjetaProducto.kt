@@ -52,6 +52,8 @@ import com.example.radiopatio.ui.theme.VerdePrecio
 import com.example.radiopatio.ui.theme.VerdePrincipal
 import com.example.radiopatio.ui.theme.VerdeSecundario
 import com.google.firebase.auth.FirebaseAuth
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 
 /**
  * Componente visual para la tarjeta de un producto en el mercadillo
@@ -59,14 +61,14 @@ import com.google.firebase.auth.FirebaseAuth
 @Composable
 fun TarjetaProducto(
     producto: Producto,
+    currentUid: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onEliminarClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onFavoritoClick: () -> Unit = {},
 ) {
-    val currentUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-    val esMiProducto = currentUid.isNotBlank() &&
-            (producto.autorUid == currentUid || producto.vendedorUid == currentUid)
-
+    val esMiProducto = currentUid.isNotBlank() && (producto.vendedorUid == currentUid)
+    val esFavorito = producto.esFavoritoDe(currentUid)
     var mostrarDialogoEliminar by remember { mutableStateOf(false) }
 
     val colorBorde = if (esMiProducto) VerdeSecundario else BordeGris
@@ -93,13 +95,6 @@ fun TarjetaProducto(
             if (!producto.imagenUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = producto.imagenUrl,
-                    contentDescription = producto.titulo,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else if (producto.imagenRes != null) {
-                Image(
-                    painter = painterResource(id = producto.imagenRes),
                     contentDescription = producto.titulo,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -159,6 +154,71 @@ fun TarjetaProducto(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
+                    }
+                }
+            }
+
+            // Contador y Botón de Favorito en la esquina superior derecha
+            val totalLikes = producto.likes.size
+
+            if (esMiProducto) {
+                // Si es mi producto, solo muestro los likes que lleva (si tiene alguno), sin botón de click
+                if (totalLikes > 0) {
+                    Surface(
+                        color = Color.White.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Favorite,
+                                contentDescription = null,
+                                tint = Color(0xFFE53935),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "$totalLikes",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AzulPrincipal
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Si es producto de otro vecino, es un botón interactivo con icono + contador
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.9f))
+                        .clickable { onFavoritoClick() }
+                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = if (esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
+                            tint = if (esFavorito) Color(0xFFE53935) else Color.Gray,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        if (totalLikes > 0) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "$totalLikes",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (esFavorito) Color(0xFFE53935) else Color.DarkGray
+                            )
+                        }
                     }
                 }
             }
@@ -258,7 +318,16 @@ fun TarjetaProducto(
 fun TarjetaProductoPreview() {
     RadioPatioTheme {
         TarjetaProducto(
-            producto = Producto(1, "Mesa auxiliar", "15€", "1ºA - Hace 1h", CategoriaProducto.MUEBLES, true),
+            producto = Producto(
+                id = "1",
+                titulo = "Mesa auxiliar",
+                precio = "15€",
+                ubicacion = "1ºA",
+                fechaCreacion = System.currentTimeMillis() - 3600_000L,
+                categoriaProducto = CategoriaProducto.MUEBLES,
+                esParaComprar = true
+            ),
+            currentUid = "",
             onClick = {},
             modifier = Modifier
                 .padding(16.dp)

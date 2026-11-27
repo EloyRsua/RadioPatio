@@ -42,23 +42,30 @@ fun MercadilloScreen(
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as RadioPatioApplication
-    val userRepository = remember { UserRepository() }
 
     val viewModel: MercadilloViewModel = viewModel(
-        factory = MercadilloViewModelFactory(app.database.productoDao(), userRepository)
+        factory = MercadilloViewModelFactory(
+            mercadilloRepository = app.mercadilloRepository,
+            userRepository = app.userRepository,
+            comunidadRepository = app.comunidadRepository
+        )
     )
 
     val uiState = viewModel.uiState
+    val cargando = uiState.actualizacion is EstadoActualizacion.Actualizando &&
+            uiState.productosTotales.isEmpty()
 
-    LaunchedEffect(uiState.errorMensaje) {
-        uiState.errorMensaje?.let { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+    LaunchedEffect(uiState.actualizacion) {
+        val estado = uiState.actualizacion
+        if (estado is EstadoActualizacion.Error) {
+            Toast.makeText(context, estado.mensaje, Toast.LENGTH_LONG).show()
             viewModel.onLimpiarError()
         }
     }
 
     MercadilloContent(
         productos = uiState.productosFiltrados,
+        currentUid = uiState.currentUid,
         textoBusqueda = uiState.textoBusqueda,
         onTextoBusquedaChange = { viewModel.onTextoBusquedaChange(it) },
         esModoComprar = uiState.esModoComprar,
@@ -71,9 +78,12 @@ fun MercadilloScreen(
             Toast.makeText(context, "Artículo eliminado", Toast.LENGTH_SHORT).show()
         },
         onSubirProducto = onIrACrearProducto,
+        onToggleFavorito = { producto ->
+            viewModel.toggleFavorito(producto)
+        },
         nombreComunidad = uiState.comunidadNombre,
         tieneComunidad = uiState.comunidadActualId.isNotBlank(),
-        cargando = uiState.cargando,
+        cargando = cargando,
         onIrAComunidad = onIrAComunidad
     )
 }
@@ -86,6 +96,7 @@ fun MercadilloScreen(
 @Composable
 fun MercadilloContent(
     productos: List<Producto>,
+    currentUid: String = "",
     textoBusqueda: String,
     onTextoBusquedaChange: (String) -> Unit,
     esModoComprar: Boolean,
@@ -95,6 +106,7 @@ fun MercadilloContent(
     onProductoClick: (String) -> Unit,
     onEliminarProducto: (Producto) -> Unit = {},
     onSubirProducto: () -> Unit = {},
+    onToggleFavorito: (Producto) -> Unit = {},
     nombreComunidad: String = "",
     tieneComunidad: Boolean = true,
     cargando: Boolean = false,
@@ -199,11 +211,10 @@ fun MercadilloContent(
                                     for (producto in fila) {
                                         TarjetaProducto(
                                             producto = producto,
-                                            onClick = {
-                                                val idDestino = producto.firestoreId.ifBlank { producto.id.toString() }
-                                                onProductoClick(idDestino)
-                                            },
+                                            currentUid = currentUid,
+                                            onClick = { onProductoClick(producto.id) },
                                             onEliminarClick = { onEliminarProducto(producto) },
+                                            onFavoritoClick = { onToggleFavorito(producto) },
                                             modifier = Modifier.weight(1f)
                                         )
                                     }
@@ -370,8 +381,26 @@ fun MercadilloPreview() {
     RadioPatioTheme {
         MercadilloContent(
             productos = listOf(
-                Producto(1, "Mesa auxiliar", "15€", "1ºA - Hace 1h", CategoriaProducto.MUEBLES, true, comunidadId = "c1"),
-                Producto(2, "Altavoz BT", "30€", "2ºC - Hace 2h", CategoriaProducto.ELECTRONICA, true, comunidadId = "c1"),
+                Producto(
+                    id = "1",
+                    comunidadId = "c1",
+                    titulo = "Mesa auxiliar",
+                    precio = "15€",
+                    ubicacion = "1ºA",
+                    fechaCreacion = System.currentTimeMillis() - 3600_000L,
+                    categoriaProducto = CategoriaProducto.MUEBLES,
+                    esParaComprar = true
+                ),
+                Producto(
+                    id = "2",
+                    comunidadId = "c1",
+                    titulo = "Altavoz BT",
+                    precio = "30€",
+                    ubicacion = "2ºC",
+                    fechaCreacion = System.currentTimeMillis() - 7200_000L,
+                    categoriaProducto = CategoriaProducto.ELECTRONICA,
+                    esParaComprar = true
+                )
             ),
             textoBusqueda = "",
             onTextoBusquedaChange = {},

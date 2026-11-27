@@ -93,7 +93,8 @@ fun PaginaPrincipal(
         onIrAComunidad = onIrAComunidad,
         onIrANotificaciones = onIrANotificaciones,
         notificacionesNoLeidas = notificacionesNoLeidas,
-        onEliminarPublicacion = viewModel::eliminarPublicacion
+        onEliminarPublicacion = viewModel::eliminarPublicacion,
+        onToggleMeGusta = viewModel::toggleMeGusta
     )
 }
 
@@ -107,11 +108,15 @@ fun PaginaPrincipalContent(
     onIrAComunidad: () -> Unit = {},
     onIrANotificaciones: () -> Unit = {},
     notificacionesNoLeidas: Int = 0,
-    onEliminarPublicacion: (PublicacionEntidad) -> Unit = {}
+    onEliminarPublicacion: (PublicacionEntidad) -> Unit = {},
+    onToggleMeGusta: (PublicacionEntidad) -> Unit = {}
 ) {
     var mostrarBuscador by remember { mutableStateOf(false) }
-    var publicacionSeleccionada by remember { mutableStateOf<PublicacionEntidad?>(null) }
 
+    var publicacionSeleccionadaId by remember { mutableStateOf<String?>(null) }
+    val publicacionSeleccionada = uiState.publicacionesFiltradas.find {
+        it.firestoreId.ifBlank { "local-${it.id}" } == publicacionSeleccionadaId
+    }
     val publicacionesVisibles = uiState.publicacionesFiltradas
     val uidActual = uiState.usuarioActual?.uid.orEmpty()
     val nombreUsuarioActual = uiState.usuarioActual?.nombre.orEmpty()
@@ -261,6 +266,8 @@ fun PaginaPrincipalContent(
                                         .fillMaxWidth()
                                         .padding(horizontal = 16.dp)
                                 ) {
+                                    val leGusta = uidActual.isNotBlank() && entidad.likesUids.split(",").contains(uidActual)
+
                                     TarjetaPublicacion(
                                         publicacion = Publicacion(
                                             autor = entidad.autor,
@@ -273,11 +280,15 @@ fun PaginaPrincipalContent(
                                         avatarUrl = avatarAutor,
                                         seedAvatar = seedAutor,
                                         esMiPublicacion = esMiPublicacion,
+                                        leGusta = leGusta,
+                                        onMeGustaClick = {
+                                            onToggleMeGusta(entidad)
+                                        },
                                         onEliminarClick = {
                                             onEliminarPublicacion(entidad)
                                         },
                                         modifier = Modifier.clickable {
-                                            publicacionSeleccionada = entidad
+                                            publicacionSeleccionadaId = entidad.firestoreId.ifBlank { "local-${entidad.id}" }
                                         }
                                     )
                                 }
@@ -294,8 +305,12 @@ fun PaginaPrincipalContent(
             PublicacionDetalleDialog(
                 publicacion = entidad,
                 avatarUrl = if (esMioDetalle) fotoUsuarioActual else "",
+                usuarioUidActual = uidActual,
+                onMeGustaClick = {
+                    onToggleMeGusta(entidad)
+                },
                 onDismiss = {
-                    publicacionSeleccionada = null
+                    publicacionSeleccionadaId = null
                 }
             )
         }
@@ -458,9 +473,9 @@ private fun CampoCrearPublicacion(
 
 @Composable
 private fun SinComunidadTablonCard(
-    tieneSolicitudPendiente: Boolean = false,
     onIrAComunidad: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tieneSolicitudPendiente: Boolean = false,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),

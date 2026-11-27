@@ -17,6 +17,7 @@ object Vecinos
 // Pantalla eventos
 @Serializable
 object Eventos
+
 @Serializable
 object Publicar
 
@@ -36,7 +37,7 @@ object MisProductos
 object CrearProducto
 
 @Serializable
-data class DetalleProducto(val firestoreId: String)
+data class DetalleProducto(val productoId: String)
 
 @Serializable
 object Notificaciones
@@ -56,3 +57,6 @@ data class CrearComunidad(
 
 @Serializable
 object ChatDirecto
+
+@Serializable
+object MisFavoritos

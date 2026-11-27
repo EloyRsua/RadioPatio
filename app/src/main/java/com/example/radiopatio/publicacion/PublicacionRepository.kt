@@ -5,6 +5,7 @@ import com.example.radiopatio.comunidad.migrarDocumentosRaizAComunidad
 import com.example.radiopatio.comunidad.subcoleccionComunidad
 import com.example.radiopatio.data.PublicacionEntidad
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.example.radiopatio.notificacion.NotificacionesHelper
 
 /**
  * Repositorio para gestionar las publicaciones del tablón en tiempo real con Cloud Firestore
@@ -35,6 +37,9 @@ class PublicacionRepository {
             ?: autor.trim().firstOrNull()?.uppercase()
             ?: "V"
 
+        @Suppress("UNCHECKED_CAST")
+        val listaLikes = doc.get("likes") as? List<String> ?: emptyList()
+
         return PublicacionEntidad(
             firestoreId = doc.id,
             comunidadId = comunidadId,
@@ -44,6 +49,7 @@ class PublicacionRepository {
             tiempoYUbica = doc.getString("tiempoYUbica") ?: "Comunidad",
             contenido = doc.getString("contenido") ?: "",
             meGusta = (doc.getLong("meGusta") ?: 0L).toInt(),
+            likesUids = listaLikes.joinToString(","),       // empaquetamos los uids de los usuarios que dieron like
             comentarios = (doc.getLong("comentarios") ?: 0L).toInt(),
             timestamp = doc.getLong("timestamp") ?: 0L
         )
@@ -156,6 +162,7 @@ class PublicacionRepository {
                 "tiempoYUbica" to entidad.tiempoYUbica,
                 "contenido" to entidad.contenido,
                 "meGusta" to entidad.meGusta,
+                "likes" to emptyList<String>(),
                 "comentarios" to entidad.comentarios,
                 "timestamp" to entidad.timestamp
             )
@@ -190,6 +197,76 @@ class PublicacionRepository {
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("PublicacionRepository", "Error eliminando publicación en Firestore", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Da o quita el me gusta del usuario en la publicación
+     */
+    suspend fun toggleMeGusta(
+        comunidadId: String,
+        publicacionFirestoreId: String,
+        usuarioUid: String
+    ): Result<Boolean> {
+        if (comunidadId.isBlank() || publicacionFirestoreId.isBlank() || usuarioUid.isBlank()) {
+            return Result.failure(IllegalArgumentException("Faltan datos para reaccionar a la publicación."))
+        }
+
+        return try {
+            val docRef = db.subcoleccionComunidad(comunidadId, COLECCION_PUBLICACIONES)
+                .document(publicacionFirestoreId)
+
+            val snapshot = docRef.get().await()
+            val autorUid = snapshot.getString("autorUid") ?: ""
+            val contenido = snapshot.getString("contenido").orEmpty().take(30)
+            val resumen = if (contenido.length == 30) "$contenido..." else contenido
+
+            // Si es el propio autor, no permitir darse auto-like
+            if (autorUid == usuarioUid) {
+                return Result.success(false)
+            }
+
+
+            @Suppress("UNCHECKED_CAST")
+            val likes = snapshot.get("likes") as? List<String> ?: emptyList()
+            val yaLeGusta = likes.contains(usuarioUid)
+
+            if (yaLeGusta) {
+                // Quitar like (elimina el uid del array y resta 1 al contador)
+                docRef.update(
+                    mapOf(
+                        "likes" to FieldValue.arrayRemove(usuarioUid),
+                        "meGusta" to FieldValue.increment(-1)
+                    )
+                ).await()
+                Result.success(false)
+            } else {
+                // Dar like (añade el uid al array y suma 1 al contador)
+                docRef.update(
+                    mapOf(
+                        "likes" to FieldValue.arrayUnion(usuarioUid),
+                        "meGusta" to FieldValue.increment(1)
+                    )
+                ).await()
+
+                if (autorUid.isNotBlank()) {
+                    NotificacionesHelper.enviarNotificacion(
+                        destinatarioUid = autorUid,
+                        titulo = "Nuevo me gusta en tu publicación",
+                        mensaje = 
+                        if (resumen.isNotBlank()) {
+                            "A un vecino le ha gustado tu aviso: \"$resumen\"."
+                        } else {
+                            "A un vecino le ha gustado tu publicación en el tablón."
+                        }
+                    )
+                }
+
+                Result.success(true)
+            }
+        } catch (e: Exception) {
+            Log.e("PublicacionRepository", "Error en toggleMeGusta", e)
             Result.failure(e)
         }
     }

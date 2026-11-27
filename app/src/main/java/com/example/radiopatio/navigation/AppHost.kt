@@ -29,6 +29,7 @@ import com.example.radiopatio.marketplace.MercadilloViewModelFactory
 import com.example.radiopatio.mensajeria.ChatScreen
 import com.example.radiopatio.mensajeria.ChatViewModel
 import com.example.radiopatio.mensajeria.ChatViewModelFactory
+import com.example.radiopatio.marketplace.MisFavoritosScreen
 import com.example.radiopatio.misProductos.MisProductosScreen
 import com.example.radiopatio.notificacion.NotificacionesScreen
 import com.example.radiopatio.publicacion.PaginaPrincipal
@@ -269,7 +270,7 @@ fun AppNavHost(
         composable<DetalleProducto> { backStackEntry ->
             val ruta = backStackEntry.toRoute<DetalleProducto>()
             DetalleProductoScreen(
-                firestoreId = ruta.firestoreId,
+                productoId = ruta.productoId,
                 chatViewModel = chatViewModel,
                 onIrAChat = {
                     if (navController.currentBackStackEntry?.destination?.hasRoute<DetalleProducto>() == true) {
@@ -300,9 +301,11 @@ fun AppNavHost(
 
         // Pantalla para la creación de productos
         composable<CrearProducto> {
-            val userRepo = remember { UserRepository() }
             val mercadilloViewModel: MercadilloViewModel = viewModel(
-                factory = MercadilloViewModelFactory(app.database.productoDao(), userRepo)
+                factory = MercadilloViewModelFactory(
+                    mercadilloRepository = app.mercadilloRepository,
+                    userRepository = app.userRepository,
+                    comunidadRepository = app.comunidadRepository)
             )
 
             CrearProductoScreen(
@@ -393,6 +396,9 @@ fun AppNavHost(
                 },
                 onIrAMisProductos = {
                     navController.navigate(MisProductos)
+                },
+                onIrAMisFavoritos = {
+                    navController.navigate(MisFavoritos)
                 }
             )
         }
@@ -402,6 +408,15 @@ fun AppNavHost(
                 onVolver = {
                     navController.popBackStack()
                 },
+                onProductoClick = { firestoreId ->
+                    navController.navigate(DetalleProducto(firestoreId))
+                }
+            )
+        }
+
+        composable<MisFavoritos> {
+            MisFavoritosScreen(
+                onVolver = { navController.popBackStack() },
                 onProductoClick = { firestoreId ->
                     navController.navigate(DetalleProducto(firestoreId))
                 }

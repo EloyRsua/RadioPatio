@@ -32,6 +32,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.radiopatio.mensajeria.ChatViewModel
 import com.example.radiopatio.mensajeria.Conversacion
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.ui.platform.LocalContext
+import com.example.radiopatio.RadioPatioApplication
 
 // Colores de RadioPatio
 private val AzulPrincipal = Color(0xFF133E54)
@@ -45,14 +49,22 @@ private val FondoApp = Color(0xFFF8FAFC)
  */
 @Composable
 fun DetalleProductoScreen(
-    firestoreId: String,
+    productoId: String,
     chatViewModel: ChatViewModel,
     onIrAChat: () -> Unit,
     onVolver: () -> Unit,
-    viewModel: DetalleProductoViewModel = viewModel(
-        factory = DetalleProductoViewModelFactory(firestoreId)
-    )
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as RadioPatioApplication
+
+    val viewModel: DetalleProductoViewModel = viewModel(
+        factory = DetalleProductoViewModelFactory(
+            productoId = productoId,
+            mercadilloRepository = app.mercadilloRepository,
+            userRepository = app.userRepository
+        )
+    )
+
     val uiState = viewModel.uiState
 
     DetalleProductoContent(
@@ -62,14 +74,15 @@ fun DetalleProductoScreen(
         onConfirmarEntregaVendedor = { viewModel.onConfirmarEntregaVendedor() },
         onConfirmarRecepcionComprador = { viewModel.onConfirmarRecepcionComprador() },
         onReportarConflicto = { motivo -> viewModel.onReportarConflicto(motivo) },
+        onToggleFavorito = { viewModel.toggleFavorito() },
         onContactarVendedor = {
             val prod = uiState.producto ?: return@DetalleProductoContent
             val precioTexto = if (prod.esParaComprar) prod.precio else "Préstamo (${prod.diasPrestamo} días)"
             val imagenUrl = prod.fotos.firstOrNull().orEmpty()
-            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.autorUid }
+            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.vendedorUid }
 
             chatViewModel.abrirChatConProducto(
-                productoId = prod.firestoreId.ifBlank { firestoreId },
+                productoId = prod.id.ifBlank { productoId },
                 productoTitulo = prod.titulo,
                 productoPrecio = precioTexto,
                 productoImagenUrl = imagenUrl,
@@ -86,10 +99,10 @@ fun DetalleProductoScreen(
             if (compUid.isBlank()) return@DetalleProductoContent
             val precioTexto = if (prod.esParaComprar) prod.precio else "Préstamo (${prod.diasPrestamo} días)"
             val imagenUrl = prod.fotos.firstOrNull().orEmpty()
-            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.autorUid }
+            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.vendedorUid }
 
             chatViewModel.abrirChatConProducto(
-                productoId = prod.firestoreId.ifBlank { firestoreId },
+                productoId = prod.id.ifBlank { productoId },
                 productoTitulo = prod.titulo,
                 productoPrecio = precioTexto,
                 productoImagenUrl = imagenUrl,
@@ -119,7 +132,8 @@ fun DetalleProductoContent(
     onConfirmarRecepcionComprador: () -> Unit,
     onReportarConflicto: (String) -> Unit,
     onContactarVendedor: () -> Unit = {},
-    onContactarInteresado: (String, String) -> Unit = { _, _ -> }
+    onContactarInteresado: (String, String) -> Unit = { _, _ -> },
+    onToggleFavorito: () -> Unit
 ) {
     var mostrarDialogoConfirmarCompra by remember { mutableStateOf(false) }
     var mostrarDialogoConflicto by remember { mutableStateOf(false) }
@@ -136,6 +150,60 @@ fun DetalleProductoContent(
                             contentDescription = "Volver",
                             tint = AzulPrincipal
                         )
+                    }
+                },
+                actions = {
+                    val producto = uiState.producto
+
+                    if (producto != null) {
+                        val totalLikes = producto.likes.size
+
+                        if (uiState.esPropietario) {
+                            // Tu propio artículo: mostramos solo el contador informativo sin click
+                            if (totalLikes > 0) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(end = 16.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Favorite,
+                                        contentDescription = null,
+                                        tint = Color(0xFFE53935),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "$totalLikes",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = AzulPrincipal
+                                    )
+                                }
+                            }
+                        } else {
+                            // Artículo de otro vecino: botón interactivo
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                if (totalLikes > 0) {
+                                    Text(
+                                        text = "$totalLikes",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = if (uiState.esFavorito) Color(0xFFE53935) else AzulPrincipal
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                }
+                                IconButton(onClick = onToggleFavorito) {
+                                    Icon(
+                                        imageVector = if (uiState.esFavorito) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                        contentDescription = if (uiState.esFavorito) "Quitar de favoritos" else "Añadir a favoritos",
+                                        tint = if (uiState.esFavorito) Color(0xFFE53935) else AzulPrincipal
+                                    )
+                                }
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -353,6 +421,7 @@ fun DetalleProductoContent(
 
                                     Spacer(modifier = Modifier.height(10.dp))
 
+                                    // Ficha destacada con el vecino comprador y su puerta
                                     val compradorTexto = producto.compradorNombre.ifBlank { "Un vecino" }
                                     val pisoTexto = if (producto.compradorPiso.isNotBlank()) " · ${producto.compradorPiso}" else ""
 
@@ -688,7 +757,7 @@ fun DetalleProductoContentPreview() {
             producto = Producto(
                 titulo = "Taladro Percutor Bosch",
                 precio = "35€",
-                ubicacionYTiempo = "Portal 2, 3ºB",
+                ubicacion = "Portal 2, 3ºB",
                 categoriaProducto = CategoriaProducto.HERRAMIENTAS,
                 descripcion = "En perfecto estado, incluye brocas y maletín.",
                 marca = "Bosch",
@@ -701,6 +770,7 @@ fun DetalleProductoContentPreview() {
         onComprarOPrestar = {},
         onConfirmarEntregaVendedor = {},
         onConfirmarRecepcionComprador = {},
+        onToggleFavorito = {},
         onReportarConflicto = {}
     )
 }
