@@ -5,6 +5,7 @@ import com.example.radiopatio.comunidad.subcoleccionComunidad
 import com.example.radiopatio.data.producto.ProductoDao
 import com.example.radiopatio.data.producto.ProductoEntidad
 import com.example.radiopatio.notificacion.NotificacionesHelper
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
@@ -164,8 +165,7 @@ class MercadilloRepository(
         }
 
         return try {
-            val docRef = db.subcoleccionComunidad(comunidadId, COLECCION_PRODUCTOS)
-                .document(productoId)
+            val docRef = obtenerDocRefProducto(comunidadId, productoId)
 
             val snapshot = docRef.get().await()
 
@@ -363,6 +363,64 @@ class MercadilloRepository(
         }
     }
 
+    /**
+     * Busca un producto por ID en Firestore (primero en subcolección de comunidad,
+     * luego en colección raíz como fallback para productos existentes) y lo guarda en Room.
+     */
+    suspend fun refrescarProductoPorId(productoId: String, comunidadId: String? = null) {
+        if (productoId.isBlank()) return
+
+        try {
+            var docSnapshot: DocumentSnapshot? = null
+            var comIdEfectiva = comunidadId.orEmpty()
+
+            // 1. Probar en subcolección de la comunidad si se conoce
+            if (comIdEfectiva.isNotBlank()) {
+                val subDoc = db.subcoleccionComunidad(comIdEfectiva, COLECCION_PRODUCTOS)
+                    .document(productoId)
+                    .get()
+                    .await()
+                if (subDoc.exists()) {
+                    docSnapshot = subDoc
+                }
+            }
+
+            // 2. Si no se encontró, probar en la colección raíz (productos como el de la foto)
+            if (docSnapshot == null) {
+                val rootDoc = db.collection(COLECCION_PRODUCTOS)
+                    .document(productoId)
+                    .get()
+                    .await()
+                if (rootDoc.exists()) {
+                    docSnapshot = rootDoc
+                    if (comIdEfectiva.isBlank()) {
+                        comIdEfectiva = rootDoc.getString("comunidadId").orEmpty()
+                    }
+                }
+            }
+
+            // 3. Si se encontró en Firestore, guardarlo en Room para que Flow notifique a la UI
+            if (docSnapshot != null && docSnapshot.exists()) {
+                val entidad = documentToEntidad(docSnapshot, comIdEfectiva)
+                if (entidad != null) {
+                    productoDao.insertarTodos(listOf(entidad))
+                    Log.i(TAG, "Producto $productoId sincronizado a Room con éxito.")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error refrescando producto $productoId desde Firestore", e)
+        }
+    }
+
+    private suspend fun obtenerDocRefProducto(comunidadId: String, productoId: String): DocumentReference {
+        if (comunidadId.isNotBlank()) {
+            val candidate = db.subcoleccionComunidad(comunidadId, COLECCION_PRODUCTOS).document(productoId)
+            val snap = try { candidate.get().await() } catch (e: Exception) { null }
+            if (snap != null && snap.exists()) return candidate
+        }
+        return db.collection(COLECCION_PRODUCTOS).document(productoId)
+    }
+
     // 4. Mappers
     private fun documentToEntidad(doc: DocumentSnapshot, comunidadId: String): ProductoEntidad? {
         val titulo = doc.getString("titulo") ?: return null
@@ -380,7 +438,7 @@ class MercadilloRepository(
         return ProductoEntidad(
             id = doc.id,
             comunidadId = doc.getString("comunidadId") ?: comunidadId,
-            vendedorUid = doc.getString("vendedorUid") ?: "",
+            vendedorUid = doc.getString("vendedorUid") ?: doc.getString("autorUid") ?: "",
             vendedorNombre = doc.getString("vendedorNombre") ?: "",
             compradorUid = doc.getString("compradorUid") ?: "",
             titulo = titulo,

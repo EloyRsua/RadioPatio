@@ -4,12 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.radiopatio.usuarios.UserRepository
 import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 data class MisFavoritosUiState(
@@ -17,16 +14,23 @@ data class MisFavoritosUiState(
     val cargando: Boolean = true
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
+class MisFavoritosViewModelFactory(
+    private val mercadilloRepository: MercadilloRepository,
+) : ViewModelProvider.Factory{
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return MisFavoritosViewModel(mercadilloRepository) as T
+    }
+}
+
 class MisFavoritosViewModel(
-    private val mercadilloRepository: MercadilloRepository = MercadilloRepository(),
-    private val userRepository: UserRepository = UserRepository()
+    private val mercadilloRepository: MercadilloRepository,
 ) : ViewModel() {
 
     var uiState by mutableStateOf(MisFavoritosUiState())
         private set
 
-    private val currentUid: String
+    val currentUid: String
         get() = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
 
     init {
@@ -35,34 +39,25 @@ class MisFavoritosViewModel(
 
     private fun observarFavoritos() {
         viewModelScope.launch {
-            userRepository.observarUsuarioActual()
-                .flatMapLatest { usuario ->
-                    val comId = usuario?.comunidadId.orEmpty()
-                    if (comId.isBlank()) {
-                        flowOf(emptyList())
-                    } else {
-                        // Reutilizamos el repositorio limpio del mercadillo
-                        mercadilloRepository.observarProductosDeComunidad(comId)
-                    }
+            mercadilloRepository.observarProductos().collect{ todosLosProductos ->
+                val soloFavoritos = todosLosProductos.filter {
+                    it.esFavoritoDe(currentUid)
                 }
-                .collect { todosLosProductos ->
-                    // Filtramos únicamente los productos donde el usuario actual dio like
-                    val soloFavoritos = todosLosProductos.filter { it.esFavoritoDe(currentUid) }
-                    uiState = uiState.copy(
-                        favoritos = soloFavoritos,
-                        cargando = false
-                    )
-                }
+                uiState = uiState.copy(
+                    favoritos = soloFavoritos,
+                    cargando = false
+                )
+            }
         }
     }
 
     fun toggleFavorito(producto: Producto) {
         val uid = currentUid
-        if (uid.isBlank() || producto.firestoreId.isBlank() || producto.comunidadId.isBlank()) return
+        if (uid.isBlank() || producto.id.isBlank() || producto.comunidadId.isBlank()) return
         viewModelScope.launch {
             mercadilloRepository.toggleMeGustaProducto(
                 comunidadId = producto.comunidadId,
-                productoId = producto.firestoreId,
+                productoId = producto.id,
                 usuarioUid = uid
             )
         }

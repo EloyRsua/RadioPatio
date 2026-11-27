@@ -261,7 +261,7 @@ fun AppNavHost(
         composable<DetalleProducto> { backStackEntry ->
             val ruta = backStackEntry.toRoute<DetalleProducto>()
             DetalleProductoScreen(
-                firestoreId = ruta.firestoreId,
+                productoId = ruta.productoId,
                 onVolver = {
                     navController.popBackStack()
                 }
@@ -270,9 +270,11 @@ fun AppNavHost(
 
         // Pantalla para la creación de productos
         composable<CrearProducto> {
-            val userRepo = remember { UserRepository() }
             val mercadilloViewModel: MercadilloViewModel = viewModel(
-                factory = MercadilloViewModelFactory(app.database.productoDao(), userRepo)
+                factory = MercadilloViewModelFactory(
+                    mercadilloRepository = app.mercadilloRepository,
+                    userRepository = app.userRepository,
+                    comunidadRepository = app.comunidadRepository)
             )
 
             CrearProductoScreen(

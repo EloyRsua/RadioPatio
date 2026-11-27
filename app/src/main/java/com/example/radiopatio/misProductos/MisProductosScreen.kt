@@ -18,12 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.radiopatio.RadioPatioApplication
 import com.example.radiopatio.marketplace.EstadoProducto
 import com.example.radiopatio.marketplace.Producto
 
@@ -36,10 +38,19 @@ private val FondoApp = Color(0xFFF8FAFC)
 @Composable
 fun MisProductosScreen(
     onVolver: () -> Unit,
-    onProductoClick: (String) -> Unit = {},
-    viewModel: MisProductosViewModel = viewModel()
+    onProductoClick: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as RadioPatioApplication
+
+    val viewModel: MisProductosViewModel = viewModel(
+        factory = MisProductosViewModelFactory(
+            mercadilloRepository = app.mercadilloRepository
+        )
+    )
+
     val uiState = viewModel.uiState
+
     MisProductosContent(
         productos = uiState.productosFiltrados,
         cargando = uiState.cargando,
@@ -125,10 +136,10 @@ fun MisProductosContent(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(productos, key = { it.firestoreId }) { producto ->
+                    items(productos, key = { it.id }) { producto ->
                         TarjetaMiArticulo(
                             producto = producto,
-                            onClick = { onProductoClick(producto.firestoreId) },
+                            onClick = { onProductoClick(producto.id) },
                             onEliminar = { onEliminarProducto(producto) }
                         )
                     }
@@ -256,8 +267,8 @@ fun BadgeEstado(estado: EstadoProducto, fechaDevolucion: String = "") {
 fun MisProductosContentPreview() {
     MisProductosContent(
         productos = listOf(
-            Producto(firestoreId = "1", titulo = "Mesa auxiliar", precio = "15€", esParaComprar = true, estado = EstadoProducto.DISPONIBLE),
-            Producto(firestoreId = "2", titulo = "Lámpara de pie", precio = "20€", esParaComprar = true, estado = EstadoProducto.VENDIDO)
+            Producto(id = "1", titulo = "Mesa auxiliar", precio = "15€", esParaComprar = true, estado = EstadoProducto.DISPONIBLE),
+            Producto(id = "2", titulo = "Lámpara de pie", precio = "20€", esParaComprar = true, estado = EstadoProducto.VENDIDO)
         ),
         cargando = false,
         pestanaSeleccionada = 0,

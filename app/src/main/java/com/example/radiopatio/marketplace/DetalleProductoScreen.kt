@@ -30,6 +30,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.ui.platform.LocalContext
+import com.example.radiopatio.RadioPatioApplication
 
 // Colores de RadioPatio
 private val AzulPrincipal = Color(0xFF133E54)
@@ -43,12 +45,20 @@ private val FondoApp = Color(0xFFF8FAFC)
  */
 @Composable
 fun DetalleProductoScreen(
-    firestoreId: String,
+    productoId: String,
     onVolver: () -> Unit,
-    viewModel: DetalleProductoViewModel = viewModel(
-        factory = DetalleProductoViewModelFactory(firestoreId)
-    )
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as RadioPatioApplication
+
+    val viewModel: DetalleProductoViewModel = viewModel(
+        factory = DetalleProductoViewModelFactory(
+            productoId = productoId,
+            mercadilloRepository = app.mercadilloRepository,
+            userRepository = app.userRepository
+        )
+    )
+
     val uiState = viewModel.uiState
 
     DetalleProductoContent(
@@ -605,7 +615,7 @@ fun DetalleProductoContentPreview() {
             producto = Producto(
                 titulo = "Taladro Percutor Bosch",
                 precio = "35€",
-                ubicacionYTiempo = "Portal 2, 3ºB",
+                ubicacion = "Portal 2, 3ºB",
                 categoriaProducto = CategoriaProducto.HERRAMIENTAS,
                 descripcion = "En perfecto estado, incluye brocas y maletín.",
                 marca = "Bosch",

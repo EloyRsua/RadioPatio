@@ -12,10 +12,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.radiopatio.RadioPatioApplication
 
 // Colores de RadioPatio
 private val AzulPrincipal = Color(0xFF133E54)
@@ -27,8 +29,17 @@ private val FondoApp = Color(0xFFF8FAFC)
 fun MisFavoritosScreen(
     onVolver: () -> Unit,
     onProductoClick: (String) -> Unit,
-    viewModel: MisFavoritosViewModel = viewModel()
 ) {
+
+    val context = LocalContext.current
+    val app = context.applicationContext as RadioPatioApplication
+
+    val viewModel: MisFavoritosViewModel =  viewModel(
+        factory = MisFavoritosViewModelFactory(
+            mercadilloRepository = app.mercadilloRepository
+        )
+    )
+
     val uiState = viewModel.uiState
 
     Scaffold(
@@ -104,8 +115,9 @@ fun MisFavoritosScreen(
                             for (producto in fila) {
                                 TarjetaProducto(
                                     producto = producto,
+                                    currentUid = viewModel.currentUid,
                                     onClick = {
-                                        val idDestino = producto.firestoreId.ifBlank { producto.id.toString() }
+                                        val idDestino = producto.id.ifBlank { producto.id }
                                         onProductoClick(idDestino)
                                     },
                                     onFavoritoClick = { viewModel.toggleFavorito(producto) },
