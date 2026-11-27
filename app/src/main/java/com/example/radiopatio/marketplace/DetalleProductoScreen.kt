@@ -79,10 +79,10 @@ fun DetalleProductoScreen(
             val prod = uiState.producto ?: return@DetalleProductoContent
             val precioTexto = if (prod.esParaComprar) prod.precio else "Préstamo (${prod.diasPrestamo} días)"
             val imagenUrl = prod.fotos.firstOrNull().orEmpty()
-            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.autorUid }
+            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.vendedorUid }
 
             chatViewModel.abrirChatConProducto(
-                productoId = prod.firestoreId.ifBlank { firestoreId },
+                productoId = prod.id.ifBlank { productoId },
                 productoTitulo = prod.titulo,
                 productoPrecio = precioTexto,
                 productoImagenUrl = imagenUrl,
@@ -99,10 +99,10 @@ fun DetalleProductoScreen(
             if (compUid.isBlank()) return@DetalleProductoContent
             val precioTexto = if (prod.esParaComprar) prod.precio else "Préstamo (${prod.diasPrestamo} días)"
             val imagenUrl = prod.fotos.firstOrNull().orEmpty()
-            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.autorUid }
+            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.vendedorUid }
 
             chatViewModel.abrirChatConProducto(
-                productoId = prod.firestoreId.ifBlank { firestoreId },
+                productoId = prod.id.ifBlank { productoId },
                 productoTitulo = prod.titulo,
                 productoPrecio = precioTexto,
                 productoImagenUrl = imagenUrl,

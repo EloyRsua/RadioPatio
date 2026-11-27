@@ -6,11 +6,11 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.radiopatio.comunidad.subcoleccionComunidad
 import com.example.radiopatio.mensajeria.Conversacion
-import com.example.radiopatio.notificacion.NotificacionesHelper
 import com.example.radiopatio.usuarios.UserRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.launch
 
 /**
@@ -44,7 +44,9 @@ class DetalleProductoViewModelFactory(
 /**
  * ViewModel del detalle de un producto:
  * - Observa el producto reactivamente desde Room (Caché local como Single Source of Truth).
- * - Delega todas las acciones (compra, confirmaciones, conflictos, favoritos) en MercadilloRepository.
+ * - Sincroniza bajo demanda con Firestore si el producto no estaba en Room (ej. al abrirlo desde notificación).
+ * - Delega todas las acciones en MercadilloRepository.
+ * - Si el usuario es el vendedor, escucha las conversaciones asociadas a este producto para el chat.
  */
 class DetalleProductoViewModel(
     private val productoId: String,
@@ -57,6 +59,7 @@ class DetalleProductoViewModel(
 
     val currentUid: String
         get() = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+
     private var conversacionesListener: ListenerRegistration? = null
 
     init {
@@ -64,10 +67,8 @@ class DetalleProductoViewModel(
         cargarProductoSiFalta()
     }
 
-
     /**
      * Observa el producto en Room mediante Flow.
-     * Si la entrega está vencida y no hay conflicto, solicita su autocompletado en segundo plano.
      */
     private fun observarProducto() {
         if (productoId.isBlank()) {
@@ -76,77 +77,37 @@ class DetalleProductoViewModel(
         }
 
         viewModelScope.launch {
+            mercadilloRepository.observarProductoPorId(productoId).collect { producto ->
+                if (producto == null) {
+                    uiState = uiState.copy(cargando = false, producto = null)
+                    return@collect
+                }
 
-            viewModelScope.launch {
-                mercadilloRepository.observarProductoPorId(productoId).collect{ producto ->
-                    if(producto == null) {
-                        uiState = uiState.copy(cargando = false, producto = null)
-                        return@collect
-                    }
-                    // Autocompletar automaticamente si ha vencido el plazo sin disputa
-                    mercadilloRepository.autocompletarEntregaSiVencida(producto)
+                // Autocompletar automáticamente si ha vencido el plazo sin disputa
+                mercadilloRepository.autocompletarEntregaSiVencida(producto)
 
-                    val ahora = System.currentTimeMillis()
-                    val diffMilis = producto.fechaLimiteEntrega - ahora
-                    val diasRestantes = if (diffMilis > 0) (diffMilis / (24 * 60 * 60 * 1000L)) + 1 else 0L
+                val ahora = System.currentTimeMillis()
+                val diffMilis = producto.fechaLimiteEntrega - ahora
+                val diasRestantes = if (diffMilis > 0) (diffMilis / (24 * 60 * 60 * 1000L)) + 1 else 0L
+                val esProp = (producto.vendedorUid == currentUid)
 
                 uiState = uiState.copy(
                     cargando = false,
-                    producto = prod,
-                    esPropietario = (autorUid == currentUid),
-                    esComprador = (compradorUid == currentUid),
+                    producto = producto,
+                    esPropietario = esProp,
+                    esComprador = (producto.compradorUid == currentUid),
+                    esFavorito = producto.esFavoritoDe(currentUid),
                     diasRestantes = diasRestantes
                 )
 
-                    observarConversacionesProducto(
-                        comunidadId = comIdProducto,
-                        productoId = snapshot.id,
-                        esPropietario = esProp
-                    )
-            }
-        }
-    }
-
-    private fun observarConversacionesProducto(
-        comunidadId: String,
-        productoId: String,
-        esPropietario: Boolean
-    ) {
-        conversacionesListener?.remove()
-        conversacionesListener = null
-
-        if (!esPropietario || currentUid.isBlank() || productoId.isBlank()) {
-            uiState = uiState.copy(conversacionesProducto = emptyList())
-            return
-        }
-
-        val comIdBusqueda = comunidadId.ifBlank { "general" }
-        conversacionesListener = db.collection("comunidades")
-            .document(comIdBusqueda)
-            .collection("conversaciones")
-            .whereEqualTo("productoId", productoId)
-            .addSnapshotListener { snap, _ ->
-                val lista = snap?.documents?.mapNotNull { doc ->
-                    doc.toObject(Conversacion::class.java)?.copy(id = doc.id)
-                }?.sortedByDescending { it.ultimoMensajeTimestamp }.orEmpty()
-
-                val compradorActualVacio = uiState.producto?.compradorUid.isNullOrBlank()
-                val primeraConv = lista.firstOrNull()
-                val prodActualizado = if (compradorActualVacio && primeraConv != null && primeraConv.compradorUid.isNotBlank()) {
-                    uiState.producto?.copy(
-                        compradorUid = primeraConv.compradorUid,
-                        compradorNombre = uiState.producto?.compradorNombre?.ifBlank { primeraConv.compradorNombre }
-                            ?: primeraConv.compradorNombre
-                    )
-                } else {
-                    uiState.producto
-                }
-
-                uiState = uiState.copy(
-                    producto = prodActualizado,
-                    conversacionesProducto = lista
+                // Si es propietario, escuchar las conversaciones de interesados
+                observarConversacionesProducto(
+                    comunidadId = producto.comunidadId,
+                    productoId = producto.id,
+                    esPropietario = esProp
                 )
             }
+        }
     }
 
     /**
@@ -162,15 +123,44 @@ class DetalleProductoViewModel(
     }
 
     /**
+     * Escucha en Firestore las conversaciones que los vecinos han abierto sobre este artículo.
+     */
+    private fun observarConversacionesProducto(
+        comunidadId: String,
+        productoId: String,
+        esPropietario: Boolean
+    ) {
+        conversacionesListener?.remove()
+        conversacionesListener = null
+
+        if (!esPropietario || currentUid.isBlank() || productoId.isBlank()) {
+            uiState = uiState.copy(conversacionesProducto = emptyList())
+            return
+        }
+
+        val comIdBusqueda = comunidadId.ifBlank { "general" }
+        conversacionesListener = FirebaseFirestore.getInstance().collection("comunidades")
+            .document(comIdBusqueda)
+            .collection("conversaciones")
+            .whereEqualTo("productoId", productoId)
+            .addSnapshotListener { snap, _ ->
+                val lista = snap?.documents?.mapNotNull { doc ->
+                    doc.toObject(Conversacion::class.java)?.copy(id = doc.id)
+                }?.sortedByDescending { it.ultimoMensajeTimestamp }.orEmpty()
+
+                uiState = uiState.copy(conversacionesProducto = lista)
+            }
+    }
+
+    /**
      * El vecino actual solicita comprar o tomar prestado el producto.
      */
     fun onComprarOPrestar() {
         val prod = uiState.producto ?: return
-
         viewModelScope.launch {
             val usuario = userRepository.getCurrentUserData().getOrNull()
             val nombreComprador = usuario?.nombre?.ifBlank { "Un vecino" } ?: "Un vecino"
-            val pisoComprador = usuario?.vivienda?.takeIf { it!= "Sin vivienda asignada" }.orEmpty()
+            val pisoComprador = usuario?.vivienda?.takeIf { it != "Sin vivienda asignada" }.orEmpty()
 
             mercadilloRepository.comprarOPrestar(
                 producto = prod,
@@ -197,7 +187,7 @@ class DetalleProductoViewModel(
     fun onConfirmarRecepcionComprador() {
         val prod = uiState.producto ?: return
         viewModelScope.launch {
-            mercadilloRepository.confirmarRecepcionComprador(producto =prod )
+            mercadilloRepository.confirmarRecepcionComprador(prod)
         }
     }
 
@@ -205,9 +195,9 @@ class DetalleProductoViewModel(
      * Se reporta una incidencia o desacuerdo al administrador.
      */
     fun onReportarConflicto(motivo: String) {
-        val producto = uiState.producto ?: return
+        val prod = uiState.producto ?: return
         viewModelScope.launch {
-            mercadilloRepository.reportarConflicto(producto, motivo)
+            mercadilloRepository.reportarConflicto(prod, motivo)
         }
     }
 
@@ -230,8 +220,6 @@ class DetalleProductoViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        docListener?.remove()
         conversacionesListener?.remove()
     }
 }
-    }
