@@ -1,5 +1,9 @@
 package com.example.radiopatio.informacionUsuario
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,15 +14,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -26,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.radiopatio.comunidad.ComunidadRepository
+import com.example.radiopatio.ui.SelectorAvatarDiceBear
 import com.example.radiopatio.ui.theme.AzulPrincipal
 import com.example.radiopatio.ui.theme.RadioPatioTheme
 import com.example.radiopatio.ui.theme.TextoPrincipal
@@ -41,6 +47,7 @@ fun PerfilUsuarioScreen(
     onIrAMisProductos: () -> Unit = {},
     onIrAMisFavoritos: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val comunidadRepository = remember { ComunidadRepository() }
     val userRepository = remember { UserRepository(comunidadRepository) }
 
@@ -53,15 +60,28 @@ fun PerfilUsuarioScreen(
 
     val uiState = viewModel.uiState
 
+    LaunchedEffect(uiState.errorMensaje) {
+        uiState.errorMensaje?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            viewModel.limpiarError()
+        }
+    }
+
     PerfilUsuarioContent(
         usuario = uiState.usuario,
         nombreComunidad = uiState.nombreComunidad,
         cargando = uiState.cargando,
+        guardandoFoto = uiState.guardandoFoto,
         onVolver = onVolver,
         onCerrarSesion = {
             viewModel.cerrarSesion(onCerrarSesion)
         },
         onIrAMisProductos = onIrAMisProductos,
+        onGuardarFotoPerfil = { nuevaUrl ->
+            viewModel.actualizarFotoPerfil(nuevaUrl) {
+                Toast.makeText(context, "Foto de perfil actualizada", Toast.LENGTH_SHORT).show()
+            }
+        },
         onIrAMisFavoritos = onIrAMisFavoritos
     )
 }
@@ -72,11 +92,76 @@ fun PerfilUsuarioContent(
     usuario: Usuario?,
     nombreComunidad: String,
     cargando: Boolean,
+    guardandoFoto: Boolean = false,
     onVolver: () -> Unit = {},
     onCerrarSesion: () -> Unit = {},
     onIrAMisProductos: () -> Unit = {},
+    onGuardarFotoPerfil: (String) -> Unit = {},
     onIrAMisFavoritos: () -> Unit = {}
 ) {
+    val usuarioActual = usuario ?: Usuario(
+        nombre = "Vecino Registrado",
+        inicial = "V",
+        vivienda = "Sin vivienda asignada",
+        email = "vecino@radiopatio.com",
+        telefono = ""
+    )
+
+    var mostrarDialogoFoto by remember { mutableStateOf(false) }
+    var fotoEditada by remember(usuarioActual.photoUrl) { mutableStateOf(usuarioActual.photoUrl) }
+
+    val galeriaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            fotoEditada = uri.toString()
+        }
+    }
+
+    if (mostrarDialogoFoto) {
+        AlertDialog(
+            onDismissRequest = { if (!guardandoFoto) mostrarDialogoFoto = false },
+            title = {
+                Text(
+                    text = "Cambiar foto o avatar",
+                    fontWeight = FontWeight.Bold,
+                    color = AzulPrincipal
+                )
+            },
+            text = {
+                SelectorAvatarDiceBear(
+                    semillaBase = usuarioActual.uid.ifBlank { usuarioActual.nombre.ifBlank { usuarioActual.email } },
+                    urlActual = fotoEditada,
+                    onSeleccionarUrl = { fotoEditada = it },
+                    onAbrirGaleria = { galeriaLauncher.launch("image/*") }
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (fotoEditada.isNotBlank()) {
+                            onGuardarFotoPerfil(fotoEditada)
+                            mostrarDialogoFoto = false
+                        }
+                    },
+                    enabled = !guardandoFoto && fotoEditada.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = VerdePrincipal)
+                ) {
+                    Text(if (guardandoFoto) "Guardando..." else "Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { mostrarDialogoFoto = false },
+                    enabled = !guardandoFoto
+                ) {
+                    Text("Cancelar", color = TextoSecundario)
+                }
+            },
+            containerColor = Color.White
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -106,14 +191,6 @@ fun PerfilUsuarioContent(
                     color = VerdePrincipal
                 )
             } else {
-                val usuarioActual = usuario ?: Usuario(
-                    nombre = "Vecino Registrado",
-                    inicial = "V",
-                    vivienda = "Sin vivienda asignada",
-                    email = "vecino@radiopatio.com",
-                    telefono = ""
-                )
-
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -144,7 +221,30 @@ fun PerfilUsuarioContent(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextButton(
+                        onClick = {
+                            fotoEditada = usuarioActual.photoUrl
+                            mostrarDialogoFoto = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = null,
+                            tint = VerdePrincipal,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Cambiar foto o avatar",
+                            color = VerdePrincipal,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = usuarioActual.nombre,

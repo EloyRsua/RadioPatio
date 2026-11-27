@@ -121,6 +121,7 @@ fun PaginaPrincipalContent(
     val uidActual = uiState.usuarioActual?.uid.orEmpty()
     val nombreUsuarioActual = uiState.usuarioActual?.nombre.orEmpty()
     val emailUsuarioActual = uiState.usuarioActual?.email.orEmpty()
+    val fotoUsuarioActual = uiState.usuarioActual?.photoUrl.orEmpty()
 
     Scaffold(
         modifier = modifier,
@@ -247,15 +248,18 @@ fun PaginaPrincipalContent(
                             ) { _, entidad ->
                                 val esMiPublicacion =
                                     (uidActual.isNotBlank() && entidad.autorUid == uidActual) ||
-                                        (entidad.autorUid.isBlank() && (
-                                            (nombreUsuarioActual.isNotBlank() &&
-                                                entidad.autor.contains(nombreUsuarioActual, ignoreCase = true)) ||
-                                                (emailUsuarioActual.isNotBlank() &&
-                                                    entidad.autor.contains(
-                                                        emailUsuarioActual.substringBefore("@"),
-                                                        ignoreCase = true
+                                            (entidad.autorUid.isBlank() && (
+                                                    (nombreUsuarioActual.isNotBlank() &&
+                                                            entidad.autor.contains(nombreUsuarioActual, ignoreCase = true)) ||
+                                                            (emailUsuarioActual.isNotBlank() &&
+                                                                    entidad.autor.contains(
+                                                                        emailUsuarioActual.substringBefore("@"),
+                                                                        ignoreCase = true
+                                                                    ))
                                                     ))
-                                            ))
+
+                                val avatarAutor = if (esMiPublicacion) fotoUsuarioActual else ""
+                                val seedAutor = entidad.autorUid.ifBlank { entidad.autor }
 
                                 Box(
                                     modifier = Modifier
@@ -273,6 +277,8 @@ fun PaginaPrincipalContent(
                                             meGusta = entidad.meGusta,
                                             comentarios = entidad.comentarios
                                         ),
+                                        avatarUrl = avatarAutor,
+                                        seedAvatar = seedAutor,
                                         esMiPublicacion = esMiPublicacion,
                                         leGusta = leGusta,
                                         onMeGustaClick = {
@@ -295,8 +301,10 @@ fun PaginaPrincipalContent(
 
         // Diálogo a pantalla completa con el detalle de la publicación seleccionada
         publicacionSeleccionada?.let { entidad ->
+            val esMioDetalle = uidActual.isNotBlank() && entidad.autorUid == uidActual
             PublicacionDetalleDialog(
                 publicacion = entidad,
+                avatarUrl = if (esMioDetalle) fotoUsuarioActual else "",
                 usuarioUidActual = uidActual,
                 onMeGustaClick = {
                     onToggleMeGusta(entidad)
@@ -363,7 +371,7 @@ private fun BarraSuperior(
                 )
             }
 
-            // Notificaciones con Badge (tu rama)
+            // Notificaciones con Badge
             BadgedBox(
                 badge = {
                     if (notificacionesNoLeidas > 0) {

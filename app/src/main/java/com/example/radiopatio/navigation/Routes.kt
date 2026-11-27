@@ -56,4 +56,7 @@ data class CrearComunidad(
 )
 
 @Serializable
+object ChatDirecto
+
+@Serializable
 object MisFavoritos

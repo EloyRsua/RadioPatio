@@ -26,6 +26,9 @@ import com.example.radiopatio.marketplace.DetalleProductoScreen
 import com.example.radiopatio.marketplace.MercadilloScreen
 import com.example.radiopatio.marketplace.MercadilloViewModel
 import com.example.radiopatio.marketplace.MercadilloViewModelFactory
+import com.example.radiopatio.mensajeria.ChatScreen
+import com.example.radiopatio.mensajeria.ChatViewModel
+import com.example.radiopatio.mensajeria.ChatViewModelFactory
 import com.example.radiopatio.marketplace.MisFavoritosScreen
 import com.example.radiopatio.misProductos.MisProductosScreen
 import com.example.radiopatio.notificacion.NotificacionesScreen
@@ -72,6 +75,12 @@ fun AppNavHost(
     val destinoInicial = remember {
         if (FirebaseAuth.getInstance().currentUser != null) Inicio else InicioSesion
     }
+
+    val chatViewModel: ChatViewModel = viewModel(
+        factory = ChatViewModelFactory(
+            userRepository = userRepository
+        )
+    )
 
     NavHost(
         navController = navController,
@@ -262,8 +271,30 @@ fun AppNavHost(
             val ruta = backStackEntry.toRoute<DetalleProducto>()
             DetalleProductoScreen(
                 productoId = ruta.productoId,
+                chatViewModel = chatViewModel,
+                onIrAChat = {
+                    if (navController.currentBackStackEntry?.destination?.hasRoute<DetalleProducto>() == true) {
+                        navController.navigate(ChatDirecto) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
                 onVolver = {
-                    navController.popBackStack()
+                    if (navController.currentBackStackEntry?.destination?.hasRoute<DetalleProducto>() == true) {
+                        navController.popBackStack()
+                    }
+                }
+            )
+        }
+
+        composable<ChatDirecto> {
+            ChatScreen(
+                viewModel = chatViewModel,
+                onVolver = {
+                    if (navController.currentBackStackEntry?.destination?.hasRoute<ChatDirecto>() == true) {
+                        chatViewModel.limpiarConversacion()
+                        navController.popBackStack()
+                    }
                 }
             )
         }

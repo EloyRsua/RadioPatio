@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Schedule
@@ -23,11 +24,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.radiopatio.mensajeria.ChatViewModel
+import com.example.radiopatio.mensajeria.Conversacion
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +50,8 @@ private val FondoApp = Color(0xFFF8FAFC)
 @Composable
 fun DetalleProductoScreen(
     productoId: String,
+    chatViewModel: ChatViewModel,
+    onIrAChat: () -> Unit,
     onVolver: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -68,7 +74,48 @@ fun DetalleProductoScreen(
         onConfirmarEntregaVendedor = { viewModel.onConfirmarEntregaVendedor() },
         onConfirmarRecepcionComprador = { viewModel.onConfirmarRecepcionComprador() },
         onReportarConflicto = { motivo -> viewModel.onReportarConflicto(motivo) },
-        onToggleFavorito = { viewModel.toggleFavorito() }
+        onToggleFavorito = { viewModel.toggleFavorito() },
+        onContactarVendedor = {
+            val prod = uiState.producto ?: return@DetalleProductoContent
+            val precioTexto = if (prod.esParaComprar) prod.precio else "Préstamo (${prod.diasPrestamo} días)"
+            val imagenUrl = prod.fotos.firstOrNull().orEmpty()
+            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.autorUid }
+
+            chatViewModel.abrirChatConProducto(
+                productoId = prod.firestoreId.ifBlank { firestoreId },
+                productoTitulo = prod.titulo,
+                productoPrecio = precioTexto,
+                productoImagenUrl = imagenUrl,
+                vendedorUid = vendedorFinalUid,
+                vendedorNombre = prod.vendedorNombre.ifBlank { "Vecino" },
+                comunidadId = prod.comunidadId,
+                onChatListo = {
+                    onIrAChat()
+                }
+            )
+        },
+        onContactarInteresado = { compUid, compNombre ->
+            val prod = uiState.producto ?: return@DetalleProductoContent
+            if (compUid.isBlank()) return@DetalleProductoContent
+            val precioTexto = if (prod.esParaComprar) prod.precio else "Préstamo (${prod.diasPrestamo} días)"
+            val imagenUrl = prod.fotos.firstOrNull().orEmpty()
+            val vendedorFinalUid = prod.vendedorUid.ifBlank { prod.autorUid }
+
+            chatViewModel.abrirChatConProducto(
+                productoId = prod.firestoreId.ifBlank { firestoreId },
+                productoTitulo = prod.titulo,
+                productoPrecio = precioTexto,
+                productoImagenUrl = imagenUrl,
+                vendedorUid = vendedorFinalUid,
+                vendedorNombre = prod.vendedorNombre.ifBlank { "Vecino" },
+                compradorUid = compUid,
+                compradorNombre = compNombre.ifBlank { "Vecino" },
+                comunidadId = prod.comunidadId,
+                onChatListo = {
+                    onIrAChat()
+                }
+            )
+        }
     )
 }
 
@@ -84,6 +131,8 @@ fun DetalleProductoContent(
     onConfirmarEntregaVendedor: () -> Unit,
     onConfirmarRecepcionComprador: () -> Unit,
     onReportarConflicto: (String) -> Unit,
+    onContactarVendedor: () -> Unit = {},
+    onContactarInteresado: (String, String) -> Unit = { _, _ -> },
     onToggleFavorito: () -> Unit
 ) {
     var mostrarDialogoConfirmarCompra by remember { mutableStateOf(false) }
@@ -105,7 +154,7 @@ fun DetalleProductoContent(
                 },
                 actions = {
                     val producto = uiState.producto
-                    
+
                     if (producto != null) {
                         val totalLikes = producto.likes.size
 
@@ -490,6 +539,99 @@ fun DetalleProductoContent(
                                     if (producto.motivoConflicto.isNotBlank()) {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text("Motivo: ${producto.motivoConflicto}", color = Color(0xFF7F1D1D), fontSize = 13.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Botón de mensajería directa con vendedor/prestador (para interesado/comprador)
+                    if (!uiState.esPropietario && (producto.estado == EstadoProducto.DISPONIBLE || producto.estado == EstadoProducto.EN_ENTREGA)) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = onContactarVendedor,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.5.dp, AzulPrincipal),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AzulPrincipal)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ChatBubbleOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (producto.esParaComprar) "Contactar con el vendedor" else "Contactar con el prestador",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Chats abiertos con vecinos interesados (para el propietario/vendedor)
+                    if (uiState.esPropietario) {
+                        val chatsInteresados = if (uiState.conversacionesProducto.isNotEmpty()) {
+                            uiState.conversacionesProducto
+                        } else if (producto.compradorUid.isNotBlank()) {
+                            listOf(
+                                Conversacion(
+                                    compradorUid = producto.compradorUid,
+                                    compradorNombre = producto.compradorNombre.ifBlank { "Vecino" }
+                                )
+                            )
+                        } else {
+                            emptyList()
+                        }
+
+                        if (chatsInteresados.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "Chats de interesados (${chatsInteresados.size})",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = AzulPrincipal
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                chatsInteresados.forEach { conv ->
+                                    val compUid = conv.compradorUid
+                                    val nombreVecino = conv.compradorNombre.ifBlank { "Vecino" }
+                                    if (compUid.isNotBlank()) {
+                                        OutlinedButton(
+                                            onClick = { onContactarInteresado(compUid, nombreVecino) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(min = 48.dp),
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = BorderStroke(1.5.dp, AzulPrincipal),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AzulPrincipal)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.ChatBubbleOutline,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "Chatear con $nombreVecino",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 14.sp
+                                                )
+                                                if (conv.ultimoMensaje.isNotBlank()) {
+                                                    Text(
+                                                        text = conv.ultimoMensaje,
+                                                        fontSize = 12.sp,
+                                                        color = TextoSecundario,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

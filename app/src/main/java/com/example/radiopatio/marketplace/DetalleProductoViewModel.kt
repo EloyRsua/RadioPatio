@@ -6,6 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.radiopatio.comunidad.subcoleccionComunidad
+import com.example.radiopatio.mensajeria.Conversacion
+import com.example.radiopatio.notificacion.NotificacionesHelper
 import com.example.radiopatio.usuarios.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
@@ -20,6 +23,7 @@ data class DetalleProductoUiState(
     val esComprador: Boolean = false,
     val esFavorito: Boolean = false,
     val diasRestantes: Long = 0L,
+    val conversacionesProducto: List<Conversacion> = emptyList(),
     val mensaje: String? = null
 )
 
@@ -53,6 +57,7 @@ class DetalleProductoViewModel(
 
     val currentUid: String
         get() = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    private var conversacionesListener: ListenerRegistration? = null
 
     init {
         observarProducto()
@@ -85,17 +90,63 @@ class DetalleProductoViewModel(
                     val diffMilis = producto.fechaLimiteEntrega - ahora
                     val diasRestantes = if (diffMilis > 0) (diffMilis / (24 * 60 * 60 * 1000L)) + 1 else 0L
 
-                    uiState = uiState.copy(
-                        cargando = false,
-                        producto = producto,
-                        esPropietario = (producto.vendedorUid == currentUid),
-                        esComprador = (producto.compradorUid == currentUid),
-                        esFavorito = producto.esFavoritoDe(currentUid),
-                        diasRestantes = diasRestantes
+                uiState = uiState.copy(
+                    cargando = false,
+                    producto = prod,
+                    esPropietario = (autorUid == currentUid),
+                    esComprador = (compradorUid == currentUid),
+                    diasRestantes = diasRestantes
+                )
+
+                    observarConversacionesProducto(
+                        comunidadId = comIdProducto,
+                        productoId = snapshot.id,
+                        esPropietario = esProp
                     )
-                }
             }
         }
+    }
+
+    private fun observarConversacionesProducto(
+        comunidadId: String,
+        productoId: String,
+        esPropietario: Boolean
+    ) {
+        conversacionesListener?.remove()
+        conversacionesListener = null
+
+        if (!esPropietario || currentUid.isBlank() || productoId.isBlank()) {
+            uiState = uiState.copy(conversacionesProducto = emptyList())
+            return
+        }
+
+        val comIdBusqueda = comunidadId.ifBlank { "general" }
+        conversacionesListener = db.collection("comunidades")
+            .document(comIdBusqueda)
+            .collection("conversaciones")
+            .whereEqualTo("productoId", productoId)
+            .addSnapshotListener { snap, _ ->
+                val lista = snap?.documents?.mapNotNull { doc ->
+                    doc.toObject(Conversacion::class.java)?.copy(id = doc.id)
+                }?.sortedByDescending { it.ultimoMensajeTimestamp }.orEmpty()
+
+                val compradorActualVacio = uiState.producto?.compradorUid.isNullOrBlank()
+                val primeraConv = lista.firstOrNull()
+                val prodActualizado = if (compradorActualVacio && primeraConv != null && primeraConv.compradorUid.isNotBlank()) {
+                    uiState.producto?.copy(
+                        compradorUid = primeraConv.compradorUid,
+                        compradorNombre = uiState.producto?.compradorNombre?.ifBlank { primeraConv.compradorNombre }
+                            ?: primeraConv.compradorNombre
+                    )
+                } else {
+                    uiState.producto
+                }
+
+                uiState = uiState.copy(
+                    producto = prodActualizado,
+                    conversacionesProducto = lista
+                )
+            }
     }
 
     /**
@@ -176,4 +227,11 @@ class DetalleProductoViewModel(
             )
         }
     }
+
+    override fun onCleared() {
+        super.onCleared()
+        docListener?.remove()
+        conversacionesListener?.remove()
+    }
 }
+    }

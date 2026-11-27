@@ -18,24 +18,38 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.example.radiopatio.data.PublicacionEntidad
+import com.example.radiopatio.ui.DiceBearAvatars
 
 @Composable
 fun PublicacionDetalleDialog(
     publicacion: PublicacionEntidad,
     usuarioUidActual: String = "",
     onMeGustaClick: () -> Unit = {},
+    avatarUrl: String = "",
     onDismiss: () -> Unit
 ) {
 
     // Calculamos si el usuario actual ya le dio me gusta
     val haDadoMeGusta = usuarioUidActual.isNotBlank() &&
             publicacion.likesUids.split(",").contains(usuarioUidActual)
+
+    val modeloAvatar = avatarUrl.trim().ifBlank {
+        DiceBearAvatars.construirUrl(
+            seed = publicacion.autorUid.trim().ifBlank {
+                publicacion.autor.ifBlank { publicacion.inicial }
+            },
+            estilo = "avataaars",
+            tamanoPx = 160
+        )
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -98,6 +112,12 @@ fun PublicacionDetalleDialog(
                             color = Color.White,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold
+                        )
+                        AsyncImage(
+                            model = modeloAvatar,
+                            contentDescription = "Avatar de ${publicacion.autor}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
 
